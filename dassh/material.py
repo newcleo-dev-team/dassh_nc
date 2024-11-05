@@ -23,6 +23,7 @@ import os
 import copy
 import numpy as np
 from dassh.logged_class import LoggedClass
+import lbh15
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -251,13 +252,30 @@ class Material(LoggedClass):
     def beta(self, beta):
         # Only used for constant-property materials
         self._beta = beta
-
+        
+    MATERIAL_LBH = {
+            'lead': lbh15.Lead,
+            'bismuth': lbh15.Bismuth,
+            'lbe': lbh15.LBE
+        }
+#   def update(self, temperature):
+#       """Update material properties based on new bulk temperature"""
+#       self.temperature = temperature
+#       for property in self._data.keys():
+#           setattr(self, property, self._data[property](temperature))
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
-        for property in self._data.keys():
-            setattr(self, property, self._data[property](temperature))
+        prop_name = dict(zip(self._data.keys(), ['rho', 'cp', 'mu', 'k'])) 
+        
+        if self.name in Material.MATERIAL_LBH.keys():
+            for property in self._data.keys():
+                setattr(self, property, getattr(Material.MATERIAL_LBH[self.name](T=self.temperature), prop_name[property]))
+        else:
+            for property in self._data.keys(): 
+                setattr(self, property, self._data[property](temperature))  
 
+                
     def clone(self, new_temperature=None):
         """Create a clone of this material with a new temperature
         if requested"""
