@@ -71,10 +71,11 @@ class Material(LoggedClass):
     """
 
     def __init__(self, name, temperature=298.15, from_file=None,
-                 coeff_dict=None):
+                 coeff_dict=None, use_lbh15 = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
+        self.use_lbh15 = use_lbh15
         # Read data into instance; use again to update properties later
         if from_file:
             self.read_from_file(from_file)
@@ -268,7 +269,7 @@ class Material(LoggedClass):
         self.temperature = temperature
         prop_name = dict(zip(self._data.keys(), ['rho', 'cp', 'mu', 'k'])) 
         
-        if self.name in Material.MATERIAL_LBH.keys():
+        if self.name in Material.MATERIAL_LBH.keys() and self.use_lbh15:
             for property in self._data.keys():
                 setattr(self, property, getattr(Material.MATERIAL_LBH[self.name](T=self.temperature), prop_name[property]))
         else:
