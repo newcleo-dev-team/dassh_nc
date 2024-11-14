@@ -76,6 +76,7 @@ class Material(LoggedClass):
         self.name = name
         self.temperature = temperature
         self.use_lbh15 = use_lbh15
+        
         # Read data into instance; use again to update properties later
         if from_file:
             self.read_from_file(from_file)
@@ -116,8 +117,10 @@ class Material(LoggedClass):
 
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
+        user_path = True
         if not path:
             path = os.path.join(_ROOT, 'data', self.name + '.csv')
+            user_path = False
 
         # data = pxd.read_csv(path, header=0)
         data = np.genfromtxt(path, skip_header=1, delimiter=',',
@@ -126,10 +129,11 @@ class Material(LoggedClass):
         with open(path, 'r') as f:
             cols = f.read().splitlines()[0].split(',')[1:]
 
-        # Check that all values are greater than or equal to zero
-        if np.any(data[~np.isnan(data)] < 0.0):
-            msg = f'Negative values detected in material data {path}'
-            self.log('warning', msg)
+        # Check that all values are greater than or equal to zero, 
+        # if file is provided by the user. 
+        if (np.any(np.isnan(data)) or np.any(data <= 0.0)) and user_path:
+            msg = f'Non-positive or missing values detected in material data {path}'
+            self.log('error', msg)
 
         # define property attributes based on temperature
         # We store only the interpolations, not the data tables
@@ -139,12 +143,10 @@ class Material(LoggedClass):
         data = data[x > 0, :]  # eliminate rows where temp is negative
         for i in range(len(cols)):
             y = data[:, i + 1]
-            x2 = x[y > 0]  # Need to ignore zeros in dependent var
-            y2 = y[y > 0]  # Now filter from dependent var
-            # self._data[cols[i]] = _MatInterp(
-            #     data[:, 0][~np.isnan(data[:, i + 1])],
-            #     data[:, i + 1][~np.isnan(data[:, i + 1])])
-            self._data[cols[i]] = _MatInterp(x2, y2)
+            if not np.all(np.diff(x) > 0):
+                msg = f'Non strictly increasing temperature values detected in material data {path}'
+                self.log('error', msg)
+            self._data[cols[i]] = _MatInterp(x, y)
 
     @staticmethod
     def _coeff_from_table(path):
