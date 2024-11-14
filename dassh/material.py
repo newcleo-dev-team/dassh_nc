@@ -23,7 +23,7 @@ import os
 import copy
 import numpy as np
 from dassh.logged_class import LoggedClass
-import lbh15
+from lbh15 import Lead, Bismuth, LBE
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -69,13 +69,28 @@ class Material(LoggedClass):
         - Thermal conductivity (k): W/m-K
 
     """
-
+    MATERIAL_LBH = {
+            'lead': Lead,
+            'bismuth': Bismuth,
+            'lbe': LBE
+        }
+    LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
+    
     def __init__(self, name, temperature=298.15, from_file=None,
-                 coeff_dict=None, use_lbh15 = False):
+                 coeff_dict=None, use_lbh15 = False, lbh15_cp = None,
+                 lbh15_rho = None, lbh15_mu = None, lbh15_k = None):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
-        self.use_lbh15 = use_lbh15
+        self.__use_lbh15 = use_lbh15
+        self.__lbh15_correlations = {'cp': lbh15_cp, 
+                                     'rho': lbh15_rho, 
+                                     'mu': lbh15_mu, 
+                                     'k': lbh15_k}
+        # Create coolant object with lbh15, if selected
+        if self.name in Material.MATERIAL_LBH.keys() and self.__use_lbh15: 
+            self.__cool = Material.MATERIAL_LBH[self.name](T=self.temperature)
+
         # Read data into instance; use again to update properties later
         if from_file:
             self.read_from_file(from_file)
@@ -254,11 +269,6 @@ class Material(LoggedClass):
         # Only used for constant-property materials
         self._beta = beta
         
-    MATERIAL_LBH = {
-            'lead': lbh15.Lead,
-            'bismuth': lbh15.Bismuth,
-            'lbe': lbh15.LBE
-        }
 #   def update(self, temperature):
 #       """Update material properties based on new bulk temperature"""
 #       self.temperature = temperature
@@ -267,11 +277,20 @@ class Material(LoggedClass):
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
-        prop_name = dict(zip(self._data.keys(), ['rho', 'cp', 'mu', 'k'])) 
-        
-        if self.name in Material.MATERIAL_LBH.keys() and self.use_lbh15:
+
+        if self.name in Material.MATERIAL_LBH.keys() and self.__use_lbh15:    
+            prop_name = dict(zip(self._data.keys(), Material.LBH15_PROPERTIES)) 
+            correlations = self.__cool.available_correlations(Material.LBH15_PROPERTIES)
             for property in self._data.keys():
-                setattr(self, property, getattr(Material.MATERIAL_LBH[self.name](T=self.temperature), prop_name[property]))
+                corr_name = self.__lbh15_correlations[prop_name[property]]
+                if corr_name and corr_name not in correlations[prop_name[property]]:
+                    msg = f'Correlation for {prop_name[property]} not available for {self.name}'
+                    self.log('error', msg)
+                if corr_name in correlations[prop_name[property]]:
+                    self.__cool.set_correlation_to_use(prop_name[property], corr_name)
+                setattr(self.__cool, 'T', self.temperature)
+                setattr(self, property, getattr(self.__cool, prop_name[property]))
+
         else:
             for property in self._data.keys(): 
                 setattr(self, property, self._data[property](temperature))  
