@@ -1922,12 +1922,7 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     matdict[m.lower()] = \
                         dassh.Material(m.lower(),
                                        temperature=inlet_temp,
-                                       from_file=path,
-                                       use_lbh15 = self.data['Core']['use_lbh15'],
-                                       lbh15_cp = self.data['Core']['lbh15_cp'],
-                                       lbh15_k = self.data['Core']['lbh15_k'],
-                                       lbh15_mu = self.data['Core']['lbh15_mu'],
-                                       lbh15_rho = self.data['Core']['lbh15_rho'])
+                                       from_file=path)
                 else:
                     # correlation coeffs specified as lists
                     # Filter None values out of dict
@@ -1936,22 +1931,14 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     matdict[m.lower()] = \
                         dassh.Material(m.lower(),
                                        temperature=inlet_temp,
-                                       coeff_dict=c,
-                                       use_lbh15 = self.data['Core']['use_lbh15'],
-                                       lbh15_cp = self.data['Core']['lbh15_cp'],
-                                       lbh15_k = self.data['Core']['lbh15_k'],
-                                       lbh15_mu = self.data['Core']['lbh15_mu'],
-                                       lbh15_rho = self.data['Core']['lbh15_rho'])
+                                       coeff_dict=c)
             else:
                 # No custom material defined, check built-in materials
                 matdict[m.lower()] = \
                     dassh.Material(m.lower(), 
                                    temperature=inlet_temp,
                                    use_lbh15 = self.data['Core']['use_lbh15'],
-                                      lbh15_cp = self.data['Core']['lbh15_cp'],
-                                      lbh15_k = self.data['Core']['lbh15_k'],
-                                      lbh15_mu = self.data['Core']['lbh15_mu'],
-                                      lbh15_rho = self.data['Core']['lbh15_rho'])
+                                   lbh15_correlations=self.data['Core']['lbh15_correlations'])
 
         # Check all of the materials to make sure they all have the
         # properties they need. Structure: thermal conductivity
