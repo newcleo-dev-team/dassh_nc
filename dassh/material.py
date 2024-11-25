@@ -105,7 +105,7 @@ class Material(LoggedClass):
     def read_from_file(self, path):
         """Determine whether a user-provided CSV file is providing
         correlation coefficients or tabulated data and read them in"""
-
+        
         with open(path, 'r') as f:
             data = f.read()
 
@@ -156,7 +156,7 @@ class Material(LoggedClass):
 
     
     def _define_from_lbh15(self, lbh15_correlations):
-        """Define correlation by using lbh15"""
+        """Define correlation by using lbh15"""    
         self._data = {}
         cool_lbh15 = Material.MATERIAL_LBH[self.name](T=self.temperature)
         
@@ -170,7 +170,6 @@ class Material(LoggedClass):
                 if corr_name in correlations[Material.PROP_NAME[property]]:
                     cool_lbh15.change_correlation_to_use(Material.PROP_NAME[property], corr_name)
         for property in Material.PROP_NAME.keys():
-            print('qui')
             self._data[property] = _Matlbh15(Material.PROP_NAME[property], cool_lbh15)
         
     @staticmethod
@@ -340,7 +339,15 @@ class _MatPoly(object):
             return y
 
 class _Matlbh15(object):
-    """lbh15 object for material properties"""
+    """lbh15 object for material properties
+    
+    Parameters
+    ----------
+    prop: str
+        Property to calculate
+    cool_lbh15: lbh15 object
+        lbh15 object representative of the liquid metal to which the property is related
+        """
     def __init__(self, prop, cool_lbh15):
         self.prop = prop
         self.cool_lbh15 = cool_lbh15
