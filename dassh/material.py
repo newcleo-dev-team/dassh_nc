@@ -23,7 +23,7 @@ import os
 import copy
 import numpy as np
 from dassh.logged_class import LoggedClass
-import lbh15
+from lbh15 import Lead, Bismuth, LBE
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -69,19 +69,28 @@ class Material(LoggedClass):
         - Thermal conductivity (k): W/m-K
 
     """
-
+    MATERIAL_LBH = {
+            'lead': Lead,
+            'bismuth': Bismuth,
+            'lbe': LBE
+        }
+    LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
+    PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
+    
     def __init__(self, name, temperature=298.15, from_file=None,
-                 coeff_dict=None, use_lbh15 = False):
+                 coeff_dict=None, use_lbh15 = False, lbh15_correlations = None):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
-        self.use_lbh15 = use_lbh15
-        
+
+
         # Read data into instance; use again to update properties later
         if from_file:
             self.read_from_file(from_file)
         elif coeff_dict:
             self._define_from_coeff(coeff_dict)
+        elif self.name in Material.MATERIAL_LBH.keys() and use_lbh15:
+            self._define_from_lbh15(lbh15_correlations)
         else:
             try:
                 self._define_from_table(None)
@@ -98,7 +107,7 @@ class Material(LoggedClass):
     def read_from_file(self, path):
         """Determine whether a user-provided CSV file is providing
         correlation coefficients or tabulated data and read them in"""
-
+        
         with open(path, 'r') as f:
             data = f.read()
 
@@ -148,6 +157,24 @@ class Material(LoggedClass):
                 self.log('error', msg)
             self._data[cols[i]] = _MatInterp(x, y)
 
+    
+    def _define_from_lbh15(self, lbh15_correlations):
+        """Define correlation by using lbh15"""    
+        self._data = {}
+        cool_lbh15 = Material.MATERIAL_LBH[self.name](T=self.temperature)
+        
+        for property in Material.PROP_NAME.keys():
+            correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
+            for property in Material.PROP_NAME.keys():
+                corr_name = lbh15_correlations[Material.PROP_NAME[property]]
+                if corr_name and corr_name not in correlations[Material.PROP_NAME[property]]:
+                    msg = f'Correlation {corr_name} for {Material.PROP_NAME[property]} not available for {self.name}'
+                    self.log('error', msg)
+                if corr_name in correlations[Material.PROP_NAME[property]]:
+                    cool_lbh15.change_correlation_to_use(Material.PROP_NAME[property], corr_name)
+        for property in Material.PROP_NAME.keys():
+            self._data[property] = _Matlbh15(Material.PROP_NAME[property], cool_lbh15)
+        
     @staticmethod
     def _coeff_from_table(path):
         """Read correlation coefficients from CSV file"""
@@ -256,28 +283,11 @@ class Material(LoggedClass):
         # Only used for constant-property materials
         self._beta = beta
         
-    MATERIAL_LBH = {
-            'lead': lbh15.Lead,
-            'bismuth': lbh15.Bismuth,
-            'lbe': lbh15.LBE
-        }
-#   def update(self, temperature):
-#       """Update material properties based on new bulk temperature"""
-#       self.temperature = temperature
-#       for property in self._data.keys():
-#           setattr(self, property, self._data[property](temperature))
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
-        prop_name = dict(zip(self._data.keys(), ['rho', 'cp', 'mu', 'k'])) 
-        
-        if self.name in Material.MATERIAL_LBH.keys() and self.use_lbh15:
-            for property in self._data.keys():
-                setattr(self, property, getattr(Material.MATERIAL_LBH[self.name](T=self.temperature), prop_name[property]))
-        else:
-            for property in self._data.keys(): 
-                setattr(self, property, self._data[property](temperature))  
-
+        for property in self._data.keys():
+            setattr(self, property, self._data[property](temperature))
                 
     def clone(self, new_temperature=None):
         """Create a clone of this material with a new temperature
@@ -331,7 +341,31 @@ class _MatPoly(object):
                 y += v
             return y
 
+class _Matlbh15(object):
+    """lbh15 object for material properties
+    
+    Parameters
+    ----------
+    prop: str
+        Property to calculate
+    cool_lbh15: lbh15 object
+        lbh15 object representative of the liquid metal to which the property is related
+        """
+    def __init__(self, prop, cool_lbh15):
+        self.prop = prop
+        self.cool_lbh15 = cool_lbh15
+    def __call__(self, temperature):
+        if type(temperature) is np.ndarray:
+            prop = np.zeros(len(temperature))
+            for ii in range(len(temperature)):
+                setattr(self.cool_lbh15, 'T', temperature[ii])
+                prop[ii] = getattr(self.cool_lbh15, self.prop)
+            return prop
+        setattr(self.cool_lbh15, 'T', temperature)
+        return getattr(self.cool_lbh15, self.prop)
+    
 
+    
 class _MatTracker(object):
     """Keep track of changes in coolant properties to indicate when
     to update correlated parameters, if applicable
