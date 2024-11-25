@@ -70,6 +70,11 @@
     assembly_pitch = float
     gap_model = option('flow', 'no_flow', 'duct_average', 'none', default='no_flow')
     htc_params_duct = float_list(default=None)
+    [[lbh15_correlations]]
+        cp = string(default=None)
+        k = string(default=None)
+        mu = string(default=None)
+        rho = string(default=None)
 
 
 [Assembly]
