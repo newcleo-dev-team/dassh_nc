@@ -1461,7 +1461,7 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     msg = (f"Bad path to properties for material {m}; "
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
-            else:
+            elif 'custom_materials' not in self.data['Materials'][m]:
                 # All properties must be lists of floats
                 for p in ['heat_capacity',
                           'thermal_conductivity',
@@ -1924,14 +1924,22 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                                        temperature=inlet_temp,
                                        from_file=path)
                 else:
-                    # correlation coeffs specified as lists
-                    # Filter None values out of dict
-                    c = {k: v for k, v in self.data['Materials'][m].items()
-                         if v is not None}
-                    matdict[m.lower()] = \
-                        dassh.Material(m.lower(),
-                                       temperature=inlet_temp,
-                                       coeff_dict=c)
+                    if not all(value is None for value in self.data['Materials'][m]['custom_correlations'].values()):
+                        # correlation coeffs specified as dict
+                        c = {k:v for k, v in self.data['Materials'][m]['custom_correlations'].items() if v is not None}
+                        matdict[m.lower()] = \
+                            dassh.Material(m.lower(),
+                                           temperature=inlet_temp,
+                                           corr_dict=c)
+                    else:
+                        # correlation coeffs specified as lists
+                        # Filter None values out of dict
+                        c = {k: v for k, v in self.data['Materials'][m].items()
+                            if v is not None and not isinstance(v, dict)}
+                        matdict[m.lower()] = \
+                            dassh.Material(m.lower(),
+                                        temperature=inlet_temp,
+                                        coeff_dict=c)
             else:
                 # No custom material defined, check built-in materials
                 matdict[m.lower()] = \
