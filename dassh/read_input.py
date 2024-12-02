@@ -26,8 +26,8 @@ import copy
 import logging
 import numpy as np
 import configobj
-from configobj import ConfigObj, flatten_errors
-from validate import Validator
+from configobj import ConfigObj, flatten_errors, ConfigObjError
+from validate import Validator, VdtValueError, VdtTypeError
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import dassh
@@ -1461,23 +1461,43 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     msg = (f"Bad path to properties for material {m}; "
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
-            elif 'custom_materials' not in self.data['Materials'][m]:
+            else: #'custom_materials' not in self.data['Materials'][m]:
                 # All properties must be lists of floats
-                for p in ['heat_capacity',
-                          'thermal_conductivity',
-                          'density',
-                          'viscosity',
-                          'beta']:
-                    msg = (f'Material "{m}" property "{p}" input '
-                           'must be list of floats')
-                    if p in self.data['Materials'][m].keys():
+                try:
+                    x = {}
+                    for p in ['heat_capacity',
+                            'thermal_conductivity',
+                            'density',
+                            'viscosity',
+                            'beta']:
+                        
+                        if p in self.data['Materials'][m].keys():
+                            if self.data['Materials'][m][p] is not None:
+                                    x[p] =    [float(v) for v in
+                                        self.data['Materials'][m][p]]
+                    for p in ['heat_capacity',
+                            'thermal_conductivity',
+                            'density',
+                            'viscosity',
+                            'beta']:
                         if self.data['Materials'][m][p] is not None:
-                            try:
-                                self.data['Materials'][m][p] = \
-                                    [float(v) for v in
-                                     self.data['Materials'][m][p]]
-                            except ValueError:
-                                self.log('error', msg)
+                            self.data['Materials'][m][p] = x[p]
+                except:
+                    try:
+                        for p in ['heat_capacity',
+                                'thermal_conductivity',
+                                'density',
+                                'viscosity',
+                                'beta']:
+                            if p in self.data['Materials'][m].keys():
+                                if self.data['Materials'][m][p] is not None:
+                                    self.data['Materials'][m][p] = \
+                                            self.data['Materials'][m][p][0]     
+                    except ValueError:
+                        msg = (f'Material "{m}" property "{p}" input must be list of floats or a string')
+                        self.log('error', msg)
+            
+                                        
 
     def check_axial_plane_req(self):
         """Check that user made appropriate requests for axial planes"""
@@ -1924,9 +1944,11 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                                        temperature=inlet_temp,
                                        from_file=path)
                 else:
-                    if not all(value is None for value in self.data['Materials'][m]['custom_correlations'].values()):
+                    if isinstance(self.data['Materials'][m]['density'], str):
                         # correlation coeffs specified as dict
-                        c = {k:v for k, v in self.data['Materials'][m]['custom_correlations'].items() if v is not None}
+                        c = {k: v for k, v in self.data['Materials'][m].items()
+                                if v is not None and not isinstance(v, dict)}
+                        #{k:v for k, v in self.data['Materials'][m]['custom_correlations'].items() if v is not None}
                         matdict[m.lower()] = \
                             dassh.Material(m.lower(),
                                            temperature=inlet_temp,
@@ -1946,7 +1968,8 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     dassh.Material(m.lower(), 
                                    temperature=inlet_temp,
                                    use_lbh15 = self.data['Core']['use_lbh15'],
-                                   lbh15_correlations=self.data['Core']['lbh15_correlations'])
+                                   lbh15_correlations=self.data['Core']['lbh15_correlations'],)
+                                #   use_correlation=self.data['Core']['use_correlation'])
 
         # Check all of the materials to make sure they all have the
         # properties they need. Structure: thermal conductivity
@@ -2094,19 +2117,19 @@ def _configobj_load(dassh_inp_object, infile, path_to_template):
                     raise_errors=True, file_error=True)
     # Instantiate Validator object; check against the template
     validator = Validator()
+    
     res = inp.validate(validator, preserve_errors=True)
-    if res is not True:
-        msg = ''
-        for (sec_list, key, _) in flatten_errors(inp, res):
-            if key is not None:
-                msg += ('"%s" key in section "%s" failed validation'
-                        '; check that it meets the requirements'
-                        % (key, ', '.join(sec_list)) + '\n')
-            else:
-                msg += ('Error found in the following '
-                        + 'section: %s ' % ', '.join(sec_list)
-                        + '; maybe missing required input?' + '\n')
-        dassh_inp_object.log('error', msg)
+
+    for entry in flatten_errors(inp, res):
+
+        [section, key, error] = entry     
+     
+        if key is not None:
+            if isinstance(error, VdtTypeError):
+                #optionString = inp.configspec[key]
+                msg = f'"{key}" key in section {section} failed validation'
+                       
+                raise ConfigObjError(msg)
     # otherwise no errors, return data
     return inp
 

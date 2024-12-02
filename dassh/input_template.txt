@@ -41,12 +41,6 @@
         viscosity = force_list(default=None)
         beta = force_list(default=None)
         from_file = string(default=None)
-        [[[custom_correlations]]]
-            thermal_conductivity = string(default=None)
-            heat_capacity = string(default=None)
-            density = string(default=None)
-            viscosity = string(default=None)
-            beta = string(default=None)
 
 
 [Power]
@@ -71,6 +65,7 @@
     coolant_inlet_temp = float
     coolant_material = string
     use_lbh15 = boolean(default=False)
+ #   use_correlation = boolean(default=False)
     length = float
     bypass_fraction = float(min=0.0, max=1.0, default=0.0)
     assembly_pitch = float
