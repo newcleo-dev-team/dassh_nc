@@ -81,7 +81,7 @@ def check_dependencies():
         install_requires.append('dill')
     try:
         import lbh15
-        if version.parse(sys.version_info) == version.parse('3.9'):
+        if sys.version_info == (3, 9):
             raise EnvironmentError('lbh15 is not compatible with Python 3.9')      
         assert version.parse(lbh15.__version__) == version.parse('2.1.0') 
     except (ImportError, AssertionError):
