@@ -314,8 +314,13 @@ class Material(LoggedClass):
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
-        for property in self._data.keys():
-            setattr(self, property, self._data[property](temperature))
+        try:
+            for property in self._data.keys():
+                setattr(self, property, self._data[property](temperature))
+        except Exception as e:
+            msg = f'Property {property} not found for material {self.name}: {e}'
+            self.log('error', msg)
+                
                 
     def clone(self, new_temperature=None):
         """Create a clone of this material with a new temperature
