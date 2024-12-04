@@ -136,7 +136,6 @@ class Material(LoggedClass):
             
             
     def _define_from_table(self, path):
-        print('qui 0', self.name)
         """Define correlation by interpolation of data table"""
         user_path = True
         if not path:
@@ -225,7 +224,6 @@ class Material(LoggedClass):
                 
     def _define_from_correlation(self):
         """Define Na or NaK properties from correlation"""
-        print('qui 1', self.name)
         if self.name == 'sodium':
             import dassh.correlations.properties_Na as corr  
         elif self.name == 'nak':
