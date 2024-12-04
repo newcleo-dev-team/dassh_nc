@@ -80,12 +80,10 @@ class Material(LoggedClass):
     
     def __init__(self, name, temperature=298.15, from_file=None,
                  coeff_dict=None, use_lbh15 = False, lbh15_correlations = None,
-                 corr_dict=None):
+                 corr_dict=None, use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
-
-
         # Read data into instance; use again to update properties later
         if from_file:
             self.read_from_file(from_file)
@@ -93,6 +91,8 @@ class Material(LoggedClass):
             self._define_from_coeff(coeff_dict)
         elif self.name in Material.MATERIAL_LBH.keys() and use_lbh15:
             self._define_from_lbh15(lbh15_correlations)
+        elif self.name in ['sodium', 'nak'] and use_correlation:
+            self._define_from_correlation()
         elif corr_dict:
             self._define_from_user_corr(corr_dict)
         else:
@@ -136,6 +136,7 @@ class Material(LoggedClass):
             
             
     def _define_from_table(self, path):
+        print('qui 0', self.name)
         """Define correlation by interpolation of data table"""
         user_path = True
         if not path:
@@ -221,7 +222,19 @@ class Material(LoggedClass):
         for property in coeff_dict.keys():
             self._data[property.lower()] = \
                 _MatPoly(coeff_dict[property.lower()][::-1])
-
+                
+    def _define_from_correlation(self):
+        """Define Na or NaK properties from correlation"""
+        print('qui 1', self.name)
+        if self.name == 'sodium':
+            import dassh.correlations.properties_Na as corr  
+        elif self.name == 'nak':
+            import dassh.correlations.properties_NaK as corr
+        
+        self._data = {}
+        for property in self.PROP_NAME.keys():
+            self._data[property] = corr.mat_from_corr(property)
+    
     @property
     def name(self):
         return self._name

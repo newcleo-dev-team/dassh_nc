@@ -1968,8 +1968,8 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     dassh.Material(m.lower(), 
                                    temperature=inlet_temp,
                                    use_lbh15 = self.data['Core']['use_lbh15'],
-                                   lbh15_correlations=self.data['Core']['lbh15_correlations'],)
-                                #   use_correlation=self.data['Core']['use_correlation'])
+                                   lbh15_correlations=self.data['Core']['lbh15_correlations'],
+                                   use_correlation=self.data['Core']['use_correlation'])
 
         # Check all of the materials to make sure they all have the
         # properties they need. Structure: thermal conductivity
