@@ -79,7 +79,7 @@ class Material(LoggedClass):
     PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
     
     def __init__(self, name, temperature=298.15, from_file=None,
-                 coeff_dict=None, use_lbh15 = False, lbh15_correlations = None,
+                 coeff_dict=None, lbh15_correlations = None,
                  corr_dict=None, use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
@@ -89,10 +89,11 @@ class Material(LoggedClass):
             self.read_from_file(from_file)
         elif coeff_dict:
             self._define_from_coeff(coeff_dict)
-        elif self.name in Material.MATERIAL_LBH.keys() and use_lbh15:
-            self._define_from_lbh15(lbh15_correlations)
-        elif self.name in ['sodium', 'nak'] and use_correlation:
-            self._define_from_correlation()
+        elif use_correlation and (self.name in ['sodium', 'nak'] or self.name in Material.MATERIAL_LBH.keys()):
+            if self.name in Material.MATERIAL_LBH.keys():
+                self._define_from_lbh15(lbh15_correlations)
+            elif self.name in ['sodium', 'nak']:
+                self._define_from_correlation()
         elif corr_dict:
             self._define_from_user_corr(corr_dict)
         else:
@@ -329,7 +330,7 @@ class Material(LoggedClass):
             for property in self._data.keys():
                 setattr(self, property, self._data[property](temperature))
         except Exception as e:
-            msg = f'Property {property} not found for material {self.name}: {e}'
+            msg = f'Properties not found for material {self.name}: {e}'
             self.log('error', msg)
                 
                 

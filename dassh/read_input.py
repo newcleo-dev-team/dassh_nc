@@ -1967,7 +1967,6 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                 matdict[m.lower()] = \
                     dassh.Material(m.lower(), 
                                    temperature=inlet_temp,
-                                   use_lbh15 = self.data['Core']['use_lbh15'],
                                    lbh15_correlations=self.data['Core']['lbh15_correlations'],
                                    use_correlation=self.data['Core']['use_correlation'])
 
