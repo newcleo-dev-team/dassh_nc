@@ -47,7 +47,6 @@ module_logger = logging.getLogger('dassh.input')
 class DASSH_Assignment(object):
     """Helper class to process the "Assignment" section of the DASSH
     input file; inherited by DASSH_Input"""
-
     def __init__(self):
         """No instance methods or attributes here"""
         pass
@@ -462,7 +461,7 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
     in the software.
 
     """
-
+    __PERMITTED_MATERIALS = ['lead', 'bismuth', 'lbe', 'sodium', 'nak']
     def __init__(self, infile, empty4c=False, power_only=False):
         """Read and check the input data"""
         LoggedClass.__init__(self, 4, 'dassh.read_input.DASSH_Input')
@@ -1935,6 +1934,19 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
         matdict = {}
         for m in matlist:
             if m in self.data['Materials'].keys():
+                # check that material is not defined in more than one way
+                msg = 'Coolant definition must be unique.'
+                if m == self.data['Core']['coolant_material']:
+                    if self.data['Core']['coolant_material'] in self.__PERMITTED_MATERIALS:
+                        self.log('error', msg)
+                    else:
+                        if self.data['Core']['use_correlation']:
+                            self.log('error', msg)
+                
+            if not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
+                msg = 'Coolant definition must be unique.'
+                self.log('error', msg)
+                        
                 if self.data['Materials'][m]['from_file'] is not None:
                     # lookup from file - could be table/coeffs
                     file = self.data['Materials'][m]['from_file']
