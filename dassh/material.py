@@ -84,16 +84,16 @@ class Material(LoggedClass):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
-        # Read data into instance; use again to update properties later
+        # Read data into instance; use again to update properties later       
         if from_file:
             self.read_from_file(from_file)
         elif coeff_dict:
             self._define_from_coeff(coeff_dict)
         elif use_correlation and (self.name in ['sodium', 'nak'] or self.name in Material.MATERIAL_LBH.keys()):
-            if self.name in Material.MATERIAL_LBH.keys():
-                self._define_from_lbh15(lbh15_correlations)
-            elif self.name in ['sodium', 'nak']:
-                self._define_from_correlation()
+                if self.name in Material.MATERIAL_LBH.keys():
+                    self._define_from_lbh15(lbh15_correlations)
+                elif self.name in ['sodium', 'nak']:
+                    self._define_from_correlation()
         elif corr_dict:
             self._define_from_user_corr(corr_dict)
         else:
@@ -191,7 +191,16 @@ class Material(LoggedClass):
         """Define correlation by using user-defined correlation"""
         self._data = {}
         for property in corr_dict.keys():
-            self._data[property] = _MatUserCorr(property, corr_dict[property])
+            try:
+                expr = sp.sympify(corr_dict[property])
+                corr_symbols = [str(fs) for fs in expr.free_symbols]
+            except Exception as e:
+                msg = f'Invalid correlation for {self.name} {property}: {e}'
+                self.log('error', msg)
+            if corr_symbols != ['T'] and corr_symbols != []:
+                msg = f'Correlation for {self.name} {property} contains invalid symbols'
+                self.log('error', msg)            
+            self._data[property] = _MatUserCorr(property, expr)
             
                                                                     
     @staticmethod
@@ -326,12 +335,8 @@ class Material(LoggedClass):
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
-        try:
-            for property in self._data.keys():
-                setattr(self, property, self._data[property](temperature))
-        except Exception as e:
-            msg = f'Properties not found for material {self.name}: {e}'
-            self.log('error', msg)
+        for property in self._data.keys():
+            setattr(self, property, self._data[property](temperature))
                 
                 
     def clone(self, new_temperature=None):
@@ -422,18 +427,17 @@ class _MatUserCorr(object):
     corr: str
         User-defined correlation to use
     """
-    def __init__(self, prop, corr):
-        self.prop = prop
-        self.corr = corr
+    def __init__(self, prop: str, expr: str):
+        self.prop: str = prop
+        self.expr: str = expr
+        self.T = sp.symbols('T')
     def __call__(self, temperature):
-        expr = sp.sympify(self.corr)
-        T = sp.symbols('T')
-        if type(temperature) is np.ndarray:
+        if isinstance(temperature, np.ndarray):
             result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
-                result[ii] = float(expr.subs(T,temperature[ii]).evalf())
+                result[ii] = float(self.expr.subs(self.T,temperature[ii]).evalf())
             return result
-        return float(expr.subs(T,temperature).evalf())
+        return float(self.expr.subs(self.T,temperature).evalf())
     
 class _MatTracker(object):
     """Keep track of changes in coolant properties to indicate when
