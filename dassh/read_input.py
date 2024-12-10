@@ -2131,19 +2131,19 @@ def _configobj_load(dassh_inp_object, infile, path_to_template):
                     raise_errors=True, file_error=True)
     # Instantiate Validator object; check against the template
     validator = Validator()
-    
     res = inp.validate(validator, preserve_errors=True)
-
-    for entry in flatten_errors(inp, res):
-
-        [section, key, error] = entry     
-     
-        if key is not None:
-            if isinstance(error, VdtTypeError):
-                #optionString = inp.configspec[key]
-                msg = f'"{key}" key in section {section} failed validation'
-                       
-                raise ConfigObjError(msg)
+    if res is not True:
+        msg = ''
+        for (sec_list, key, _) in flatten_errors(inp, res):
+            if key is not None:
+                msg += ('"%s" key in section "%s" failed validation'
+                        '; check that it meets the requirements'
+                        % (key, ', '.join(sec_list)) + '\n')
+            else:
+                msg += ('Error found in the following '
+                        + 'section: %s ' % ', '.join(sec_list)
+                        + '; maybe missing required input?' + '\n')
+        dassh_inp_object.log('error', msg)
     # otherwise no errors, return data
     return inp
 

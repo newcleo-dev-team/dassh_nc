@@ -164,11 +164,12 @@ class Material(LoggedClass):
         data = data[x > 0, :]  # eliminate rows where temp is negative
         for i in range(len(cols)):
             y = data[:, i + 1]
+            x2 = x[y > 0]  # Need to ignore zeros in dependent var
+            y2 = y[y > 0]  # Now filter from dependent var
             if not np.all(np.diff(x) > 0):
                 msg = f'Non strictly increasing temperature values detected in material data {path}'
                 self.log('error', msg)
-            self._data[cols[i]] = _MatInterp(x, y)
-
+            self._data[cols[i]] = _MatInterp(x2, y2)
     
     def _define_from_lbh15(self, lbh15_correlations):
         """Define correlation by using lbh15"""    
