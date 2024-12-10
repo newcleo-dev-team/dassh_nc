@@ -1942,10 +1942,6 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     else:
                         if self.data['Core']['use_correlation']:
                             self.log('error', msg)
-                
-            if not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
-                msg = 'Coolant definition must be unique.'
-                self.log('error', msg)
                         
                 if self.data['Materials'][m]['from_file'] is not None:
                     # lookup from file - could be table/coeffs
@@ -1974,6 +1970,13 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                             dassh.Material(m.lower(),
                                         temperature=inlet_temp,
                                         coeff_dict=c)
+                    
+            elif not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
+                msg = 'Coolant definition must be unique.'
+                self.log('error', msg)
+            elif self.data['Core']['use_correlation'] and any(self.data['Core']['lbh15_correlations'].values()) and m in ['sodium', 'nak']:
+                msg = 'Coolant definition must be unique.'
+                self.log('error', msg)
             else:
                 # No custom material defined, check built-in materials
                 matdict[m.lower()] = \
