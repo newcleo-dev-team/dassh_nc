@@ -73,8 +73,9 @@ def test_error_table_negative_val(testdir, caplog):
     f = os.path.join(testdir, 'test_inputs', 'custom_mat-3.csv')
     # with pytest.raises(SystemExit):
     #     Material('badbad', from_file=f)
-    Material('badbad', from_file=f)
-    assert 'Negative values detected in material data ' in caplog.text
+    with pytest.raises(SystemExit):
+        Material('badbad', from_file=f)     
+    assert 'Non-positive or missing values detected in material data ' in caplog.text
 
 
 def test_material_coeff_from_file(testdir):
@@ -130,19 +131,14 @@ def test_sodium_interpolated_value():
     assert ans == pytest.approx(sodium.density)
 
 
-def test_table_with_missing_values(testdir):
+def test_table_with_missing_values(testdir, caplog):
     """Test that DASSH interpolates properties
     with missing or zero values"""
     filepath = os.path.join(testdir, 'test_inputs', 'custom_mat-2.csv')
-    m = Material('sodium', from_file=filepath)
-    # missing values in heat capacity
-    m.update(950.0)
-    assert m.heat_capacity == pytest.approx(1252.0)
-    # zero values in density; missing values in viscosity
-    # linear interp should return average
-    m.update(850.0)
-    assert m.density == pytest.approx(np.average([828, 805]))
-    assert m.viscosity == pytest.approx(np.average([0.000227, 0.000201]))
+    with pytest.raises(SystemExit):
+        Material('missing_sodium', from_file=filepath)    
+    assert 'Non-positive or missing values detected in material data ' in caplog.text
+    
 def _test_property(mat, t_range, correct_values, property):
     """
     Function to test properties
@@ -150,6 +146,7 @@ def _test_property(mat, t_range, correct_values, property):
     for i in np.arange(0,len(t_range)-1):
         mat.update(np.average([t_range[i], t_range[i+1]]))
         assert correct_values[i] == pytest.approx(getattr(mat, property))
+        
 def test_lead():
     """Test that DASSH properly finds the properties for lead"""
     temperature_range = {

@@ -345,7 +345,7 @@ def test_nonfloat_matspec(testdir, caplog):
             os.path.join(testdir, 'test_inputs', 'x_nonfloat_matspec.txt'),
             empty4c=True
         )
-    assert 'must be list of floats' in caplog.text
+    assert 'contains invalid symbols' in caplog.text
     assert 'viscosity' in caplog.text
 
 
