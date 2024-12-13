@@ -89,11 +89,10 @@ class Material(LoggedClass):
             self.read_from_file(from_file)
         elif coeff_dict:
             self._define_from_coeff(coeff_dict)
-        elif use_correlation and (self.name in ['sodium', 'nak'] or self.name in Material.MATERIAL_LBH.keys()):
-                if self.name in Material.MATERIAL_LBH.keys():
-                    self._define_from_lbh15(lbh15_correlations)
-                elif self.name in ['sodium', 'nak']:
-                    self._define_from_correlation()
+        elif use_correlation and self.name in Material.MATERIAL_LBH.keys():
+            self._define_from_lbh15(lbh15_correlations) 
+        elif use_correlation and self.name in ['sodium', 'nak']:
+            self._define_from_correlation()
         elif corr_dict:
             self._define_from_user_corr(corr_dict)
         else:
@@ -129,8 +128,7 @@ class Material(LoggedClass):
         if line1[0] == 'temperature' and 'thermal_conductivity' in line1:
             self._define_from_table(path)
         elif '=' in data[0]:
-            cordict = self._corr_from_file(path)
-            self._define_from_user_corr(cordict)
+            self._define_from_user_corr(self._corr_from_file(path))
         else:  
             cdict = self._coeff_from_table(path)
             self._define_from_coeff(cdict)

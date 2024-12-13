@@ -68,7 +68,7 @@ def test_material_from_table():
             assert getattr(mat, prop) > 0.0
 
 
-def test_error_table_negative_val(testdir, caplog):
+def test_error_table_non_positive_val(testdir, caplog):
     """Test error when table has negative value"""
     f = os.path.join(testdir, 'test_inputs', 'custom_mat-3.csv')
     # with pytest.raises(SystemExit):

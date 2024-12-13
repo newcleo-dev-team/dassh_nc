@@ -28,6 +28,10 @@ class mat_from_corr(object):
         return getattr(self, self.prop)(temperature)
     
     def density(self, T):
+        """
+        Computes NaK density
+        Eq. (1.9) pag. 18 of [1]
+        """
         rho_na = 1000 * self.__density_Na(T) 
         rho_k = 1000 * self.__density_K(T)
         N_k = 0.611138  # corresponding to 72.77 K weight fraction
@@ -36,10 +40,18 @@ class mat_from_corr(object):
         return 1/v 
     
     def thermal_conductivity(self, T):
+        """
+        Computes NaK thermal conductivity
+        Eq. (1.53) pag. 46 of [1]
+        """
         T = T - 273.15
         return (0.214 + 2.07e-4*T - 2.2e-7*T**2)*100
     
     def viscosity(self, T):
+        """
+        Computes NaK viscosity
+        Eq. (1.18) and (1.19) pag.24 of [1]
+        """
         rho = self.density(T) / 1000 # g/cm3
         if T <= 673.15:
             return 0.116*rho**(1/3) * np.exp(688*rho/T) / 1000
@@ -47,6 +59,10 @@ class mat_from_corr(object):
             return 0.082*rho**(1/3) * np.exp(979*rho/T) / 1000
     
     def heat_capacity(self, T):
+        """
+        Computes NaK heat capacity
+        Eq. (1.59) pag. 53 of [1]
+        """
         cp = 0.2320 - 8.82e-5 * T + 8.2e-8*T**2
         return cp*4186.8
     
