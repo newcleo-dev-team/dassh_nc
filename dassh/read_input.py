@@ -1925,9 +1925,7 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
             msg = 'Coolant definition must be unique.'
             if m in self.data['Materials'].keys():
                 # check that material is not defined in more than one way
-                if m == self.data['Core']['coolant_material'] and self.data['Core']['coolant_material'] in self.__PERMITTED_MATERIALS:
-                    self.log('error', msg)
-                elif m == self.data['Core']['coolant_material'] and self.data['Core']['use_correlation']:
+                if m == self.data['Core']['coolant_material'] and (self.data['Core']['coolant_material'] in self.__PERMITTED_MATERIALS or self.data['Core']['use_correlation']):
                     self.log('error', msg)
                 if self.data['Materials'][m]['from_file'] is not None:
                     # lookup from file - could be table/coeffs
@@ -1942,7 +1940,6 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                             if v is not None and not isinstance(v, dict)}
                     if isinstance(self.data['Materials'][m]['density'], str):
                         # correlation coeffs specified as dict
-                        #{k:v for k, v in self.data['Materials'][m]['custom_correlations'].items() if v is not None}
                         matdict[m.lower()] = \
                             dassh.Material(m.lower(),
                                            temperature=inlet_temp,
