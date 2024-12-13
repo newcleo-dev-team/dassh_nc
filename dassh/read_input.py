@@ -26,14 +26,15 @@ import copy
 import logging
 import numpy as np
 import configobj
-from configobj import ConfigObj, flatten_errors, ConfigObjError
-from validate import Validator, VdtValueError, VdtTypeError
+from configobj import ConfigObj, flatten_errors
+from validate import Validator
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import dassh
 from dassh.logged_class import LoggedClass
 from dassh import utils
 from dassh import py4c
+from typing import List, Union
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -462,6 +463,7 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
 
     """
     __PERMITTED_MATERIALS = ['lead', 'bismuth', 'lbe', 'sodium', 'nak']
+    __PROPERTY_LIST = ['density', 'heat_capacity', 'thermal_conductivity', 'viscosity', 'beta']
     def __init__(self, infile, empty4c=False, power_only=False):
         """Read and check the input data"""
         LoggedClass.__init__(self, 4, 'dassh.read_input.DASSH_Input')
@@ -1460,43 +1462,30 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     msg = (f"Bad path to properties for material {m}; "
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
-            else: #'custom_materials' not in self.data['Materials'][m]:
-                # All properties must be lists of floats
-                try:
-                    x = {}
-                    for p in ['heat_capacity',
-                            'thermal_conductivity',
-                            'density',
-                            'viscosity',
-                            'beta']:
-                        
-                        if p in self.data['Materials'][m].keys():
-                            if self.data['Materials'][m][p] is not None:
-                                    x[p] =    [float(v) for v in
-                                        self.data['Materials'][m][p]]
-                    for p in ['heat_capacity',
-                            'thermal_conductivity',
-                            'density',
-                            'viscosity',
-                            'beta']:
-                        if self.data['Materials'][m][p] is not None:
-                            self.data['Materials'][m][p] = x[p]
-                except:
-                    try:
-                        for p in ['heat_capacity',
-                                'thermal_conductivity',
-                                'density',
-                                'viscosity',
-                                'beta']:
-                            if p in self.data['Materials'][m].keys():
-                                if self.data['Materials'][m][p] is not None:
-                                    self.data['Materials'][m][p] = \
-                                            self.data['Materials'][m][p][0]     
-                    except ValueError:
-                        msg = (f'Material "{m}" property "{p}" input must be list of floats or a string')
-                        self.log('error', msg)
+            else: # user material not defined from file
+                x = self.__convert_to_float_or_string([self.data['Materials'][m][p] for p in self.__PROPERTY_LIST])
+                for p in self.__PROPERTY_LIST:
+                    self.data['Materials'][m][p] = x[self.__PROPERTY_LIST.index(p)]
             
-                                        
+    def __convert_to_float_or_string(self, x: Union[List[str], List[float]]):
+        """
+        Converted a list to float, otherwise to string
+        
+        Parameters
+        ----------
+        x : Union[List[str], List[float]]
+            List to convert
+            
+        Returns
+        -------
+        List[Union[str, float]]
+            Converted list into either list of floats or list of strings
+        """
+        try:
+            return [float(v) for v in x]
+        except ValueError:
+            return [str(v) for v in x]
+                                             
 
     def check_axial_plane_req(self):
         """Check that user made appropriate requests for axial planes"""
@@ -1933,16 +1922,13 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
         # list, importing correlations as necessary
         matdict = {}
         for m in matlist:
+            msg = 'Coolant definition must be unique.'
             if m in self.data['Materials'].keys():
                 # check that material is not defined in more than one way
-                msg = 'Coolant definition must be unique.'
-                if m == self.data['Core']['coolant_material']:
-                    if self.data['Core']['coolant_material'] in self.__PERMITTED_MATERIALS:
-                        self.log('error', msg)
-                    else:
-                        if self.data['Core']['use_correlation']:
-                            self.log('error', msg)
-                        
+                if m == self.data['Core']['coolant_material'] and self.data['Core']['coolant_material'] in self.__PERMITTED_MATERIALS:
+                    self.log('error', msg)
+                elif m == self.data['Core']['coolant_material'] and self.data['Core']['use_correlation']:
+                    self.log('error', msg)
                 if self.data['Materials'][m]['from_file'] is not None:
                     # lookup from file - could be table/coeffs
                     file = self.data['Materials'][m]['from_file']
@@ -1952,10 +1938,10 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                                        temperature=inlet_temp,
                                        from_file=path)
                 else:
+                    c = {k: v for k, v in self.data['Materials'][m].items()
+                            if v is not None and not isinstance(v, dict)}
                     if isinstance(self.data['Materials'][m]['density'], str):
                         # correlation coeffs specified as dict
-                        c = {k: v for k, v in self.data['Materials'][m].items()
-                                if v is not None and not isinstance(v, dict)}
                         #{k:v for k, v in self.data['Materials'][m]['custom_correlations'].items() if v is not None}
                         matdict[m.lower()] = \
                             dassh.Material(m.lower(),
@@ -1964,18 +1950,14 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     else:
                         # correlation coeffs specified as lists
                         # Filter None values out of dict
-                        c = {k: v for k, v in self.data['Materials'][m].items()
-                            if v is not None and not isinstance(v, dict)}
                         matdict[m.lower()] = \
                             dassh.Material(m.lower(),
                                         temperature=inlet_temp,
                                         coeff_dict=c)
                     
             elif not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
-                msg = 'Coolant definition must be unique.'
                 self.log('error', msg)
             elif self.data['Core']['use_correlation'] and any(self.data['Core']['lbh15_correlations'].values()) and m in ['sodium', 'nak']:
-                msg = 'Coolant definition must be unique.'
                 self.log('error', msg)
             else:
                 # No custom material defined, check built-in materials
