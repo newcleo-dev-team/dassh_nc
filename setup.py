@@ -79,6 +79,18 @@ def check_dependencies():
         import dill
     except ImportError:
         install_requires.append('dill')
+    try:
+        import lbh15
+        if sys.version_info == (3, 9):
+            raise EnvironmentError('lbh15 is not compatible with Python 3.9')      
+        assert version.parse(lbh15.__version__) == version.parse('2.1.0') 
+    except (ImportError, AssertionError):
+        install_requires.append('lbh15 == 2.1.0')
+    except EnvironmentError as e:
+        raise EnvironmentError(str(e))
+        
+    
+        
     return install_requires
 
 

@@ -24,6 +24,7 @@ import copy
 import numpy as np
 from dassh.logged_class import LoggedClass
 from lbh15 import Lead, Bismuth, LBE
+import sympy as sp
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -78,17 +79,22 @@ class Material(LoggedClass):
     PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
     
     def __init__(self, name, temperature=298.15, from_file=None,
-                 coeff_dict=None, use_lbh15 = False, lbh15_correlations = None):
+                 coeff_dict=None, lbh15_correlations = None,
+                 corr_dict=None, use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
-        # Read data into instance; use again to update properties later
+        # Read data into instance; use again to update properties later       
         if from_file:
             self.read_from_file(from_file)
         elif coeff_dict:
             self._define_from_coeff(coeff_dict)
-        elif self.name in Material.MATERIAL_LBH.keys() and use_lbh15:
-            self._define_from_lbh15(lbh15_correlations)
+        elif use_correlation and self.name in Material.MATERIAL_LBH.keys():
+            self._define_from_lbh15(lbh15_correlations) 
+        elif use_correlation and self.name in ['sodium', 'nak']:
+            self._define_from_correlation()
+        elif corr_dict:
+            self._define_from_user_corr(corr_dict)
         else:
             try:
                 self._define_from_table(None)
@@ -111,21 +117,29 @@ class Material(LoggedClass):
 
         data = data.splitlines()
         # Tabulated data has cols ['temperature', prop 1, prop 2, ...]
-        line1 = data[0].split(',')
-        line1 = [l.lower() for l in line1]
+        if '=' in data[0]:
+            line1 = data[0].split('=')
+        else:
+            line1 = data[0].split(',')
+            line1 = [l.lower() for l in line1]
         # print(line1)
         # print(line1[0] == 'temperature')
         # print('thermal_conductivity' in line1)
         if line1[0] == 'temperature' and 'thermal_conductivity' in line1:
             self._define_from_table(path)
-        else:
+        elif '=' in data[0]:
+            self._define_from_user_corr(self._corr_from_file(path))
+        else:  
             cdict = self._coeff_from_table(path)
             self._define_from_coeff(cdict)
-
+            
+            
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
+        user_path = True
         if not path:
             path = os.path.join(_ROOT, 'data', self.name + '.csv')
+            user_path = False
 
         # data = pxd.read_csv(path, header=0)
         data = np.genfromtxt(path, skip_header=1, delimiter=',',
@@ -134,10 +148,11 @@ class Material(LoggedClass):
         with open(path, 'r') as f:
             cols = f.read().splitlines()[0].split(',')[1:]
 
-        # Check that all values are greater than or equal to zero
-        if np.any(data[~np.isnan(data)] < 0.0):
-            msg = f'Negative values detected in material data {path}'
-            self.log('warning', msg)
+        # Check that all values are greater than or equal to zero, 
+        # if file is provided by the user. 
+        if (np.any(np.isnan(data)) or np.any(data <= 0.0)) and user_path:
+            msg = f'Non-positive or missing values detected in material data {path}'
+            self.log('error', msg)
 
         # define property attributes based on temperature
         # We store only the interpolations, not the data tables
@@ -149,11 +164,10 @@ class Material(LoggedClass):
             y = data[:, i + 1]
             x2 = x[y > 0]  # Need to ignore zeros in dependent var
             y2 = y[y > 0]  # Now filter from dependent var
-            # self._data[cols[i]] = _MatInterp(
-            #     data[:, 0][~np.isnan(data[:, i + 1])],
-            #     data[:, i + 1][~np.isnan(data[:, i + 1])])
+            if not np.all(np.diff(x) > 0):
+                msg = f'Non strictly increasing temperature values detected in material data {path}'
+                self.log('error', msg)
             self._data[cols[i]] = _MatInterp(x2, y2)
-
     
     def _define_from_lbh15(self, lbh15_correlations):
         """Define correlation by using lbh15"""    
@@ -172,6 +186,22 @@ class Material(LoggedClass):
         for property in Material.PROP_NAME.keys():
             self._data[property] = _Matlbh15(Material.PROP_NAME[property], cool_lbh15)
         
+    def _define_from_user_corr(self, corr_dict):
+        """Define correlation by using user-defined correlation"""
+        self._data = {}
+        for property in corr_dict.keys():
+            try:
+                expr = sp.sympify(corr_dict[property])
+                corr_symbols = [str(fs) for fs in expr.free_symbols]
+            except Exception as e:
+                msg = f'Invalid correlation for {self.name} {property}: {e}'
+                self.log('error', msg)
+            if corr_symbols != ['T'] and corr_symbols != []:
+                msg = f'Correlation for {self.name} {property} contains invalid symbols'
+                self.log('error', msg)            
+            self._data[property] = _MatUserCorr(property, expr)
+            
+                                                                    
     @staticmethod
     def _coeff_from_table(path):
         """Read correlation coefficients from CSV file"""
@@ -181,7 +211,17 @@ class Material(LoggedClass):
                 line = line.split(',')
                 cdict[line[0]] = np.array([float(c) for c in line[1:]])
         return cdict
-
+    
+    @staticmethod
+    def _corr_from_file(path):
+        """Read correlation from file"""
+        cdict = {}
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.split('=')
+                cdict[line[0].strip(' ')] = str(line[1])
+        return cdict
+    
     def _define_from_coeff(self, coeff_dict):
         """Define correlation from array of polynomial coefficients"""
         if not coeff_dict:
@@ -190,7 +230,18 @@ class Material(LoggedClass):
         for property in coeff_dict.keys():
             self._data[property.lower()] = \
                 _MatPoly(coeff_dict[property.lower()][::-1])
-
+                
+    def _define_from_correlation(self):
+        """Define Na or NaK properties from correlation"""
+        if self.name == 'sodium':
+            import dassh.correlations.properties_Na as corr  
+        elif self.name == 'nak':
+            import dassh.correlations.properties_NaK as corr
+        
+        self._data = {}
+        for property in self.PROP_NAME.keys():
+            self._data[property] = corr.mat_from_corr(property)
+    
     @property
     def name(self):
         return self._name
@@ -286,6 +337,7 @@ class Material(LoggedClass):
         for property in self._data.keys():
             setattr(self, property, self._data[property](temperature))
                 
+                
     def clone(self, new_temperature=None):
         """Create a clone of this material with a new temperature
         if requested"""
@@ -339,7 +391,8 @@ class _MatPoly(object):
             return y
 
 class _Matlbh15(object):
-    """lbh15 object for material properties
+    """
+    lbh15 object for material properties
     
     Parameters
     ----------
@@ -347,21 +400,43 @@ class _Matlbh15(object):
         Property to calculate
     cool_lbh15: lbh15 object
         lbh15 object representative of the liquid metal to which the property is related
-        """
+    """
     def __init__(self, prop, cool_lbh15):
         self.prop = prop
         self.cool_lbh15 = cool_lbh15
     def __call__(self, temperature):
         if type(temperature) is np.ndarray:
-            prop = np.zeros(len(temperature))
+            result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
                 setattr(self.cool_lbh15, 'T', temperature[ii])
-                prop[ii] = getattr(self.cool_lbh15, self.prop)
-            return prop
+                result[ii] = getattr(self.cool_lbh15, self.prop)
+            return result
         setattr(self.cool_lbh15, 'T', temperature)
         return getattr(self.cool_lbh15, self.prop)
     
 
+class _MatUserCorr(object):
+    """
+    User-defined correlation object for material properties
+    
+    Parameters
+    ----------
+    prop: str
+        Property to calculate
+    corr: str
+        User-defined correlation to use
+    """
+    def __init__(self, prop: str, expr: str):
+        self.prop: str = prop
+        self.expr: str = expr
+        self.T = sp.symbols('T')
+    def __call__(self, temperature):
+        if isinstance(temperature, np.ndarray):
+            result = np.zeros(len(temperature))
+            for ii in range(len(temperature)):
+                result[ii] = float(self.expr.subs(self.T,temperature[ii]).evalf())
+            return result
+        return float(self.expr.subs(self.T,temperature).evalf())
     
 class _MatTracker(object):
     """Keep track of changes in coolant properties to indicate when

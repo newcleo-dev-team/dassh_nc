@@ -34,6 +34,7 @@ import dassh
 from dassh.logged_class import LoggedClass
 from dassh import utils
 from dassh import py4c
+from typing import List, Union
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -47,7 +48,6 @@ module_logger = logging.getLogger('dassh.input')
 class DASSH_Assignment(object):
     """Helper class to process the "Assignment" section of the DASSH
     input file; inherited by DASSH_Input"""
-
     def __init__(self):
         """No instance methods or attributes here"""
         pass
@@ -462,7 +462,8 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
     in the software.
 
     """
-
+    __PERMITTED_MATERIALS = ['lead', 'bismuth', 'lbe', 'sodium', 'nak']
+    __PROPERTY_LIST = ['density', 'heat_capacity', 'thermal_conductivity', 'viscosity', 'beta']
     def __init__(self, infile, empty4c=False, power_only=False):
         """Read and check the input data"""
         LoggedClass.__init__(self, 4, 'dassh.read_input.DASSH_Input')
@@ -1461,23 +1462,30 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                     msg = (f"Bad path to properties for material {m}; "
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
-            else:
-                # All properties must be lists of floats
-                for p in ['heat_capacity',
-                          'thermal_conductivity',
-                          'density',
-                          'viscosity',
-                          'beta']:
-                    msg = (f'Material "{m}" property "{p}" input '
-                           'must be list of floats')
-                    if p in self.data['Materials'][m].keys():
-                        if self.data['Materials'][m][p] is not None:
-                            try:
-                                self.data['Materials'][m][p] = \
-                                    [float(v) for v in
-                                     self.data['Materials'][m][p]]
-                            except ValueError:
-                                self.log('error', msg)
+            else: # user material not defined from file
+                x = self.__convert_to_float_or_string([self.data['Materials'][m][p] for p in self.__PROPERTY_LIST])
+                for p in self.__PROPERTY_LIST:
+                    self.data['Materials'][m][p] = x[self.__PROPERTY_LIST.index(p)]
+            
+    def __convert_to_float_or_string(self, x: Union[List[str], List[float]]):
+        """
+        Converted a list to float, otherwise to string
+        
+        Parameters
+        ----------
+        x : Union[List[str], List[float]]
+            List to convert
+            
+        Returns
+        -------
+        List[Union[str, float]]
+            Converted list into either list of floats or list of strings
+        """
+        try:
+            return [float(v) for v in x]
+        except ValueError:
+            return [str(v) for v in x]
+                                             
 
     def check_axial_plane_req(self):
         """Check that user made appropriate requests for axial planes"""
@@ -1914,7 +1922,11 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
         # list, importing correlations as necessary
         matdict = {}
         for m in matlist:
+            msg = 'Coolant definition must be unique.'
             if m in self.data['Materials'].keys():
+                # check that material is not defined in more than one way
+                if m == self.data['Core']['coolant_material'] and (self.data['Core']['coolant_material'] in self.__PERMITTED_MATERIALS or self.data['Core']['use_correlation']):
+                    self.log('error', msg)
                 if self.data['Materials'][m]['from_file'] is not None:
                     # lookup from file - could be table/coeffs
                     file = self.data['Materials'][m]['from_file']
@@ -1924,21 +1936,33 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                                        temperature=inlet_temp,
                                        from_file=path)
                 else:
-                    # correlation coeffs specified as lists
-                    # Filter None values out of dict
                     c = {k: v for k, v in self.data['Materials'][m].items()
-                         if v is not None}
-                    matdict[m.lower()] = \
-                        dassh.Material(m.lower(),
-                                       temperature=inlet_temp,
-                                       coeff_dict=c)
+                            if v is not None and not isinstance(v, dict)}
+                    if isinstance(self.data['Materials'][m]['density'], str):
+                        # correlation coeffs specified as dict
+                        matdict[m.lower()] = \
+                            dassh.Material(m.lower(),
+                                           temperature=inlet_temp,
+                                           corr_dict=c)
+                    else:
+                        # correlation coeffs specified as lists
+                        # Filter None values out of dict
+                        matdict[m.lower()] = \
+                            dassh.Material(m.lower(),
+                                        temperature=inlet_temp,
+                                        coeff_dict=c)
+                    
+            elif not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
+                self.log('error', msg)
+            elif self.data['Core']['use_correlation'] and any(self.data['Core']['lbh15_correlations'].values()) and m in ['sodium', 'nak']:
+                self.log('error', msg)
             else:
                 # No custom material defined, check built-in materials
                 matdict[m.lower()] = \
                     dassh.Material(m.lower(), 
                                    temperature=inlet_temp,
-                                   use_lbh15 = self.data['Core']['use_lbh15'],
-                                   lbh15_correlations=self.data['Core']['lbh15_correlations'])
+                                   lbh15_correlations=self.data['Core']['lbh15_correlations'],
+                                   use_correlation=self.data['Core']['use_correlation'])
 
         # Check all of the materials to make sure they all have the
         # properties they need. Structure: thermal conductivity
