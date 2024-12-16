@@ -201,7 +201,7 @@ def test_lbh15_temperature_in_range():
             __test_property(m, temperature_range, correct_values, prop_name)  
 
      
-def test_lbh15_temperature_outside_range(caplog):
+def test_lbh15_temperature_outside_range():
     """
     Test use of lbh15 in calculating material properties for lead, lbe and bismuth:
     - below the melting temperature
