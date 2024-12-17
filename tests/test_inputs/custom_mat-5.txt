@@ -1,0 +1,4 @@
+density = 219 + 20/T + 0.001*T**2
+thermal_conductivity = 124.67 - 0.11381*T + 5e-5*T**2 - 1e-8*T**3
+heat_capacity = 1.6582 - 8.5e-4*T + 4.5e-7*T**2 - 2993/T**2 
+viscosity = exp(-6.4406 - 0.3958 * log(T) + 556.835/T)

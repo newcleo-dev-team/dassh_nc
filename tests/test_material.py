@@ -28,7 +28,15 @@ from dassh import Material
 __PROPERTIES = ['density', 'heat_capacity','viscosity', 'thermal_conductivity']
 __COOL_NAMES = ['lead', 'lbe', 'bismuth', 'sodium', 'nak']
 __OUT_RANGE = {'lead': [600, 1301, 2021], 'lbe': [397, 1201, 1927], 'bismuth': [544, 1001, 1831]}
-
+__CORRELATION_DICT = {'density': '219 + 20/T + 0.001*T**2',
+                      'thermal_conductivity': '124.67 - 0.11381*T + 5e-5*T**2 - 1e-8*T**3',
+                      'heat_capacity': '1.6582 - 8.5e-4*T + 4.5e-7*T**2 - 2993/T**2 ',
+                      'viscosity': 'exp(-6.4406 - 0.3958 * log(T) + 556.835/T)'}
+__CORRELATION_DICT_WRONG = {'density': '219*A + 20/T + 0.001*T**2',
+                            'thermal_conductivity': '124.67 - 0.11381*T + 5e-5*T**2 - 1e-8*T**3',
+                            'heat_capacity': '1.6582 - 8.5e-4*T + 4.5e-7*T**2 - 2993/T**2 ',
+                            'viscosity': 'exp(-6.4406 - 0.3958 * log(T) + 556.835/T)'
+                            }
 def __test_property(mat, t_range, correct_values, property):
     """
     Function to test properties
@@ -237,3 +245,45 @@ def test_non_strict_monotonicity_in_table(testdir, caplog):
     with pytest.raises(SystemExit):
         Material('badbad', from_file=f2)     
     assert 'Non strictly increasing temperature values detected in material data' in caplog.text
+    
+def test_user_correlation_from_input():
+    """
+    Test that the user correlation is correctly parsed and used
+    """
+    c = __CORRELATION_DICT
+    m = Material('user_material', corr_dict = c)
+    m.update(100)
+    assert m.density == pytest.approx(229.2)
+    assert m.thermal_conductivity == pytest.approx(113.779)
+    assert m.heat_capacity == pytest.approx(1.2784)
+    assert m.viscosity == pytest.approx(0.067543978521069)
+    
+def test_user_correlation_from_file(testdir):
+    """
+    Test that the user correlation from file is correctly parsed and used
+    """
+    f = os.path.join(testdir, 'test_inputs', 'custom_mat-5.txt')
+    m = Material('badbad', from_file=f)
+    m.update(100)
+    assert m.density == pytest.approx(229.2)
+    assert m.thermal_conductivity == pytest.approx(113.779)
+    assert m.heat_capacity == pytest.approx(1.2784)
+    assert m.viscosity == pytest.approx(0.067543978521069)
+    
+def test_wrong_user_correlation(caplog):
+    """
+    Test that an error is raised for wrong user correlation
+    """
+    c = __CORRELATION_DICT_WRONG
+    with pytest.raises(SystemExit):
+        Material('user_material', corr_dict = c)
+    assert 'Correlation for user_material density contains invalid symbols' in caplog.text
+    
+def test_wrong_user_correlation_from_file(testdir, caplog):
+    """
+    Test that an error is raised for wrong user correlation from file
+    """
+    f = os.path.join(testdir, 'test_inputs', 'custom_mat-6.txt')
+    with pytest.raises(SystemExit):
+        Material('wrong_corr', from_file=f)
+    assert 'Correlation for wrong_corr thermal_conductivity contains invalid symbols' in caplog.text
