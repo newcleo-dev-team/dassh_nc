@@ -26,7 +26,7 @@ from dassh import Material
 
 
 __PROPERTIES = ['density', 'heat_capacity','viscosity', 'thermal_conductivity']
-__MAT_NAMES = ['lead', 'lbe', 'bismuth', 'sodium', 'potassium', 'nak', 'ss304', 'ss316']
+__COOL_NAMES = ['lead', 'lbe', 'bismuth', 'sodium', 'nak']
 __OUT_RANGE = {'lead': [600, 1301, 2021], 'lbe': [397, 1201, 1927], 'bismuth': [544, 1001, 1831]}
 def __test_property(mat, t_range, correct_values, property):
     """
@@ -156,20 +156,6 @@ def test_bad_property(caplog):
         m.update(400.0)
     assert 'viscosity must be > 0; given' in caplog.text
 
-
-def test_sodium_interpolated_value():
-    """Test that DASSH properly interpolates sodium properties"""
-    rho_400 = 919.0
-    rho_500 = 897.0
-    ans = np.average([rho_400, rho_500])
-    sodium = Material('sodium', temperature=450.0)
-    print('ans =', ans)
-    print('res =', sodium.density)
-    err = (sodium.density - ans) / ans
-    print('err = ', err)
-    assert ans == pytest.approx(sodium.density)
-
-
 def test_table_with_missing_values(testdir, caplog):
     """Test that DASSH interpolates properties
     with missing or zero values"""
@@ -182,18 +168,18 @@ def test_interpolation():
     """
     Test interpolation of all properties for all materials
     """
-    for mat in __MAT_NAMES:
+    for mat in __COOL_NAMES + ['ss304', 'ss316', 'potassium']:
         temperature_range = __get_temperature_range(mat)
         properties = __extract_properties('tests/test_data/material_data/' + mat + '_properties.csv')
         m = Material(mat, temperature=temperature_range[0])
         for prop_name, correct_values in properties.items():
             __test_property(m, temperature_range, correct_values, prop_name)
             
-def test_lbh15_temperature_in_range():
+def test_correlations_temperature_in_range():
     """
     Test use of lbh15 in calculating material properties for lead, lbe and bismuth
     """
-    for mat in ['lead', 'lbe', 'bismuth']:
+    for mat in __COOL_NAMES:
         temperature_range = __get_temperature_range(mat)
         properties = __extract_properties('tests/test_data/material_data_lbh15/' + mat + '_properties.csv')
         m = Material(mat, temperature=temperature_range[0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
