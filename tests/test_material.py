@@ -130,10 +130,12 @@ def test_material_from_table():
 def test_error_table_non_positive_val(testdir, caplog):
     """Test error when table has negative value"""
     f = os.path.join(testdir, 'test_inputs', 'custom_mat-3.csv')
-    # with pytest.raises(SystemExit):
-    #     Material('badbad', from_file=f)
     with pytest.raises(SystemExit):
         Material('badbad', from_file=f)     
+    assert 'Non-positive or missing values detected in material data ' in caplog.text
+    f0 = os.path.join(testdir, 'test_inputs', 'custom_mat-4.csv')
+    with pytest.raises(SystemExit):
+        Material('badbad', from_file=f0)     
     assert 'Non-positive or missing values detected in material data ' in caplog.text
 
 
