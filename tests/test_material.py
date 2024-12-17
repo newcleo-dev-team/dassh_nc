@@ -181,7 +181,7 @@ def test_correlations_temperature_in_range():
     """
     for mat in __COOL_NAMES:
         temperature_range = __get_temperature_range(mat)
-        properties = __extract_properties('tests/test_data/material_data_lbh15/' + mat + '_properties.csv')
+        properties = __extract_properties('tests/test_data/material_data_correlations/' + mat + '_properties.csv')
         m = Material(mat, temperature=temperature_range[0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
         for prop_name, correct_values in properties.items():
             __test_property(m, temperature_range, correct_values, prop_name)  
