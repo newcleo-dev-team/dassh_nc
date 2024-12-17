@@ -198,6 +198,7 @@ def test_interpolation():
 def test_correlations_temperature_in_range():
     """
     Test use of lbh15 in calculating material properties for lead, lbe and bismuth
+    and sodium/NaK correlations
     """
     for mat in __COOL_NAMES:
         temperature_range = __get_temperature_range(mat)
@@ -222,3 +223,15 @@ def test_lbh15_temperature_outside_range():
         with pytest.raises(ValueError, match="Temperature must be smaller than boiling temperature"):
             m = Material(mat, temperature=__OUT_RANGE[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             
+def test_non_strict_monotonicity_in_table(testdir, caplog):
+    """
+    Test that an error is raised in case of non-strictly increasing temperatures in tables
+    """
+    f1 = os.path.join(testdir, 'test_inputs', 'mat_non_strict_1.csv')
+    with pytest.raises(SystemExit):
+        Material('badbad', from_file=f1)     
+    assert 'Non strictly increasing temperature values detected in material data' in caplog.text
+    f2 = os.path.join(testdir, 'test_inputs', 'mat_non_strict_2.csv')
+    with pytest.raises(SystemExit):
+        Material('badbad', from_file=f2)     
+    assert 'Non strictly increasing temperature values detected in material data' in caplog.text
