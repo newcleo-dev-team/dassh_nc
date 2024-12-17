@@ -28,6 +28,7 @@ from dassh import Material
 __PROPERTIES = ['density', 'heat_capacity','viscosity', 'thermal_conductivity']
 __COOL_NAMES = ['lead', 'lbe', 'bismuth', 'sodium', 'nak']
 __OUT_RANGE = {'lead': [600, 1301, 2021], 'lbe': [397, 1201, 1927], 'bismuth': [544, 1001, 1831]}
+
 def __test_property(mat, t_range, correct_values, property):
     """
     Function to test properties
@@ -63,32 +64,51 @@ def __get_temperature_range(name):
     ss316_range = np.arange(300, 1700, 100)
     return locals()[name + '_range']
 
-
-def test_material_from_coeff():
-    """Try loading material properties by coefficient dictionaries"""
-    assert hasattr(Material('d9'), 'thermal_conductivity')
-    assert hasattr(Material('ht9'), 'thermal_conductivity')
-
-    # Define a custom dictionary and use it
-    c = {'thermal_conductivity': [0.05, 1.0, 2.0],
-         'heat_capacity': [480.0, 0.5],
-         'density': [1200.0, 0.2, 0.03],
-         'viscosity': [1.0, 1.0, 1.0],
+def __generate_coefficients(n):
+    c = {'thermal_conductivity': [10.0],
+         'heat_capacity': [480.0],
+         'density': [1200.0],
+         'viscosity': [1.0],
          'beta': [0.002]
          }
-    m = Material('test_material', coeff_dict=c)
-    for prop in ['thermal_conductivity', 'heat_capacity',
-                 'density', 'viscosity']:
-        assert hasattr(m, prop)
-        # Try getting a value from the correlation; should be
-        # a float, and should be greater than 0
-        assert getattr(m, prop) > 0.0
+    if n > 0:
+        for i in range(1,n+1):
+            for key in c.keys():
+                c[key].append(i*0.001)
+    return c
 
-    # Check the results for one of the values
-    m.update(100.0)
-    assert m.heat_capacity == pytest.approx(480 + 50.0)
-    assert type(m.beta) == float
-    assert m.beta == 0.002
+def __calc_expected_value(n, T):
+    expected_value = [1200.0, 480.0, 1.0, 10.0, 0.002]
+    if n > 0:
+        for i in range(1,n+1):
+            for p in range(5):
+                expected_value[p] = expected_value[p] + 0.001*i*T**i
+    return expected_value
+
+def test_builtin_materials():
+    """Test built in materials by coefficient dictionaries"""
+    assert hasattr(Material('d9'), 'thermal_conductivity')
+    assert hasattr(Material('ht9'), 'thermal_conductivity')
+    
+def test_material_from_coeff():
+    # Define a custom dictionary and use it
+    for n in range(1, 6):
+        c = __generate_coefficients(n)
+        print(n, c)
+        m = Material('test_material', coeff_dict=c)
+        for prop in ['thermal_conductivity', 'heat_capacity',
+                    'density', 'viscosity']:
+            assert hasattr(m, prop)
+            # Try getting a value from the correlation; should be
+            # a float, and should be greater than 0
+            assert getattr(m, prop) > 0.0
+            assert type(getattr(m, prop)) == float
+            # Check the results for one of the values
+        for T in range(100, 2000, 100):
+            m.update(T)
+            expected_values = __calc_expected_value(n, T)
+            props = [getattr(m,p) for p in __PROPERTIES + ['beta']]
+            assert props == pytest.approx(expected_values)
 
 
 def test_material_from_table():
