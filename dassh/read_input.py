@@ -464,7 +464,6 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
     """
     __PERMITTED_MATERIALS = ['lead', 'bismuth', 'lbe', 'sodium', 'nak']
     __PROPERTY_LIST = ['density', 'heat_capacity', 'thermal_conductivity', 'viscosity', 'beta']
-    __PROPERTY_LIST_STRUCTURAL = ['thermal_conductivity']
     def __init__(self, infile, empty4c=False, power_only=False):
         """Read and check the input data"""
         LoggedClass.__init__(self, 4, 'dassh.read_input.DASSH_Input')
@@ -1464,30 +1463,24 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
             else: # user material not defined from file
-                if len([item for item in self.data['Materials'][m].values() if item is not None]) < 2 and \
-                        self.data['Materials'][m]['thermal_conductivity'] is not None:
-                    property_list = self.__PROPERTY_LIST_STRUCTURAL
-                else:
-                    property_list = self.__PROPERTY_LIST
-                for p in property_list:
+                for p in self.__PROPERTY_LIST:
                     if self.data['Materials'][m][p] is not None:   
-                        x = self.__convert_to_float_or_string(self.data['Materials'][m][p])   
-                        self.data['Materials'][m][p] = x
+                        self.data['Materials'][m][p] = self.__convert_to_float_or_string(self.data['Materials'][m][p])  
                 
             
-    def __convert_to_float_or_string(self, x: Union[List[List[str]], List[List[float]]]):
+    def __convert_to_float_or_string(self, x: Union[List[str], List[float]]):
         """
-        Converted a list to float, otherwise to string
+        Convert a list either to a list of float, or to string
         
         Parameters
         ----------
-        x : Union[List[List[str]], List[List[float]]]
+        x : Union[List[str], List[float]]
             List to convert
             
         Returns
         -------
-        List[List[Union[str, float]]]
-            Converted list into either list of floats or list of strings
+        Union[str, List[float]]
+            Converted list into either list of floats or a single string
         """
         try:
             return [float(v) for v in x]
