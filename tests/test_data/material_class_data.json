@@ -1,0 +1,31 @@
+{
+    "out_range" : {
+        "lead": [600, 1301, 2021], 
+        "lbe": [397, 1201, 1927], 
+        "bismuth": [544, 1001, 1831]
+    },
+    "correlation_dict" : {
+        "density": "219 + 20/T + 0.001*T**2",
+        "thermal_conductivity": "124.67 - 0.11381*T + 5e-5*T**2 - 1e-8*T**3",
+        "heat_capacity": "1.6582 - 8.5e-4*T + 4.5e-7*T**2 - 2993/T**2",
+        "viscosity": "exp(-6.4406 - 0.3958 * log(T) + 556.835/T)"
+    },
+    "correlation_dict_wrong" : {
+        "density": "219*A + 20/T + 0.001*T**2",
+        "thermal_conductivity": "124.67 - 0.11381*T + 5e-5*T**2 - 1e-8*T**3",
+        "heat_capacity": "1.6582 - 8.5e-4*T + 4.5e-7*T**2 - 2993/T**2",
+        "viscosity": "exp(-6.4406 - 0.3958 * log(T) + 556.835/T)"
+    },
+    "properties" : ["density", "heat_capacity", "viscosity", "thermal_conductivity"],
+    "cool_names" : ["lead", "lbe", "bismuth", "sodium", "nak"],
+    "temperature_range": {
+        "lead" :  [650, 1300, 50],   
+        "lbe" : [400, 1200, 50],    
+        "bismuth" : [550, 1000, 50],
+        "sodium" : [400, 2400, 100],
+        "potassium" : [373.15, 1173.15, 50],
+        "nak" : [323.15, 1173.15, 50],
+        "ss304" : [300, 1700, 100],
+        "ss316" : [300, 1700, 100]
+    }
+}
