@@ -79,28 +79,26 @@ class Material(LoggedClass):
     PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
     
     def __init__(self, name, temperature=298.15, from_file=None,
-                 coeff_dict=None, lbh15_correlations = None,
-                 corr_dict=None, use_correlation = False):
+                 corr_dict=None, lbh15_correlations = None,
+                 use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
         # Read data into instance; use again to update properties later       
         if from_file:
             self.read_from_file(from_file)
-        elif coeff_dict:
-            self._define_from_coeff(coeff_dict)
+        elif corr_dict:
+            self._define_from_user_corr(corr_dict)
         elif use_correlation and self.name in Material.MATERIAL_LBH.keys():
             self._define_from_lbh15(lbh15_correlations) 
         elif use_correlation and self.name in ['sodium', 'nak']:
             self._define_from_correlation()
-        elif corr_dict:
-            self._define_from_user_corr(corr_dict)
         else:
             try:
                 self._define_from_table(None)
             except OSError:
                 if self.name.lower() in globals():
-                    self._define_from_coeff(None)
+                    self._define_from_user_corr(None)
                 else:
                     msg = f'Cannot find properties for material {name}'
                     self.log('error', msg)
@@ -130,8 +128,8 @@ class Material(LoggedClass):
         elif '=' in data[0]:
             self._define_from_user_corr(self._corr_from_file(path))
         else:  
-            cdict = self._coeff_from_table(path)
-            self._define_from_coeff(cdict)
+            cdict = self._corr_from_file(path)    
+            self._define_from_user_corr(cdict)
             
             
     def _define_from_table(self, path):
@@ -184,23 +182,7 @@ class Material(LoggedClass):
                 if corr_name in correlations[Material.PROP_NAME[property]]:
                     cool_lbh15.change_correlation_to_use(Material.PROP_NAME[property], corr_name)
         for property in Material.PROP_NAME.keys():
-            self._data[property] = _Matlbh15(Material.PROP_NAME[property], cool_lbh15)
-        
-    def _define_from_user_corr(self, corr_dict):
-        """Define correlation by using user-defined correlation"""
-        self._data = {}
-        for property in corr_dict.keys():
-            try:
-                expr = sp.sympify(corr_dict[property])
-                corr_symbols = [str(fs) for fs in expr.free_symbols]
-            except Exception as e:
-                msg = f'Invalid correlation for {self.name} {property}: {e}'
-                self.log('error', msg)
-            if corr_symbols != ['T'] and corr_symbols != []:
-                msg = f'Correlation for {self.name} {property} contains invalid symbols'
-                self.log('error', msg)            
-            self._data[property] = _MatUserCorr(property, expr)
-            
+            self._data[property] = _Matlbh15(Material.PROP_NAME[property], cool_lbh15)           
                                                                     
     @staticmethod
     def _coeff_from_table(path):
@@ -218,18 +200,34 @@ class Material(LoggedClass):
         cdict = {}
         with open(path, 'r') as f:
             for line in f:
-                line = line.split('=')
-                cdict[line[0].strip(' ')] = str(line[1])
+                if '=' in line:
+                    line = line.split('=')
+                    cdict[line[0].strip(' ')] = str(line[1])
+                else:
+                    line = line.split(',')
+                    cdict[line[0]] = np.array([float(c) for c in line[1:]])
         return cdict
     
-    def _define_from_coeff(self, coeff_dict):
+    def _define_from_user_corr(self, corr_dict):
         """Define correlation from array of polynomial coefficients"""
-        if not coeff_dict:
-            coeff_dict = globals()[self.name.lower()]
+        if not corr_dict:
+            corr_dict = globals()[self.name.lower()]
         self._data = {}
-        for property in coeff_dict.keys():
-            self._data[property.lower()] = \
-                _MatPoly(coeff_dict[property.lower()][::-1])
+        for property in corr_dict.keys():
+            if isinstance(corr_dict[property], str):
+                try:
+                    expr = sp.sympify(corr_dict[property])
+                    corr_symbols = [str(fs) for fs in expr.free_symbols]
+                except Exception as e:
+                    msg = f'Invalid correlation for {self.name} {property}: {e}'
+                    self.log('error', msg)
+                if corr_symbols != ['T'] and corr_symbols != []:
+                    msg = f'Correlation for {self.name} {property} contains invalid symbols'
+                    self.log('error', msg)            
+                self._data[property] = _MatUserCorr(property, expr) 
+            else:
+                self._data[property.lower()] = \
+                    _MatPoly(corr_dict[property.lower()][::-1])
                 
     def _define_from_correlation(self):
         """Define Na or NaK properties from correlation"""

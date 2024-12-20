@@ -464,6 +464,7 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
     """
     __PERMITTED_MATERIALS = ['lead', 'bismuth', 'lbe', 'sodium', 'nak']
     __PROPERTY_LIST = ['density', 'heat_capacity', 'thermal_conductivity', 'viscosity', 'beta']
+    __PROPERTY_LIST_STRUCTURAL = ['thermal_conductivity']
     def __init__(self, infile, empty4c=False, power_only=False):
         """Read and check the input data"""
         LoggedClass.__init__(self, 4, 'dassh.read_input.DASSH_Input')
@@ -1463,28 +1464,35 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
             else: # user material not defined from file
-                x = self.__convert_to_float_or_string([self.data['Materials'][m][p] for p in self.__PROPERTY_LIST])
-                for p in self.__PROPERTY_LIST:
-                    self.data['Materials'][m][p] = x[self.__PROPERTY_LIST.index(p)]
+                if len([item for item in self.data['Materials'][m].values() if item is not None]) < 2 and \
+                        self.data['Materials'][m]['thermal_conductivity'] is not None:
+                    property_list = self.__PROPERTY_LIST_STRUCTURAL
+                else:
+                    property_list = self.__PROPERTY_LIST
+                for p in property_list:
+                    if self.data['Materials'][m][p] is not None:   
+                        x = self.__convert_to_float_or_string(self.data['Materials'][m][p])   
+                        self.data['Materials'][m][p] = x
+                
             
-    def __convert_to_float_or_string(self, x: Union[List[str], List[float]]):
+    def __convert_to_float_or_string(self, x: Union[List[List[str]], List[List[float]]]):
         """
         Converted a list to float, otherwise to string
         
         Parameters
         ----------
-        x : Union[List[str], List[float]]
+        x : Union[List[List[str]], List[List[float]]]
             List to convert
             
         Returns
         -------
-        List[Union[str, float]]
+        List[List[Union[str, float]]]
             Converted list into either list of floats or list of strings
         """
         try:
             return [float(v) for v in x]
-        except ValueError:
-            return [str(v) for v in x]
+        except:          
+            return ''.join([str(v) for v in x]) 
                                              
 
     def check_axial_plane_req(self):
@@ -1938,19 +1946,10 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                 else:
                     c = {k: v for k, v in self.data['Materials'][m].items()
                             if v is not None and not isinstance(v, dict)}
-                    if isinstance(self.data['Materials'][m]['density'], str):
-                        # correlation coeffs specified as dict
-                        matdict[m.lower()] = \
-                            dassh.Material(m.lower(),
-                                           temperature=inlet_temp,
-                                           corr_dict=c)
-                    else:
-                        # correlation coeffs specified as lists
-                        # Filter None values out of dict
-                        matdict[m.lower()] = \
+                    matdict[m.lower()] = \
                             dassh.Material(m.lower(),
                                         temperature=inlet_temp,
-                                        coeff_dict=c)
+                                        corr_dict=c)
                     
             elif not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
                 self.log('error', msg)
