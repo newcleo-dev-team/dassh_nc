@@ -456,4 +456,4 @@ class MetallicFuel(Material):
         porosity_factor = (1 - porosity) / (1 + beta * porosity)
         coeffs *= porosity_factor
         coeffs = {'thermal_conductivity': coeffs}
-        Material.__init__(self, 'metallic_fuel', coeff_dict=coeffs)
+        Material.__init__(self, 'metallic_fuel', corr_dict=coeffs)
