@@ -1463,13 +1463,14 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                            f"{self.data['Materials'][m]['from_file']}")
                     self.log('error', msg)
             else: # user material not defined from file
-                x = self.__convert_to_float_or_string([self.data['Materials'][m][p] for p in self.__PROPERTY_LIST])
                 for p in self.__PROPERTY_LIST:
-                    self.data['Materials'][m][p] = x[self.__PROPERTY_LIST.index(p)]
+                    if self.data['Materials'][m][p] is not None:   
+                        self.data['Materials'][m][p] = self.__convert_to_float_or_string(self.data['Materials'][m][p])  
+                
             
     def __convert_to_float_or_string(self, x: Union[List[str], List[float]]):
         """
-        Converted a list to float, otherwise to string
+        Convert a list either to a list of float, or to string
         
         Parameters
         ----------
@@ -1478,13 +1479,13 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
             
         Returns
         -------
-        List[Union[str, float]]
-            Converted list into either list of floats or list of strings
+        Union[str, List[float]]
+            Converted list into either list of floats or a single string
         """
         try:
             return [float(v) for v in x]
-        except ValueError:
-            return [str(v) for v in x]
+        except:          
+            return ''.join([str(v) for v in x]) 
                                              
 
     def check_axial_plane_req(self):
@@ -1938,19 +1939,10 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                 else:
                     c = {k: v for k, v in self.data['Materials'][m].items()
                             if v is not None and not isinstance(v, dict)}
-                    if isinstance(self.data['Materials'][m]['density'], str):
-                        # correlation coeffs specified as dict
-                        matdict[m.lower()] = \
-                            dassh.Material(m.lower(),
-                                           temperature=inlet_temp,
-                                           corr_dict=c)
-                    else:
-                        # correlation coeffs specified as lists
-                        # Filter None values out of dict
-                        matdict[m.lower()] = \
+                    matdict[m.lower()] = \
                             dassh.Material(m.lower(),
                                         temperature=inlet_temp,
-                                        coeff_dict=c)
+                                        corr_dict=c)
                     
             elif not(self.data['Core']['use_correlation']) and any(self.data['Core']['lbh15_correlations'].values()):
                 self.log('error', msg)
