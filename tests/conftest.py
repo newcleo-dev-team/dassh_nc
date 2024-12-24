@@ -113,7 +113,6 @@ def pytest_configure(config):
     ###########################################
     # Setup test data for material class tests
     ###########################################  
-    print('ciao')
     with open("tests/test_data/material_class_data.json", "r") as json_file:
         file_data = json.load(json_file)
         
