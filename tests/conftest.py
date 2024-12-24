@@ -29,7 +29,10 @@ import pytest
 import dassh
 from dassh.__main__ import main as dassh_main
 from dassh.__main__ import integrate_pin_power as dassh_power
-
+import json 
+import lbh15
+from typing import List, Dict, Any
+from dataclasses import dataclass
 
 def execute_dassh(args, entrypoint="dassh"):
     """Execute DASSH (separate process if Python = 3.6)"""
@@ -75,7 +78,84 @@ def wdir_setup():
         return os.path.join(outpath, infile_name)
     return tmp
 
+@dataclass
+class MaterialData:
+    correlation_mat_names: List[str]
+    material_names: List[str]
+    temperature_range: Dict[str, np.array]
+    correlation_dict: Dict[str, Any]
+    correlation_dict_2: Dict[str, Any]
+    correlation_dict_wrong: Dict[str, Any]
+    expected_from_corr: Dict[str, List[float]]
+    coeff: Dict[str, List[float]]
+    bad_coeff: Dict[str, List[float]]
+    lead_interp: Dict[str, List[float]]
+    lbe_interp: Dict[str, List[float]]
+    bismuth_interp: Dict[str, List[float]]
+    sodium_interp: Dict[str, List[float]]
+    nak_interp: Dict[str, List[float]]
+    potassium_interp: Dict[str, List[float]]
+    ss304_interp: Dict[str, List[float]]
+    ss316_interp: Dict[str, List[float]]
+    lead_corr: Dict[str, List[float]]
+    lbe_corr: Dict[str, List[float]]
+    bismuth_corr: Dict[str, List[float]]
+    sodium_corr: Dict[str, List[float]]
+    nak_corr: Dict[str, List[float]]
+    properties_list: List[str] 
+    mat_from_tables: Dict[str, float]
+    out_range: Dict[str, List[float]]
 
+def pytest_configure(config):
+    """
+    Setup test data for the DASSH test suite
+    """
+    ###########################################
+    # Setup test data for material class tests
+    ###########################################  
+    print('ciao')
+    with open("tests/test_data/material_class_data.json", "r") as json_file:
+        file_data = json.load(json_file)
+        
+    lead_bounds = lbh15.lead_properties.k().range
+    lbe_bounds = lbh15.lbe_properties.k().range
+    bismuth_bounds = lbh15.bismuth_properties.k().range
+        
+    out_range = {
+        'lead': [lead_bounds[0]-1, lead_bounds[1]+1] + [2021.0],
+        'lbe': [lbe_bounds[0]-1, lbe_bounds[1]+1] + [1927.0],
+        'bismuth': [bismuth_bounds[0]-1, bismuth_bounds[1]+1] + [1831.0]
+    }    
+    
+    pytest.mat_data = MaterialData(
+        correlation_mat_names=file_data["cool_names"],
+        material_names=file_data["cool_names"] + ['ss304', 'ss316', 'potassium'],
+        temperature_range=file_data["temperature_range"],
+        correlation_dict=file_data["correlation_dict"],
+        correlation_dict_2=file_data["correlation_dict_2"],
+        correlation_dict_wrong=file_data["correlation_dict_wrong"],
+        expected_from_corr=file_data["expected_from_corr"],
+        coeff=file_data["coefficients"],
+        bad_coeff=file_data["bad_coefficients"],
+        lead_interp=file_data["lead_interp"],
+        lbe_interp=file_data["lbe_interp"],
+        bismuth_interp=file_data["bismuth_interp"],
+        sodium_interp=file_data["sodium_interp"],
+        nak_interp=file_data["nak_interp"],
+        potassium_interp=file_data["potassium_interp"],
+        ss304_interp=file_data["ss304_interp"],
+        ss316_interp=file_data["ss316_interp"],
+        lead_corr=file_data["lead_corr"],
+        lbe_corr=file_data["lbe_corr"],
+        bismuth_corr=file_data["bismuth_corr"],
+        sodium_corr=file_data["sodium_corr"],
+        nak_corr=file_data["nak_corr"],
+        properties_list= ['density', 'thermal_conductivity', 'heat_capacity', 'viscosity'],
+        mat_from_tables=file_data["mat_from_tables"],
+        out_range = out_range
+    )
+    
+    
 # def pytest_configure(config):
 #     # register an additional marker
 #     config.addinivalue_line(
@@ -1232,3 +1312,4 @@ def se2anl_peaktemp_params(c_fuel_rr):
             'T_cool': T_cool,
             'T_clad': T_clad,
             'T_fuel': T_fuel}
+
