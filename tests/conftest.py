@@ -103,8 +103,12 @@ class MaterialData:
     sodium_corr: Dict[str, List[float]]
     nak_corr: Dict[str, List[float]]
     properties_list: List[str] 
+    properties_list_full: List[str]
     mat_from_tables: Dict[str, float]
     out_range: Dict[str, List[float]]
+    mfact: float
+    temperature_1: float
+    temperature_2: float
 
 def pytest_configure(config):
     """
@@ -128,7 +132,7 @@ def pytest_configure(config):
     
     pytest.mat_data = MaterialData(
         correlation_mat_names=file_data["cool_names"],
-        material_names=file_data["cool_names"] + ['ss304', 'ss316', 'potassium'],
+        material_names=file_data["cool_names"] + file_data["other_materials"],
         temperature_range=file_data["temperature_range"],
         correlation_dict=file_data["correlation_dict"],
         correlation_dict_2=file_data["correlation_dict_2"],
@@ -149,9 +153,13 @@ def pytest_configure(config):
         bismuth_corr=file_data["bismuth_corr"],
         sodium_corr=file_data["sodium_corr"],
         nak_corr=file_data["nak_corr"],
-        properties_list= ['density', 'thermal_conductivity', 'heat_capacity', 'viscosity'],
+        properties_list=['density', 'thermal_conductivity', 'heat_capacity', 'viscosity'],
+        properties_list_full= ['density', 'thermal_conductivity', 'heat_capacity', 'viscosity', 'beta'],
         mat_from_tables=file_data["mat_from_tables"],
-        out_range = out_range
+        out_range = out_range,
+        mfact=file_data["multiplication_factor"],
+        temperature_1=file_data["temperature_1"],
+        temperature_2=file_data["temperature_2"]
     )
     
     
