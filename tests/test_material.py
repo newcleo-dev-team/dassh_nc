@@ -28,7 +28,7 @@ from typing import Dict, List
 from pytest import mat_data
 
 
-def property_test(mat: str, t_range: np.array, correct_values: list[float], property: str):
+def property_test(mat: str, t_values: np.array, correct_values: list[float], property: str):
     """
     Function that tests that values of a property of a certain material
     in a certain temperature range are correctly evaluated
@@ -37,18 +37,45 @@ def property_test(mat: str, t_range: np.array, correct_values: list[float], prop
     ----------
     mat : str
         Material name
-    t_range : np.array
+    t_values : np.array
         Temperature range
     correct_values : list[float]
-        Correct values for the properties
+        Reference value for the property
     property : str
         Property name
     """
-    for i in range(0,len(t_range)-1):
-        mat.update(np.average([t_range[i], t_range[i+1]]))
-        assert correct_values[i] == pytest.approx(getattr(mat, property))
+    for ind in range(0,len(t_values)-1):
+        mat.update(np.average([t_values[ind], t_values[ind+1]]))
+        assert correct_values[ind] == pytest.approx(getattr(mat, property))
         
-def get_temperature_range(name: str) -> np.ndarray:
+def material_comparison(mat: str, use_corr: bool = False, lbh15_corr: Dict[str, str] = {'cp': None, 'k': None, 'rho': None, 'mu': None}):
+    """ 
+    Function to compare all material properties over validity range
+    
+    Parameters
+    ----------
+    mat : str
+        Material name
+    use_corr : bool, optional
+        Whether to use correlations or not
+        Default is False
+    lbh15_corr : Dict[str, str], optional
+        Dictionary with non-default correlations to use for each property 
+    """
+    temperature_values = get_temperature_values(mat)
+    if use_corr:      
+        if lbh15_corr['cp'] is not None:
+            properties = mat_data.lead_corr_gurv
+        else: 
+            properties = getattr(mat_data, f"{mat}_corr")
+    else:
+        properties = getattr(mat_data, f"{mat}_interp")
+    mm = Material(mat, temperature=temperature_values[0], use_correlation = use_corr, 
+                     lbh15_correlations = lbh15_corr)
+    for prop_name, correct_values in properties.items():
+        property_test(mm, temperature_values, correct_values, prop_name)
+                
+def get_temperature_values(name: str) -> np.ndarray:
     """
     Function to get validity temperature range
     
@@ -59,23 +86,23 @@ def get_temperature_range(name: str) -> np.ndarray:
         
     Returns
     -------
-    temperature_range : np.ndarray
+    temperature_values : np.ndarray
         Array of temperatures in the validity range 
     """
-    temperature_range = np.arange(*mat_data.temperature_range[name])
-    return temperature_range  
+    temperature_values = np.arange(*mat_data.temperature_values[name])
+    return temperature_values 
            
 class TestCoefficients():
     """
     Class to test material properties as polynomials
     """
-    def __generate_coefficients(self, n: int) -> Dict[str, List[float]]:
+    def __generate_coefficients(self, deg: int) -> Dict[str, List[float]]:
         """
         Method to generate coefficients for a polynomial
         
         Parameters
         ----------
-        n : int
+        deg : int
             Degree of the polynomial
             
         Returns
@@ -84,18 +111,18 @@ class TestCoefficients():
             Dictionary with a list of coefficients for each property
         """
         cc = copy.deepcopy(mat_data.coeff)
-        for i in range(1,n+1):
+        for ind in range(1,deg+1):
             for key in cc.keys():
-                cc[key].append(i*mat_data.mfact)
+                cc[key].append(ind*mat_data.mfact)
         return cc
     
-    def __calc_expected_values(self, n: int, T: float) -> Dict[str, float]:
+    def __calc_expected_values(self, deg: int, T: float) -> Dict[str, float]:
         """
         Method to calculate expected values for a polynomial evaluation
         
         Parameters
         ----------
-        n : int
+        deg : int
             Degree of the polynomial
         T : float
             Temperature
@@ -106,9 +133,9 @@ class TestCoefficients():
             Dictionary with expected values for each property
         """
         expected_values = {key: value[0] for key, value in mat_data.coeff.items()}
-        for i in range(1,n+1):   
+        for ind in range(1,deg+1):   
             for p in mat_data.properties_list_full:        
-                expected_values[p] = expected_values[p] + mat_data.mfact*i*T**i     
+                expected_values[p] = expected_values[p] + mat_data.mfact*ind*T**ind    
         return expected_values
     
     def test_material_from_coeff(self):
@@ -116,36 +143,35 @@ class TestCoefficients():
         # Define a custom dictionary and use it
         for n in range(0, 6):
             cc = self.__generate_coefficients(n)
-            m = Material('test_material', corr_dict=cc)
+            mm = Material('test_material', corr_dict=cc)
             for prop in mat_data.properties_list_full:
-                assert hasattr(m, prop)
+                assert hasattr(mm, prop)
                 # Try getting a value from the correlation; should be
                 # a float, and should be greater than 0
-                assert getattr(m, prop) > 0.0
-                assert type(getattr(m, prop)) == float
+                assert getattr(mm, prop) > 0.0
+                assert type(getattr(mm, prop)) == float
             # Check the results for some of the values
-            for T in range(500, 1000, 100):
-                m.update(T)
+            for T in range(*mat_data.coeff_test_values):
+                mm.update(T)
                 expected_values = self.__calc_expected_values(n, T)
-                props = {p: getattr(m,p) for p in mat_data.properties_list_full}
+                props = {p: getattr(mm,p) for p in mat_data.properties_list_full}
                 assert props == pytest.approx(expected_values)
 
     def test_material_coeff_from_file(self, testdir):
         """Try loading material property correlation coeffs from CSV"""
         filepath = os.path.join(testdir, 'test_inputs', 'custom_mat.csv')
-        m = Material('sodium', from_file=filepath)
-        m.update(mat_data.temperature_1)
+        mm = Material('aasodium', from_file=filepath)
+        mm.update(mat_data.temperature_1)
         for prop in mat_data.properties_list:
-            assert hasattr(m, prop)
-            assert getattr(m, prop) > 0.0
+            assert getattr(mm, prop) == pytest.approx(mat_data.expected_from_coeff[prop])
             
     def test_bad_property(self, caplog):
-        """Make sure Material throws error for negative temperatures"""
+        """Make sure Material throws error for negative value of a property"""
         # Define a custom dictionary and use it
         cc = copy.deepcopy(mat_data.bad_coeff)
-        m = Material('test', corr_dict=cc)
+        mm = Material('test', corr_dict=cc)
         with pytest.raises(SystemExit):
-            m.update(mat_data.temperature_2)
+            mm.update(mat_data.temperature_2)
         assert 'viscosity must be > 0; given' in caplog.text
             
 class TestBuiltInCorrelations():   
@@ -158,12 +184,20 @@ class TestBuiltInCorrelations():
         and sodium/NaK correlations
         """
         for mat in mat_data.correlation_mat_names:
-            temperature_range = get_temperature_range(mat)
-            properties = getattr(mat_data, f"{mat}_corr")
-            m = Material(mat, temperature=temperature_range[0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
-            for prop_name, correct_values in properties.items():
-                property_test(m, temperature_range, correct_values, prop_name)  
-                
+            material_comparison(mat, use_corr = True) 
+           
+    def test_lbh15_non_default_correlation(self, caplog):
+        """
+        Test use of lbh15 in calculating material properties
+        using non-default correlations
+        """
+        material_comparison('lead', use_corr = True, lbh15_corr = {'cp': mat_data.corr_names[0], 'k': None, 'rho': None, 'mu': None})
+            
+        with pytest.raises(SystemExit):
+            mat_bad_corr = Material('lead', get_temperature_values('lead')[0], use_correlation = True, 
+                     lbh15_correlations = {'cp': mat_data.corr_names[1], 'k': None, 'rho': None, 'mu': None})
+        assert f'Correlation {mat_data.corr_names[1]} for cp not available for lead' in caplog.text
+             
     def test_lbh15_temperature_outside_range(self):
         """
         Test use of lbh15 in calculating material properties for lead, lbe and bismuth:
@@ -173,11 +207,11 @@ class TestBuiltInCorrelations():
         """
         for mat in mat_data.out_range.keys():    
             with pytest.raises(ValueError, match="Temperature must be larger than melting temperature"):
-                m = Material(mat, temperature= mat_data.out_range[mat][0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+                mm = Material(mat, temperature= mat_data.out_range[mat][0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             with pytest.warns(UserWarning, match="The thermal conductivity is requested at temperature value"):
-                m = Material(mat, temperature= mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+                mm = Material(mat, temperature= mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             with pytest.raises(ValueError, match="Temperature must be smaller than boiling temperature"):
-                m = Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+                mm = Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             
 class TestTablesAndIntepolation():
     """
@@ -188,8 +222,8 @@ class TestTablesAndIntepolation():
         tables in the data/ directory"""
         coolants = [k for k in mat_data.mat_from_tables.keys()]
         temps = [v for v in mat_data.mat_from_tables.values()]
-        for i in range(len(coolants)):
-            mat = Material(coolants[i], temps[i])
+        for ind in range(len(coolants)):
+            mat = Material(coolants[ind], temps[ind])
             for prop in mat_data.properties_list:
                 assert hasattr(mat, prop)
                 # Try getting a value from the correlation; should be
@@ -200,11 +234,11 @@ class TestTablesAndIntepolation():
         """Test error when table has negative value"""
         f = os.path.join(testdir, 'test_inputs', 'custom_mat-3.csv')
         with pytest.raises(SystemExit):
-            Material('badbad', from_file=f)     
+            Material('negative_prop_mat', from_file=f)     
         assert 'Non-positive or missing values detected in material data ' in caplog.text
         f0 = os.path.join(testdir, 'test_inputs', 'custom_mat-4.csv')
         with pytest.raises(SystemExit):
-            Material('badbad', from_file=f0)     
+            Material('zero_prop_mat', from_file=f0)     
         assert 'Non-positive or missing values detected in material data ' in caplog.text
         
     def test_table_with_missing_values(self, testdir, caplog):
@@ -223,11 +257,15 @@ class TestTablesAndIntepolation():
         """
         f1 = os.path.join(testdir, 'test_inputs', 'mat_non_strict_1.csv')
         with pytest.raises(SystemExit):
-            Material('badbad', from_file=f1)     
+            Material('not_monotonic_mat_1', from_file=f1)     
         assert 'Non strictly increasing temperature values detected in material data' in caplog.text
         f2 = os.path.join(testdir, 'test_inputs', 'mat_non_strict_2.csv')
         with pytest.raises(SystemExit):
-            Material('badbad', from_file=f2)     
+            Material('not_monotonic_mat_2', from_file=f2)     
+        assert 'Non strictly increasing temperature values detected in material data' in caplog.text
+        f3 = os.path.join(testdir, 'test_inputs', 'mat_non_strict_3.csv')
+        with pytest.raises(SystemExit):
+            Material('not_monotonic_mat_3', from_file=f3)     
         assert 'Non strictly increasing temperature values detected in material data' in caplog.text
         
     def test_default_material_interpolation(self):
@@ -235,51 +273,55 @@ class TestTablesAndIntepolation():
         Test interpolation of all properties for all materials
         """
         for mat in mat_data.material_names:
-            temperature_range = get_temperature_range(mat)
-            properties = getattr(mat_data, f"{mat}_interp")
-            m = Material(mat, temperature=temperature_range[0])
-            for prop_name, correct_values in properties.items():
-                property_test(m, temperature_range, correct_values, prop_name)    
-        
+            material_comparison(mat) 
+                
 class TestUserCorrelation():
     """
     Class to test user-defined correlations
     """
+    def __user_correlation_comparison(self, mm: Material, TT: np.ndarray):
+        """
+        Function to compare properties calculated using the user correlation to expected values
+        
+        Parameters
+        ----------
+        mm : Material
+            Material object
+        TT : np.ndarray
+            Range of temperatures over which the comparison is performed
+        """
+        for ind in range(len(TT)):
+            mm.update(TT[ind])
+            assert mm.density == pytest.approx(mat_data.expected_from_corr['density'][ind])
+            assert mm.thermal_conductivity == pytest.approx(mat_data.expected_from_corr['thermal_conductivity'][ind])
+            assert mm.heat_capacity == pytest.approx(mat_data.expected_from_corr['heat_capacity'][ind])
+            assert mm.viscosity == pytest.approx(mat_data.expected_from_corr['viscosity'][ind])
+            
     def test_user_correlation_from_input(self):
         """
         Test that the user correlation is correctly used
         """
-        c = mat_data.correlation_dict
-        m = Material('user_material', corr_dict = c)
-        TT = np.arange(100, 1100, 200)
-        for i in range(len(TT)):
-            m.update(TT[i])
-            assert m.density == pytest.approx(mat_data.expected_from_corr['density'][i])
-            assert m.thermal_conductivity == pytest.approx(mat_data.expected_from_corr['thermal_conductivity'][i])
-            assert m.heat_capacity == pytest.approx(mat_data.expected_from_corr['heat_capacity'][i])
-            assert m.viscosity == pytest.approx(mat_data.expected_from_corr['viscosity'][i])
+        cdict = mat_data.correlation_dict
+        mm = Material('user_material', corr_dict = cdict)
+        TT = np.arange(*mat_data.user_corr_values)
+        self.__user_correlation_comparison(mm, TT)
         
     def test_user_correlation_from_file(self, testdir):
         """
         Test that the user correlation from file is correctly parsed and used
         """
         f = os.path.join(testdir, 'test_inputs', 'custom_mat-5.txt')
-        m = Material('badbad', from_file=f)
-        TT = np.arange(100, 1100, 200)
-        for i in range(len(TT)):
-            m.update(TT[i])
-            assert m.density == pytest.approx(mat_data.expected_from_corr['density'][i])
-            assert m.thermal_conductivity == pytest.approx(mat_data.expected_from_corr['thermal_conductivity'][i])
-            assert m.heat_capacity == pytest.approx(mat_data.expected_from_corr['heat_capacity'][i])
-            assert m.viscosity == pytest.approx(mat_data.expected_from_corr['viscosity'][i])
-        
+        mm = Material('from_file_material', from_file=f)
+        TT = np.arange(*mat_data.user_corr_values)
+        self.__user_correlation_comparison(mm, TT)
+            
     def test_wrong_user_correlation(self, caplog):
         """
         Test that an error is raised for wrong user correlation
         """
-        c = mat_data.correlation_dict_wrong
+        cdict = mat_data.correlation_dict_wrong
         with pytest.raises(SystemExit):
-            Material('user_material', corr_dict = c)
+            Material('user_material', corr_dict = cdict)
         assert 'Correlation for user_material density contains invalid symbols' in caplog.text
         
     def test_wrong_user_correlation_from_file(self, testdir, caplog):
@@ -296,16 +338,11 @@ class TestUserCorrelation():
         Test that the user correlation is used when both user correlation 
         and coefficients are provided for different properties
         """
-        c = mat_data.correlation_dict_2
-        m = Material('user_material', corr_dict = c)
+        cdict = mat_data.correlation_dict_2
+        mm = Material('user_material', corr_dict = cdict)
         
-        TT = np.arange(100, 1100, 200)
-        for i in range(len(TT)):
-            m.update(TT[i])
-            assert m.density == pytest.approx(mat_data.expected_from_corr['density'][i])
-            assert m.thermal_conductivity == pytest.approx(mat_data.expected_from_corr['thermal_conductivity'][i])
-            assert m.heat_capacity == pytest.approx(mat_data.expected_from_corr['heat_capacity'][i])
-            assert m.viscosity == pytest.approx(mat_data.expected_from_corr['viscosity'][i])
+        TT = np.arange(*mat_data.user_corr_values)
+        self.__user_correlation_comparison(mm, TT)
         
 class TestBuiltInDefinition():
     """
@@ -326,9 +363,11 @@ class TestBuiltInDefinition():
         assert 'material candycorn' in caplog.text
         
     def test_bad_temperature(self, caplog):
-        """Make sure Material throws error for negative temperatures"""
-        m = Material('sodium')
+        """Make sure Material throws error for 0 or negative temperatures"""
+        mm = Material('sodium')
         with pytest.raises(SystemExit):
-            m.update(0.0)
+            mm.update(0.0)
         assert 'must be > 0; given' in caplog.text
+        with pytest.raises(SystemExit):
+            mm.update(mat_data.negative_temperature)
         

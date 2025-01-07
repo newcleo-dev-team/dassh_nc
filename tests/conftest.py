@@ -82,7 +82,7 @@ def wdir_setup():
 class MaterialData:
     correlation_mat_names: List[str]
     material_names: List[str]
-    temperature_range: Dict[str, np.array]
+    temperature_values: Dict[str, np.array]
     correlation_dict: Dict[str, Any]
     correlation_dict_2: Dict[str, Any]
     correlation_dict_wrong: Dict[str, Any]
@@ -108,7 +108,13 @@ class MaterialData:
     out_range: Dict[str, List[float]]
     mfact: float
     temperature_1: float
+    expected_from_coeff: Dict[str, List[float]]
     temperature_2: float
+    negative_temperature: float
+    corr_names: List[str]
+    lead_corr_gurv: Dict[str, List[float]]
+    coeff_test_values: List[float]
+    user_corr_values: List[float]
 
 def pytest_configure(config):
     """
@@ -133,7 +139,7 @@ def pytest_configure(config):
     pytest.mat_data = MaterialData(
         correlation_mat_names=file_data["cool_names"],
         material_names=file_data["cool_names"] + file_data["other_materials"],
-        temperature_range=file_data["temperature_range"],
+        temperature_values=file_data["temperature_values"],
         correlation_dict=file_data["correlation_dict"],
         correlation_dict_2=file_data["correlation_dict_2"],
         correlation_dict_wrong=file_data["correlation_dict_wrong"],
@@ -159,7 +165,13 @@ def pytest_configure(config):
         out_range = out_range,
         mfact=file_data["multiplication_factor"],
         temperature_1=file_data["temperature_1"],
-        temperature_2=file_data["temperature_2"]
+        expected_from_coeff=file_data["expected_from_coeff"],
+        temperature_2=file_data["temperature_2"],
+        negative_temperature = file_data["negative_temperature"],
+        corr_names = file_data["correlation_names"],
+        lead_corr_gurv = file_data["lead_corr_gurvich"],
+        coeff_test_values = file_data["coeff_test_values"],
+        user_corr_values = file_data["user_corr_values"]
     )
     
     
