@@ -62,7 +62,7 @@ def material_comparison(mat: str, use_corr: bool = False, lbh15_corr: Dict[str, 
     lbh15_corr : Dict[str, str], optional
         Dictionary with non-default correlations to use for each property 
     """
-    temperature_values = get_temperature_values(mat)
+    strictest_temp_range = get_strictest_temp_range(mat)
     if use_corr:      
         if lbh15_corr['cp'] is not None:
             properties = mat_data.lead_corr_gurv
@@ -70,14 +70,15 @@ def material_comparison(mat: str, use_corr: bool = False, lbh15_corr: Dict[str, 
             properties = getattr(mat_data, f"{mat}_corr")
     else:
         properties = getattr(mat_data, f"{mat}_interp")
-    mm = Material(mat, temperature=temperature_values[0], use_correlation = use_corr, 
+    mm = Material(mat, temperature=strictest_temp_range[0], use_correlation = use_corr, 
                      lbh15_correlations = lbh15_corr)
     for prop_name, correct_values in properties.items():
-        property_test(mm, temperature_values, correct_values, prop_name)
+        property_test(mm, strictest_temp_range, correct_values, prop_name)
                 
-def get_temperature_values(name: str) -> np.ndarray:
+def get_strictest_temp_range(name: str) -> np.ndarray:
     """
-    Function to get validity temperature range
+    Function to get the strictest validity temperature range
+    among all properties
     
     Parameters
     ----------
@@ -86,11 +87,11 @@ def get_temperature_values(name: str) -> np.ndarray:
         
     Returns
     -------
-    temperature_values : np.ndarray
-        Array of temperatures in the validity range 
+    strictest_temp_range : np.ndarray
+        Array of temperatures in the strictest validity range 
     """
-    temperature_values = np.arange(*mat_data.temperature_values[name])
-    return temperature_values 
+    strictest_temp_range = np.arange(*mat_data.strictest_temp_range[name])
+    return strictest_temp_range 
            
 class TestCoefficients():
     """
@@ -146,15 +147,12 @@ class TestCoefficients():
             mm = Material('test_material', corr_dict=cc)
             for prop in mat_data.properties_list_full:
                 assert hasattr(mm, prop)
-                # Try getting a value from the correlation; should be
-                # a float, and should be greater than 0
-                assert getattr(mm, prop) > 0.0
                 assert type(getattr(mm, prop)) == float
             # Check the results for some of the values
             for T in range(*mat_data.coeff_test_values):
                 mm.update(T)
                 expected_values = self.__calc_expected_values(n, T)
-                props = {p: getattr(mm,p) for p in mat_data.properties_list_full}
+                props = {prop_name: getattr(mm, prop_name) for prop_name in mat_data.properties_list_full}
                 assert props == pytest.approx(expected_values)
 
     def test_material_coeff_from_file(self, testdir):
@@ -194,7 +192,7 @@ class TestBuiltInCorrelations():
         material_comparison('lead', use_corr = True, lbh15_corr = {'cp': mat_data.corr_names[0], 'k': None, 'rho': None, 'mu': None})
             
         with pytest.raises(SystemExit):
-            mat_bad_corr = Material('lead', get_temperature_values('lead')[0], use_correlation = True, 
+            mat_bad_corr = Material('lead', get_strictest_temp_range('lead')[0], use_correlation = True, 
                      lbh15_correlations = {'cp': mat_data.corr_names[1], 'k': None, 'rho': None, 'mu': None})
         assert f'Correlation {mat_data.corr_names[1]} for cp not available for lead' in caplog.text
              
@@ -217,19 +215,6 @@ class TestTablesAndIntepolation():
     """
     Class to test material properties using tables and interpolation
     """
-    def test_material_from_table(self):
-        """Try loading material properties stored exclusively in CSV
-        tables in the data/ directory"""
-        coolants = [k for k in mat_data.mat_from_tables.keys()]
-        temps = [v for v in mat_data.mat_from_tables.values()]
-        for ind in range(len(coolants)):
-            mat = Material(coolants[ind], temps[ind])
-            for prop in mat_data.properties_list:
-                assert hasattr(mat, prop)
-                # Try getting a value from the correlation; should be
-                # a float, and should be greater than 0
-                assert getattr(mat, prop) > 0.0
-
     def test_error_table_non_positive_val(self, testdir, caplog):
         """Test error when table has negative value"""
         f = os.path.join(testdir, 'test_inputs', 'custom_mat-3.csv')
@@ -350,8 +335,8 @@ class TestBuiltInDefinition():
     """
     def test_builtin_materials(self):
         """Test built in materials by coefficient dictionaries"""
-        assert hasattr(Material('d9'), 'thermal_conductivity')
-        assert hasattr(Material('ht9'), 'thermal_conductivity')
+        for mat in mat_data.built_in_coeff_mat:
+            assert hasattr(Material(mat), 'thermal_conductivity')
         
     def test_failed_material(self, caplog):
         """

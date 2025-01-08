@@ -82,7 +82,7 @@ def wdir_setup():
 class MaterialData:
     correlation_mat_names: List[str]
     material_names: List[str]
-    temperature_values: Dict[str, np.array]
+    strictest_temp_range: Dict[str, np.array]
     correlation_dict: Dict[str, Any]
     correlation_dict_2: Dict[str, Any]
     correlation_dict_wrong: Dict[str, Any]
@@ -104,7 +104,6 @@ class MaterialData:
     nak_corr: Dict[str, List[float]]
     properties_list: List[str] 
     properties_list_full: List[str]
-    mat_from_tables: Dict[str, float]
     out_range: Dict[str, List[float]]
     mfact: float
     temperature_1: float
@@ -115,6 +114,7 @@ class MaterialData:
     lead_corr_gurv: Dict[str, List[float]]
     coeff_test_values: List[float]
     user_corr_values: List[float]
+    built_in_coeff_mat: List[str]
 
 def pytest_configure(config):
     """
@@ -139,7 +139,7 @@ def pytest_configure(config):
     pytest.mat_data = MaterialData(
         correlation_mat_names=file_data["cool_names"],
         material_names=file_data["cool_names"] + file_data["other_materials"],
-        temperature_values=file_data["temperature_values"],
+        strictest_temp_range=file_data["strictest_temp_range"],
         correlation_dict=file_data["correlation_dict"],
         correlation_dict_2=file_data["correlation_dict_2"],
         correlation_dict_wrong=file_data["correlation_dict_wrong"],
@@ -161,7 +161,6 @@ def pytest_configure(config):
         nak_corr=file_data["nak_corr"],
         properties_list=['density', 'thermal_conductivity', 'heat_capacity', 'viscosity'],
         properties_list_full= ['density', 'thermal_conductivity', 'heat_capacity', 'viscosity', 'beta'],
-        mat_from_tables=file_data["mat_from_tables"],
         out_range = out_range,
         mfact=file_data["multiplication_factor"],
         temperature_1=file_data["temperature_1"],
@@ -171,7 +170,8 @@ def pytest_configure(config):
         corr_names = file_data["correlation_names"],
         lead_corr_gurv = file_data["lead_corr_gurvich"],
         coeff_test_values = file_data["coeff_test_values"],
-        user_corr_values = file_data["user_corr_values"]
+        user_corr_values = file_data["user_corr_values"],
+        built_in_coeff_mat = file_data["built_in_coeff_mat"]
     )
     
     

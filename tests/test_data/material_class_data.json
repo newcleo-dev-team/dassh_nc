@@ -19,7 +19,7 @@
     },
     "cool_names" : ["lead", "lbe", "bismuth", "sodium", "nak"],
     "other_materials" : ["ss304", "ss316", "potassium"],
-    "temperature_values": {
+    "strictest_temp_range": {
         "lead" :  [650, 1300, 50],   
         "lbe" : [400, 1200, 50],    
         "bismuth" : [550, 1000, 50],
@@ -1163,15 +1163,6 @@
             13.29134375
         ]
     },
-    "mat_from_tables": {
-        "water": 300.0,
-        "sodium": 500.0, 
-        "potassium": 500.0, 
-        "nak": 500.0,       
-        "lead": 800.0, 
-        "bismuth": 800.0, 
-        "lbe": 800.0
-    },
     "multiplication_factor": 0.001,
     "temperature_1": 623.15,
     "expected_from_coeff": {
@@ -1273,5 +1264,6 @@
         ]
     },
     "coeff_test_values": [500, 1000, 100],
-    "user_corr_values": [100, 1100, 200]
+    "user_corr_values": [100, 1100, 200],
+    "built_in_coeff_mat": ["ht9", "d9"]
 }
