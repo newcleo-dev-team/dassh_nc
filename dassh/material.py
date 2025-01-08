@@ -134,10 +134,8 @@ class Material(LoggedClass):
             
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
-        user_path = True
         if not path:
             path = os.path.join(_ROOT, 'data', self.name + '.csv')
-            user_path = False
 
         # data = pxd.read_csv(path, header=0)
         data = np.genfromtxt(path, skip_header=1, delimiter=',',
@@ -146,10 +144,10 @@ class Material(LoggedClass):
         with open(path, 'r') as f:
             cols = f.read().splitlines()[0].split(',')[1:]
 
-        # Check that all values are greater than or equal to zero, 
+        # Check that all values are greater than zero, 
         # if file is provided by the user. 
-        if (np.any(np.isnan(data)) or np.any(data <= 0.0)) and user_path:
-            msg = f'Non-positive or missing values detected in material data {path}'
+        if np.any(data <= 0.0):
+            msg = f'Non-positive values detected in material data {path}'
             self.log('error', msg)
 
         # define property attributes based on temperature

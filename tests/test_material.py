@@ -348,3 +348,17 @@ def test_ss316():
         __test_property(m, temperature_range[prop_name], correct_values, prop_name)
     
     
+def test_interpolation_with_missing_value(testdir):
+    """
+    Tests that interpolation is correctly performed
+    in case of missing value in a user-defined table
+    """
+    f = os.path.join(testdir, 'test_inputs', 'custom_missing.csv')
+    mat = Material('test_mat', from_file=f)  
+    mat.update(1700)
+    assert mat.density == pytest.approx(597.0)   
+    
+    f = os.path.join(testdir, 'test_inputs', 'custom_missing-2.csv')
+    mat = Material('test_mat', from_file=f)
+    mat.update(1700)
+    assert mat.density == pytest.approx(595.0)
