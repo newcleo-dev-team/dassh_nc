@@ -1,7 +1,7 @@
 import numpy as np
-from dassh.logged_class import LoggedClass
+from dassh.correlations.properties_abs import PropertyClass
 
-class mat_from_corr(LoggedClass):
+class mat_from_corr(PropertyClass):
     """
     Correlation object for sodium properties
     
@@ -24,7 +24,6 @@ class mat_from_corr(LoggedClass):
     """
     
     def __init__(self, prop):
-        LoggedClass.__init__(self, 0, f'dassh.correlations.properties_Na')
         self.prop = prop
     
     def __call__(self, temperature):
@@ -57,9 +56,17 @@ class mat_from_corr(LoggedClass):
         Eq. (39) pag. 29 of [1]
         """
         # CODATA equation for Na
-        if T > 2000:
-            msg = 'temperature out of validity range for heat capacity (T = {} K > 2000 K)'.format(T)
-            self.log('warning', msg)
-            
         cp = 1.6582 - 8.4790e-4*T + 4.4541e-7*T**2 - 2992.6/T**2 
         return cp*1000  # J/kg-K
+    
+    def density_range(self):
+        return (371, 2500)
+    
+    def thermal_conductivity_range(self):
+        return (371, 2500)
+    
+    def viscosity_range(self):
+        return (371, 2500)
+    
+    def heat_capacity_range(self):
+        return (371, 2000)

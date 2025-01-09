@@ -1,6 +1,7 @@
 import numpy as np
+from dassh.correlations.properties_abs import PropertyClass
 
-class mat_from_corr(object):
+class mat_from_corr(PropertyClass):
     """
     Correlation object for sodium properties
     
@@ -65,6 +66,18 @@ class mat_from_corr(object):
         """
         cp = 0.2320 - 8.82e-5 * T + 8.2e-8*T**2
         return cp*4186.8
+    
+    def density_range(self):
+        return (323.15, 1423.15)
+    
+    def thermal_conductivity_range(self):
+        return (323.15, 1173.15)
+    
+    def viscosity_range(self):
+        return (323.15, 1423.15)
+    
+    def heat_capacity_range(self):
+        return (323.15, 1423.15)
     
     def __density_K(self, T):
         T = T - 273.15
