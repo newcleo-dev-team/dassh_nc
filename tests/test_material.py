@@ -220,21 +220,15 @@ class TestTablesAndIntepolation():
         f = os.path.join(testdir, 'test_inputs', 'custom_mat-3.csv')
         with pytest.raises(SystemExit):
             Material('negative_prop_mat', from_file=f)     
-        assert 'Non-positive or missing values detected in material data ' in caplog.text
+        assert 'Non-positive values detected in material data ' in caplog.text
         f0 = os.path.join(testdir, 'test_inputs', 'custom_mat-4.csv')
         with pytest.raises(SystemExit):
             Material('zero_prop_mat', from_file=f0)     
-        assert 'Non-positive or missing values detected in material data ' in caplog.text
-        
-    def test_table_with_missing_values(self, testdir, caplog):
-        """
-        Test that DASSH interpolates properties
-        with missing or zero values
-        """
-        filepath = os.path.join(testdir, 'test_inputs', 'custom_mat-2.csv')
+        assert 'Non-positive values detected in material data ' in caplog.text
+        f1 = os.path.join(testdir, 'test_inputs', 'custom_mat-2.csv')
         with pytest.raises(SystemExit):
-            Material('missing_sodium', from_file=filepath)    
-        assert 'Non-positive or missing values detected in material data ' in caplog.text
+            Material('missing_sodium', from_file=f1)    
+        assert 'Non-positive values detected in material data ' in caplog.text
         
     def test_non_strict_monotonicity_in_table(self, testdir, caplog):
         """
@@ -259,7 +253,22 @@ class TestTablesAndIntepolation():
         """
         for mat in mat_data.material_names:
             material_comparison(mat) 
-                
+            
+    def test_interpolation_with_missing_value(self, testdir):
+        """
+        Tests that interpolation is correctly performed
+        in case of missing value in a user-defined table
+        """
+        f = os.path.join(testdir, 'test_inputs', 'custom_missing.csv')
+        mat = Material('test_mat', from_file=f)  
+        mat.update(mat_data.interp_temperature)
+        assert mat.density == pytest.approx(mat_data.interp_expected_values[0])   
+        
+        f = os.path.join(testdir, 'test_inputs', 'custom_missing-2.csv')
+        mat = Material('test_mat', from_file=f)
+        mat.update(mat_data.interp_temperature)
+        assert mat.density == pytest.approx(mat_data.interp_expected_values[1])     
+               
 class TestUserCorrelation():
     """
     Class to test user-defined correlations
@@ -356,3 +365,4 @@ class TestBuiltInDefinition():
         with pytest.raises(SystemExit):
             mat.update(mat_data.negative_temperature)
         
+

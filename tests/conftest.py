@@ -115,6 +115,8 @@ class MaterialData:
     coeff_test_values: List[float]
     user_corr_values: List[float]
     built_in_coeff_mat: List[str]
+    interp_temperature: float 
+    interp_expected_values: List[float]
 
 def pytest_configure(config):
     """
@@ -171,7 +173,9 @@ def pytest_configure(config):
         lead_corr_gurv = file_data["lead_corr_gurvich"],
         coeff_test_values = file_data["coeff_test_values"],
         user_corr_values = file_data["user_corr_values"],
-        built_in_coeff_mat = file_data["built_in_coeff_mat"]
+        built_in_coeff_mat = file_data["built_in_coeff_mat"],
+        interp_temperature = file_data["interp_temperature"],
+        interp_expected_values = file_data["interp_expected_values"]
     )
     
     

@@ -1265,5 +1265,7 @@
     },
     "coeff_test_values": [500, 1000, 100],
     "user_corr_values": [100, 1100, 200],
-    "built_in_coeff_mat": ["ht9", "d9"]
+    "built_in_coeff_mat": ["ht9", "d9"],
+    "interp_temperature": 1700,
+    "interp_expected_values": [597.0, 595.0]
 }
