@@ -155,7 +155,6 @@ class Material(LoggedClass):
         self._data = {}
         # Pull temperatures over which to interpolate; eliminate negative vals
         x = data[:, 0]         # temperatures over which to interpolate
-        data = data[x > 0, :]  # eliminate rows where temp is negative
         for i in range(len(cols)):
             y = data[:, i + 1]
             x2 = x[y > 0]  # Need to ignore zeros in dependent var
