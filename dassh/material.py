@@ -84,6 +84,7 @@ class Material(LoggedClass):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.temperature = temperature
+        self.validity_ranges = {}
         # Read data into instance; use again to update properties later       
         if from_file:
             self.read_from_file(from_file)
@@ -131,15 +132,36 @@ class Material(LoggedClass):
             cdict = self._corr_from_file(path)    
             self._define_from_user_corr(cdict)
             
+    def __get_validity_ranges(self, datapath: str = None, corr = None):
+        if corr:
+            print('1')
+            for prop_name in self.PROP_NAME.keys():
+                self.validity_ranges[f"{prop_name}_range"] = getattr(corr, f"{prop_name}_range")
+        else: # data table
+            print('2')  
+            with open(datapath, 'r') as f:
+                header = f.readline().strip().split(',')
+            property_names = header[1:] 
+            data = np.genfromtxt(datapath, delimiter=",", skip_header=1, filling_values=np.nan)
             
+            temperature = data[:, 0]
+            properties = data[:, 1:]
+            for i, prop_name in enumerate(property_names):
+                prop_column = properties[:, i]
+                valid_temps = temperature[~np.isnan(prop_column)]
+                self.validity_ranges[f"{prop_name}_range"] = (valid_temps.min(), valid_temps.max())
+
+        
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
         if not path:
             path = os.path.join(_ROOT, 'data', self.name + '.csv')
-
+            
         # data = pxd.read_csv(path, header=0)
         data = np.genfromtxt(path, skip_header=1, delimiter=',',
                              missing_values=0.0)
+        # get validity ranges for properties
+        self.__get_validity_ranges(datapath = path)
         # Get the columns with string parsing
         with open(path, 'r') as f:
             cols = f.read().splitlines()[0].split(',')[1:]
@@ -232,7 +254,7 @@ class Material(LoggedClass):
             import dassh.correlations.properties_Na as corr  
         elif self.name == 'nak':
             import dassh.correlations.properties_NaK as corr
-        
+        self.__get_validity_ranges(corr = corr.mat_from_corr)
         self._data = {}
         for property in self.PROP_NAME.keys():
             self._data[property] = corr.mat_from_corr(property)
