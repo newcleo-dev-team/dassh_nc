@@ -77,6 +77,7 @@ class Material(LoggedClass):
         }
     LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
     PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
+    MATERIAL_NAMES = ['lead', 'bismuth', 'lbe', 'sodium', 'nak', 'potassium', 'water', 'ss304', 'ss316']
     
     def __init__(self, name, temperature=298.15, from_file=None,
                  corr_dict=None, lbh15_correlations = None,
@@ -134,11 +135,10 @@ class Material(LoggedClass):
             
     def __get_validity_ranges(self, datapath: str = None, corr = None):
         if corr:
-            print('1')
             for prop_name in self.PROP_NAME.keys():
+                print(corr.density_range())
                 self.validity_ranges[f"{prop_name}_range"] = getattr(corr, f"{prop_name}_range")
         else: # data table
-            print('2')  
             with open(datapath, 'r') as f:
                 header = f.readline().strip().split(',')
             property_names = header[1:] 
@@ -347,11 +347,28 @@ class Material(LoggedClass):
     def beta(self, beta):
         # Only used for constant-property materials
         self._beta = beta
-        
+    
+    def __check_limits(self, prop: str):
+        print(self.validity_ranges)
+        if self.validity_ranges[f"{prop}_range"] is not None \
+            and self.temperature < self.validity_ranges[f"{prop}_range"][0]:
+            msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][0]}'
+            self.log('error', msg)
+        elif self.validity_ranges[f"{prop}_range"] is not None \
+            and self.temperature > max(value[1] for value in self.validity_ranges.values()):
+            msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())}'
+            self.log('error', msg)
+        elif self.validity_ranges[f"{prop}_range"] is not None \
+            and self.temperature > self.validity_ranges[f"{prop}_range"][1]:
+            msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][1]}'
+            self.log('warning', msg)
+                
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
         for property in self._data.keys():
+            if self.name in self.MATERIAL_NAMES:
+                self.__check_limits(property)
             setattr(self, property, self._data[property](temperature))
                 
                 
