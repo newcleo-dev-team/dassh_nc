@@ -44,7 +44,7 @@ def property_test(mat: str, t_values: np.array, correct_values: list[float], pro
     property : str
         Property name
     """
-    for ind in range(0,len(t_values)-1):
+    for ind in range(len(t_values)-1):
         mat.update(np.average([t_values[ind], t_values[ind+1]]))
         assert correct_values[ind] == pytest.approx(getattr(mat, property))
         
@@ -90,8 +90,7 @@ def get_strictest_temp_range(name: str) -> np.ndarray:
     strictest_temp_range : np.ndarray
         Array of temperatures in the strictest validity range 
     """
-    strictest_temp_range = np.arange(*mat_data.strictest_temp_range[name])
-    return strictest_temp_range 
+    return np.arange(*mat_data.strictest_temp_range[name])
            
 class TestCoefficients():
     """
@@ -142,7 +141,7 @@ class TestCoefficients():
     def test_material_from_coeff(self):
         """Test material properties as polynomials"""
         # Define a custom dictionary and use it
-        for n in range(0, 6):
+        for n in range(6):
             cc = self.__generate_coefficients(n)
             mat = Material('test_material', corr_dict=cc)
             for prop in mat_data.properties_list_full:
@@ -158,8 +157,7 @@ class TestCoefficients():
     def test_material_coeff_from_file(self, testdir):
         """Try loading material property correlation coeffs from CSV"""
         filepath = os.path.join(testdir, 'test_inputs', 'custom_mat.csv')
-        mat = Material('aasodium', from_file=filepath)
-        mat.update(mat_data.temperature_1)
+        mat = Material('aasodium', mat_data.temperature_coeff_file, from_file=filepath)
         for prop in mat_data.properties_list:
             assert getattr(mat, prop) == pytest.approx(mat_data.expected_from_coeff[prop])
             
@@ -167,9 +165,8 @@ class TestCoefficients():
         """Make sure Material throws error for negative value of a property"""
         # Define a custom dictionary and use it
         cc = copy.deepcopy(mat_data.bad_coeff)
-        mat = Material('test', corr_dict=cc)
         with pytest.raises(SystemExit):
-            mat.update(mat_data.temperature_2)
+            mat = Material('test', mat_data.temperature_negative_prop, corr_dict=cc)
         assert 'viscosity must be > 0; given' in caplog.text
             
 class TestBuiltInCorrelations():   
@@ -221,13 +218,9 @@ class TestTablesAndIntepolation():
         with pytest.raises(SystemExit):
             Material('negative_prop_mat', from_file=f)     
         assert 'Non-positive values detected in material data ' in caplog.text
-        f0 = os.path.join(testdir, 'test_inputs', 'custom_mat-4.csv')
-        with pytest.raises(SystemExit):
-            Material('zero_prop_mat', from_file=f0)     
-        assert 'Non-positive values detected in material data ' in caplog.text
         f1 = os.path.join(testdir, 'test_inputs', 'custom_mat-2.csv')
         with pytest.raises(SystemExit):
-            Material('missing_sodium', from_file=f1)    
+            Material('zero_prop_mat', from_file=f1)    
         assert 'Non-positive values detected in material data ' in caplog.text
         
     def test_non_strict_monotonicity_in_table(self, testdir, caplog):
@@ -295,34 +288,31 @@ class TestUserCorrelation():
         """
         Test that the user correlation is correctly used
         """
-        cdict = mat_data.correlation_dict
-        mat = Material('user_material', corr_dict = cdict)
-        TT = np.arange(*mat_data.user_corr_values)
-        self.__user_correlation_comparison(mat, TT)
+        self.__user_correlation_comparison(
+            Material('user_material', corr_dict = mat_data.correlation_dict),
+            np.arange(*mat_data.user_corr_values))
         
     def test_user_correlation_from_file(self, testdir):
         """
         Test that the user correlation from file is correctly parsed and used
         """
-        f = os.path.join(testdir, 'test_inputs', 'custom_mat-5.txt')
-        mat = Material('from_file_material', from_file=f)
-        TT = np.arange(*mat_data.user_corr_values)
-        self.__user_correlation_comparison(mat, TT)
+        f = os.path.join(testdir, 'test_inputs', 'custom_mat-4.txt')
+        self.__user_correlation_comparison(Material('from_file_material', from_file=f),
+                                           np.arange(*mat_data.user_corr_values))
             
     def test_wrong_user_correlation(self, caplog):
         """
         Test that an error is raised for wrong user correlation
         """
-        cdict = mat_data.correlation_dict_wrong
         with pytest.raises(SystemExit):
-            Material('user_material', corr_dict = cdict)
+            Material('user_material', corr_dict = mat_data.correlation_dict_wrong)
         assert 'Correlation for user_material density contains invalid symbols' in caplog.text
         
     def test_wrong_user_correlation_from_file(self, testdir, caplog):
         """
         Test that an error is raised for wrong user correlation from file
         """
-        f = os.path.join(testdir, 'test_inputs', 'custom_mat-6.txt')
+        f = os.path.join(testdir, 'test_inputs', 'custom_mat-5.txt')
         with pytest.raises(SystemExit):
             Material('wrong_corr', from_file=f)
         assert 'Correlation for wrong_corr thermal_conductivity contains invalid symbols' in caplog.text
@@ -332,11 +322,8 @@ class TestUserCorrelation():
         Test that the user correlation is used when both user correlation 
         and coefficients are provided for different properties
         """
-        cdict = mat_data.correlation_dict_2
-        mat = Material('user_material', corr_dict = cdict)
-        
-        TT = np.arange(*mat_data.user_corr_values)
-        self.__user_correlation_comparison(mat, TT)
+        self.__user_correlation_comparison(Material('user_material', corr_dict = mat_data.correlation_dict_2),
+                                           np.arange(*mat_data.user_corr_values))
         
 class TestBuiltInDefinition():
     """

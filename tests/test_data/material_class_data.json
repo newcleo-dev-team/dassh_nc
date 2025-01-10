@@ -1166,14 +1166,14 @@
     "properties_list": ["density", "thermal_conductivity", "heat_capacity", "viscosity"],
     "properties_list_full" : ["density", "thermal_conductivity", "heat_capacity", "viscosity", "beta"],
     "multiplication_factor": 0.001,
-    "temperature_1": 623.15,
+    "temperature_coeff_file": 623.15,
     "expected_from_coeff": {
         "heat_capacity": 1295.123478,
         "density": 869.2534737,
         "viscosity": 0.003224371643,
         "thermal_conductivity": 214.1703205 
     },
-    "temperature_2": 400.0,
+    "temperature_negative_prop": 400.0,
     "negative_temperature": -100.0,
     "correlation_names": ["gurvich1991", "gurvik1991"],
     "lead_corr_gurvich" : {

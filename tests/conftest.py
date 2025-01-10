@@ -106,9 +106,9 @@ class MaterialData:
     properties_list_full: List[str]
     out_range: Dict[str, List[float]]
     mfact: float
-    temperature_1: float
+    temperature_coeff_file: float
     expected_from_coeff: Dict[str, List[float]]
-    temperature_2: float
+    temperature_negative_prop: float
     negative_temperature: float
     corr_names: List[str]
     lead_corr_gurv: Dict[str, List[float]]
@@ -165,9 +165,9 @@ def pytest_configure(config):
         properties_list_full= file_data["properties_list_full"],
         out_range = out_range,
         mfact=file_data["multiplication_factor"],
-        temperature_1=file_data["temperature_1"],
+        temperature_coeff_file=file_data["temperature_coeff_file"],
         expected_from_coeff=file_data["expected_from_coeff"],
-        temperature_2=file_data["temperature_2"],
+        temperature_negative_prop=file_data["temperature_negative_prop"],
         negative_temperature = file_data["negative_temperature"],
         corr_names = file_data["correlation_names"],
         lead_corr_gurv = file_data["lead_corr_gurvich"],
