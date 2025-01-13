@@ -23,22 +23,24 @@ class PropertyClass(ABC):
     def viscosity(self, T: float) -> float:
         pass
     
+
     @abstractmethod
     def heat_capacity(self, T: float) -> float:
         pass
     
+ 
     @abstractmethod
     def density_range(self) -> tuple[float]:
         pass
-    
+
     @abstractmethod
     def thermal_conductivity_range(self) -> tuple[float]:
         pass
-    
+
     @abstractmethod
     def viscosity_range(self) -> tuple[float]:
         pass
-    
+
     @abstractmethod
     def heat_capacity_range(self) -> tuple[float]:
         pass

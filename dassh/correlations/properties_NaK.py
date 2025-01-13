@@ -67,15 +67,16 @@ class mat_from_corr(PropertyClass):
         cp = 0.2320 - 8.82e-5 * T + 8.2e-8*T**2
         return cp*4186.8
     
+    @property 
     def density_range(self):
         return (323.15, 1423.15)
-    
+    @property 
     def thermal_conductivity_range(self):
         return (323.15, 1173.15)
-    
+    @property 
     def viscosity_range(self):
         return (323.15, 1423.15)
-    
+    @property 
     def heat_capacity_range(self):
         return (323.15, 1423.15)
     

@@ -58,15 +58,15 @@ class mat_from_corr(PropertyClass):
         # CODATA equation for Na
         cp = 1.6582 - 8.4790e-4*T + 4.4541e-7*T**2 - 2992.6/T**2 
         return cp*1000  # J/kg-K
-    
+    @property 
     def density_range(self):
         return (371, 2500)
-    
+    @property 
     def thermal_conductivity_range(self):
         return (371, 2500)
-    
+    @property 
     def viscosity_range(self):
         return (371, 2500)
-    
+    @property 
     def heat_capacity_range(self):
         return (371, 2000)

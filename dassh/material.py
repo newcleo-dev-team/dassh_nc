@@ -23,7 +23,7 @@ import os
 import copy
 import numpy as np
 from dassh.logged_class import LoggedClass
-from lbh15 import Lead, Bismuth, LBE
+from lbh15 import Lead, Bismuth, LBE, lead_properties, bismuth_properties, lbe_properties
 import sympy as sp
 
 
@@ -75,6 +75,11 @@ class Material(LoggedClass):
             'bismuth': Bismuth,
             'lbe': LBE
         }
+    
+    PROP_LBH15 = {'lead': lead_properties,
+                  'bismuth': bismuth_properties,
+                  'lbe': lbe_properties}
+    
     LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
     PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
     MATERIAL_NAMES = ['lead', 'bismuth', 'lbe', 'sodium', 'nak', 'potassium', 'water', 'ss304', 'ss316']
@@ -133,23 +138,52 @@ class Material(LoggedClass):
             cdict = self._corr_from_file(path)    
             self._define_from_user_corr(cdict)
             
-    def __get_validity_ranges(self, datapath: str = None, corr = None):
-        if corr:
+    def __get_validity_ranges(self, datapath: str = None, corr=None, lbh15_corr = None):
+        """
+        Get the validity ranges for all the properties of the material
+        
+        Parameters
+        ----------
+        datapath: str
+            Path to the data table
+        corr: mat_from_corr
+            Correlation function
+        lbh15_corr: dict
+            Dictionary with the correlation to use for each property
+        """
+        if corr:  
             for prop_name in self.PROP_NAME.keys():
-                print(corr.density_range())
-                self.validity_ranges[f"{prop_name}_range"] = getattr(corr, f"{prop_name}_range")
-        else: # data table
+                self.validity_ranges[f"{prop_name}_range"] = \
+                    getattr(corr(prop_name), f"{prop_name}_range")
+        elif datapath is not None: # data table
             with open(datapath, 'r') as f:
                 header = f.readline().strip().split(',')
-            property_names = header[1:] 
-            data = np.genfromtxt(datapath, delimiter=",", skip_header=1, filling_values=np.nan)
-            
+            data = np.genfromtxt(datapath, delimiter=",", skip_header=1, filling_values=np.nan)   
             temperature = data[:, 0]
             properties = data[:, 1:]
-            for i, prop_name in enumerate(property_names):
-                prop_column = properties[:, i]
-                valid_temps = temperature[~np.isnan(prop_column)]
+            for i, prop_name in enumerate(header[1:]):
+                valid_temps = temperature[~np.isnan(properties[:, i])]
                 self.validity_ranges[f"{prop_name}_range"] = (valid_temps.min(), valid_temps.max())
+        #else:
+        #    cool_prop = self.PROP_LBH15[self.name]
+        #    for prop_name in self.PROP_NAME.keys():
+        #        if self.name == 'lead' and prop_name == 'heat_capacity':
+        #            if lbh15_corr['cp'] is None:
+        #                self.validity_ranges[f"{prop_name}_range"] = \
+        #                    getattr(cool_prop, f'cp_sobolev2011')().range
+        #            else: 
+        #                self.validity_ranges[f"{prop_name}_range"] = \
+        #                    getattr(cool_prop, f"cp_{lbh15_corr['cp']}")().range
+        #        else:
+        #            self.validity_ranges[f"{prop_name}_range"] = \
+        #                getattr(cool_prop, self.PROP_NAME[prop_name])().range
+
+                    
+                        
+
+
+                
+
 
         
     def _define_from_table(self, path):
@@ -190,7 +224,7 @@ class Material(LoggedClass):
         """Define correlation by using lbh15"""    
         self._data = {}
         cool_lbh15 = Material.MATERIAL_LBH[self.name](T=self.temperature)
-        
+        self.__get_validity_ranges(lbh15_corr = lbh15_correlations)
         for property in Material.PROP_NAME.keys():
             correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
             for property in Material.PROP_NAME.keys():
@@ -254,7 +288,8 @@ class Material(LoggedClass):
             import dassh.correlations.properties_Na as corr  
         elif self.name == 'nak':
             import dassh.correlations.properties_NaK as corr
-        self.__get_validity_ranges(corr = corr.mat_from_corr)
+            
+        self.__get_validity_ranges(corr=corr.mat_from_corr)
         self._data = {}
         for property in self.PROP_NAME.keys():
             self._data[property] = corr.mat_from_corr(property)
@@ -349,19 +384,24 @@ class Material(LoggedClass):
         self._beta = beta
     
     def __check_limits(self, prop: str):
-        print(self.validity_ranges)
-        if self.validity_ranges[f"{prop}_range"] is not None \
-            and self.temperature < self.validity_ranges[f"{prop}_range"][0]:
-            msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][0]}'
-            self.log('error', msg)
-        elif self.validity_ranges[f"{prop}_range"] is not None \
-            and self.temperature > max(value[1] for value in self.validity_ranges.values()):
-            msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())}'
-            self.log('error', msg)
-        elif self.validity_ranges[f"{prop}_range"] is not None \
-            and self.temperature > self.validity_ranges[f"{prop}_range"][1]:
-            msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][1]}'
-            self.log('warning', msg)
+        """
+        Checks if the temperature is within the validity range of the property
+        
+        Parameters
+        ----------
+        prop: str
+            Property to check
+        """
+        if self.validity_ranges.get(f"{prop}_range", None):
+            if self.temperature < self.validity_ranges[f"{prop}_range"][0]:
+                msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][0]} K'
+                self.log('error', msg)
+            elif self.temperature > max(value[1] for value in self.validity_ranges.values()):
+                msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())} K'
+                self.log('error', msg)
+            elif self.temperature > self.validity_ranges[f"{prop}_range"][1]:
+                msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][1]} K'
+                self.log('warning', msg)
                 
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
