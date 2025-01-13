@@ -207,7 +207,27 @@ class TestBuiltInCorrelations():
                 lbh15_mat = Material(mat, temperature= mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             with pytest.raises(ValueError, match="Temperature must be smaller than boiling temperature"):
                 lbh15_mat = Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
-            
+    
+    def test_sodium_nak_corr_out_range(self, caplog):
+        """
+        Test that a warning is raised for temperature outside the range of correlations 
+        for sodium and NaK
+        """
+        for mat in mat_data.corr_out_range.keys():
+            Material(mat, temperature= mat_data.corr_out_range[mat][0])
+            assert 'is below the validity range ' in caplog.text
+            Material(mat, temperature= mat_data.corr_out_range[mat][1])
+            assert 'is above the maximum validity range ' in caplog.text
+    
+    def test_sodium_nak_corr_mid_range(self, caplog):
+        """
+        Test that a warning is raised for temperature above the validity range
+        for a property, but below the maximum validity range
+        """
+        for mat in mat_data.corr_mid_range.keys():    
+            Material(mat, temperature=mat_data.corr_mid_range[mat], use_correlation=True)
+            assert 'is above the validity range' in caplog.text
+                
 class TestTablesAndIntepolation():
     """
     Class to test material properties using tables and interpolation
@@ -261,6 +281,27 @@ class TestTablesAndIntepolation():
         mat = Material('test_mat', from_file=f)
         mat.update(mat_data.interp_temperature)
         assert mat.density == pytest.approx(mat_data.interp_expected_values[1])     
+    
+    def test_table_out_of_range(self, caplog):
+        """
+        Test that a warning is raised for temperature outside the range of the table
+        """
+        for mat in mat_data.table_out_range.keys():    
+            Material(mat, temperature= mat_data.table_out_range[mat][0])
+            assert 'is below the validity range ' in caplog.text
+            Material(mat, temperature= mat_data.table_out_range[mat][1])
+            assert 'is above the maximum validity range ' in caplog.text
+            
+    def test_table_mid_range(self, caplog):
+        """
+        Test that a warning is raised for temperature above the validity range
+        for a property, but below the maximum validity range
+        """
+        for mat in mat_data.table_mid_range.keys():    
+            Material(mat, temperature= mat_data.table_mid_range[mat])
+            assert 'is above the validity range' in caplog.text
+                
+        
                
 class TestUserCorrelation():
     """

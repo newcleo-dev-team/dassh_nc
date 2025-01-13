@@ -117,6 +117,10 @@ class MaterialData:
     built_in_coeff_mat: List[str]
     interp_temperature: float 
     interp_expected_values: List[float]
+    table_out_range: Dict[str, List[float]]
+    table_mid_range: Dict[str, float]
+    corr_out_range: Dict[str, List[float]]
+    corr_mid_range: Dict[str, float]
 
 def pytest_configure(config):
     """
@@ -175,7 +179,11 @@ def pytest_configure(config):
         user_corr_values = file_data["user_corr_values"],
         built_in_coeff_mat = file_data["built_in_coeff_mat"],
         interp_temperature = file_data["interp_temperature"],
-        interp_expected_values = file_data["interp_expected_values"]
+        interp_expected_values = file_data["interp_expected_values"],
+        table_out_range=file_data["table_out_range"],
+        table_mid_range=file_data["table_mid_range"],
+        corr_out_range = file_data["corr_out_range"],
+        corr_mid_range=file_data["corr_mid_range"]
     )
     
     

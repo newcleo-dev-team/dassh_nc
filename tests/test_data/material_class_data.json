@@ -1269,5 +1269,26 @@
     "user_corr_values": [100, 1100, 200],
     "built_in_coeff_mat": ["ht9", "d9"],
     "interp_temperature": 1700,
-    "interp_expected_values": [597.0, 595.0]
+    "interp_expected_values": [597.0, 595.0],
+    "table_out_range": {
+        "sodium": [370, 2501],
+        "nak": [322.15, 1474.15],
+        "lead": [600, 2001],
+        "bismuth": [549, 1801],
+        "lbe": [399, 1901]
+    },
+    "table_mid_range": {
+        "nak": 1223.15,
+        "lead": 1400,
+        "bismuth": 1400,
+        "lbe": 1400
+    },
+    "corr_out_range": {
+        "sodium": [370, 2501],
+        "nak": [322.15, 1424.15]
+        },
+    "corr_mid_range": {
+        "sodium": 2100,
+        "nak": 1180
+        }   
 }

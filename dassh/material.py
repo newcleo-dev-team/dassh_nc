@@ -84,7 +84,7 @@ class Material(LoggedClass):
     PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
     MATERIAL_NAMES = ['lead', 'bismuth', 'lbe', 'sodium', 'nak', 'potassium', 'water', 'ss304', 'ss316']
     
-    def __init__(self, name, temperature=298.15, from_file=None,
+    def __init__(self, name, temperature=300, from_file=None,
                  corr_dict=None, lbh15_correlations = None,
                  use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
@@ -395,13 +395,13 @@ class Material(LoggedClass):
         if self.validity_ranges.get(f"{prop}_range", None):
             if self.temperature < self.validity_ranges[f"{prop}_range"][0]:
                 msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][0]} K'
-                self.log('error', msg)
+                self.log('Warning', msg)
             elif self.temperature > max(value[1] for value in self.validity_ranges.values()):
                 msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())} K'
-                self.log('error', msg)
+                self.log('Warning', msg)
             elif self.temperature > self.validity_ranges[f"{prop}_range"][1]:
                 msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][1]} K'
-                self.log('warning', msg)
+                self.log('Warning', msg)
                 
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
