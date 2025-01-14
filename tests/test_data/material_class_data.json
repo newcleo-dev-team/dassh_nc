@@ -1285,7 +1285,7 @@
     },
     "corr_out_range": {
         "sodium": [370, 2501],
-        "nak": [322.15, 1424.15]
+        "nak": [322.15, 1500.15]
         },
     "corr_mid_range": {
         "sodium": 2100,

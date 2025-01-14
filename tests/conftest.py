@@ -465,7 +465,7 @@ def sc_5ring_map(sc_5ring_type):
 @pytest.fixture(scope='module')
 def coolant():
     """DASSH Material object for coolant"""
-    return dassh.Material('sodium')
+    return dassh.Material('sodium_se2anl')
 
 
 @pytest.fixture(scope='module')
@@ -561,7 +561,7 @@ def unrodded_default_params():
 def textbook_params(assembly_default_params):
     """Parameters for simple hexagonal bundle parameters taken from
     Nuclear Systems II textbook (Todreas); Table 4-3 page 159"""
-    mat = {'coolant': dassh.Material('water'),
+    mat = {'coolant': dassh.Material('water', 300.0),
            'duct': dassh.Material('ss316')}
     input = copy.deepcopy(assembly_default_params)
     input['num_rings'] = 5
@@ -675,7 +675,7 @@ def thesis_asm_params(assembly_default_params):
                  + input['pin_diameter'])
     input['duct_ftf'] = [duct_iftf, duct_iftf + 0.001]  # m
     input['AxialRegion'] = {'rods': {'z_lo': 0.0, 'z_hi': 5.0}}
-    mat = {'coolant': dassh.Material('water'),
+    mat = {'coolant': dassh.Material('water', 273.3),
            'duct': dassh.Material('ss316')}
     return input, mat
 
@@ -1236,7 +1236,8 @@ def small_reactor(testdir):
 def three_asm_core(testdir, coolant, simple_asm):
     """DASSH Core object for 3-asm core with simple, 7-pin asm"""
     asm_list = np.array([0, 1, 2, np.nan, np.nan, np.nan, np.nan])
-    core_obj = dassh.Core(asm_list, 0.12, 1.0, coolant,
+    cool = dassh.Material('sodium', 401)
+    core_obj = dassh.Core(asm_list, 0.12, 1.0, cool,
                           inlet_temperature=623.15, model='flow')
     assemblies = []
     loc = [(0, 0), (1, 0), (1, 1)]
