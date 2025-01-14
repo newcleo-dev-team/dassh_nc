@@ -44,7 +44,7 @@ def test_ur_reg_instantiation_fancy(testdir):
     inp = dassh.DASSH_Input(
         os.path.join(testdir, 'test_inputs', 'input_ur_conv_factor.txt'),
         empty4c=True)
-    mat = {'coolant': dassh.Material('sodium'),
+    mat = {'coolant': dassh.Material('sodium', 400),
            'duct': dassh.Material('ht9')}
 
     # Test fully unrodded assembly
@@ -102,10 +102,14 @@ def test_unrodded_reg_clone_deep(c_lrefl_simple):
 
 def test_simple_unrodded_reg_zero_power(c_lrefl_simple):
     """Test that no power temp calc returns no change"""
+    c_lrefl_simple.temp['coolant_int'] *= 623.15
+    c_lrefl_simple.temp['duct_mw'] *= 623.15
     in_temp = c_lrefl_simple.temp['coolant_int']
     t_gap = np.ones(6) * c_lrefl_simple.avg_duct_mw_temp
+    print(in_temp, t_gap)
     c_lrefl_simple.calculate(
         0.1, {'refl': 0.0}, t_gap, 0.0, adiabatic_duct=True)
+    print('qui1')
     c_lrefl_simple.calculate_pressure_drop(0.1, 0.1)
     assert c_lrefl_simple.temp['coolant_int'] == pytest.approx(in_temp)
     assert c_lrefl_simple.pressure_drop > 0.0
@@ -113,6 +117,7 @@ def test_simple_unrodded_reg_zero_power(c_lrefl_simple):
 
 def test_simple_unrodded_reg_none_power(c_lrefl_simple):
     """Test that giving power=None returns no change in temps"""
+    c_lrefl_simple.temp['coolant_int'] *= 623.15
     in_temp = c_lrefl_simple.temp['coolant_int']
     t_gap = np.ones(6) * c_lrefl_simple.avg_duct_mw_temp
     c_lrefl_simple.calculate(

@@ -27,7 +27,7 @@ import dassh
 
 def test_rr_flowsplit_conservation(textbook_rr):
     """Test flowsplit mass conservation requirement"""
-    textbook_rr._update_coolant_int_params(700.0)
+    textbook_rr._update_coolant_int_params(373)
     total = 0.0
     total += (textbook_rr.coolant_int_params['fs'][0]
               * textbook_rr.params['area'][0]
