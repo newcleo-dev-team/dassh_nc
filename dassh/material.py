@@ -25,7 +25,8 @@ import numpy as np
 from dassh.logged_class import LoggedClass
 from lbh15 import Lead, Bismuth, LBE, lead_properties, bismuth_properties, lbe_properties
 import sympy as sp
-
+import csv
+import warnings
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -81,10 +82,11 @@ class Material(LoggedClass):
                   'lbe': lbe_properties}
     
     LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
-    PROP_NAME = dict(zip(['density', 'heat_capacity', 'viscosity', 'thermal_conductivity'], LBH15_PROPERTIES)) 
+    PROPS_NAME = ['density', 'heat_capacity', 'viscosity', 'thermal_conductivity']
+    PROPS_NAME_FULL = dict(zip(PROPS_NAME, LBH15_PROPERTIES)) 
     MATERIAL_NAMES = ['lead', 'bismuth', 'lbe', 'sodium', 'nak', 'potassium', 'water', 'ss304', 'ss316']
     
-    def __init__(self, name, temperature=300, from_file=None,
+    def __init__(self, name, temperature=400, from_file=None,
                  corr_dict=None, lbh15_correlations = None,
                  use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
@@ -138,7 +140,7 @@ class Material(LoggedClass):
             cdict = self._corr_from_file(path)    
             self._define_from_user_corr(cdict)
             
-    def __get_validity_ranges(self, datapath: str = None, corr=None, lbh15_corr = None):
+    def __get_validity_ranges(self, datapath: str = None, corr=None) -> None:
         """
         Get the validity ranges for all the properties of the material
         
@@ -147,15 +149,16 @@ class Material(LoggedClass):
         datapath: str
             Path to the data table
         corr: mat_from_corr
-            Correlation function
+            Object for sodium or NaK correlations
         lbh15_corr: dict
             Dictionary with the correlation to use for each property
         """
         if corr:  
-            for prop_name in self.PROP_NAME.keys():
+            correlation_obj = corr()
+            for prop_name in self.PROPS_NAME:
                 self.validity_ranges[f"{prop_name}_range"] = \
-                    getattr(corr(prop_name), f"{prop_name}_range")
-        elif datapath is not None: # data table
+                    getattr(correlation_obj, f"{prop_name}_range")
+        elif datapath is not None: 
             with open(datapath, 'r') as f:
                 header = f.readline().strip().split(',')
             data = np.genfromtxt(datapath, delimiter=",", skip_header=1, filling_values=np.nan)   
@@ -164,27 +167,6 @@ class Material(LoggedClass):
             for i, prop_name in enumerate(header[1:]):
                 valid_temps = temperature[~np.isnan(properties[:, i])]
                 self.validity_ranges[f"{prop_name}_range"] = (valid_temps.min(), valid_temps.max())
-        #else:
-        #    cool_prop = self.PROP_LBH15[self.name]
-        #    for prop_name in self.PROP_NAME.keys():
-        #        if self.name == 'lead' and prop_name == 'heat_capacity':
-        #            if lbh15_corr['cp'] is None:
-        #                self.validity_ranges[f"{prop_name}_range"] = \
-        #                    getattr(cool_prop, f'cp_sobolev2011')().range
-        #            else: 
-        #                self.validity_ranges[f"{prop_name}_range"] = \
-        #                    getattr(cool_prop, f"cp_{lbh15_corr['cp']}")().range
-        #        else:
-        #            self.validity_ranges[f"{prop_name}_range"] = \
-        #                getattr(cool_prop, self.PROP_NAME[prop_name])().range
-
-                    
-                        
-
-
-                
-
-
         
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
@@ -223,19 +205,24 @@ class Material(LoggedClass):
     def _define_from_lbh15(self, lbh15_correlations):
         """Define correlation by using lbh15"""    
         self._data = {}
-        cool_lbh15 = Material.MATERIAL_LBH[self.name](T=self.temperature)
-        self.__get_validity_ranges(lbh15_corr = lbh15_correlations)
-        for property in Material.PROP_NAME.keys():
+        with warnings.catch_warnings(record=True) as w:
+            try:
+                cool_lbh15 = Material.MATERIAL_LBH[self.name](T=self.temperature)
+            except ValueError as e:
+                self.log('error', str(e))
+            if w:
+                self.log('warning', str(w[-1].message))
+
+        for property in Material.PROPS_NAME:
             correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
-            for property in Material.PROP_NAME.keys():
-                corr_name = lbh15_correlations[Material.PROP_NAME[property]]
-                if corr_name and corr_name not in correlations[Material.PROP_NAME[property]]:
-                    msg = f'Correlation {corr_name} for {Material.PROP_NAME[property]} not available for {self.name}'
-                    self.log('error', msg)
-                if corr_name in correlations[Material.PROP_NAME[property]]:
-                    cool_lbh15.change_correlation_to_use(Material.PROP_NAME[property], corr_name)
-        for property in Material.PROP_NAME.keys():
-            self._data[property] = _Matlbh15(Material.PROP_NAME[property], cool_lbh15)           
+            corr_name = lbh15_correlations[Material.PROPS_NAME_FULL[property]]
+            if corr_name and corr_name not in correlations[Material.PROPS_NAME_FULL[property]]:
+                msg = f'Correlation {corr_name} for {Material.PROPS_NAME_FULL[property]} not available for {self.name}'
+                self.log('error', msg)
+            if corr_name in correlations[Material.PROPS_NAME_FULL[property]]:
+                cool_lbh15.change_correlation_to_use(Material.PROPS_NAME_FULL[property], corr_name)        
+        for property in Material.PROPS_NAME:
+            self._data[property] = _Matlbh15(Material.PROPS_NAME_FULL[property], cool_lbh15)           
                                                                     
     @staticmethod
     def _coeff_from_table(path):
@@ -291,7 +278,7 @@ class Material(LoggedClass):
             
         self.__get_validity_ranges(corr=corr.mat_from_corr)
         self._data = {}
-        for property in self.PROP_NAME.keys():
+        for property in self.PROPS_NAME:
             self._data[property] = corr.mat_from_corr(property)
     
     @property
@@ -395,13 +382,13 @@ class Material(LoggedClass):
         if self.validity_ranges.get(f"{prop}_range", None):
             if self.temperature < self.validity_ranges[f"{prop}_range"][0]:
                 msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][0]} K'
-                self.log('Warning', msg)
+                self.log('error', msg)
             elif self.temperature > max(value[1] for value in self.validity_ranges.values()):
                 msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())} K'
-                self.log('Warning', msg)
+                self.log('error', msg)
             elif self.temperature > self.validity_ranges[f"{prop}_range"][1]:
                 msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][1]} K'
-                self.log('Warning', msg)
+                self.log('warning', msg)
                 
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
@@ -464,7 +451,7 @@ class _MatPoly(object):
                 y += v
             return y
 
-class _Matlbh15(object):
+class _Matlbh15(LoggedClass):
     """
     lbh15 object for material properties
     
@@ -476,6 +463,7 @@ class _Matlbh15(object):
         lbh15 object representative of the liquid metal to which the property is related
     """
     def __init__(self, prop, cool_lbh15):
+        LoggedClass.__init__(self, 0, f'dassh._Matlbh15')
         self.prop = prop
         self.cool_lbh15 = cool_lbh15
     def __call__(self, temperature):
@@ -483,11 +471,23 @@ class _Matlbh15(object):
             result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
                 setattr(self.cool_lbh15, 'T', temperature[ii])
-                result[ii] = getattr(self.cool_lbh15, self.prop)
+                with warnings.catch_warnings(record=True) as w:
+                    try:
+                        result[ii] = getattr(self.cool_lbh15, self.prop)
+                    except ValueError as e:
+                        self.log('error', str(e))
+                    if w:
+                        self.log('warning', str(w[-1].message))
             return result
         setattr(self.cool_lbh15, 'T', temperature)
-        return getattr(self.cool_lbh15, self.prop)
-    
+        with warnings.catch_warnings(record=True) as w:
+            try:
+                result = getattr(self.cool_lbh15, self.prop)
+            except ValueError as e:
+                self.log('error', str(e))
+            if w:
+                self.log('warning', str(w[-1].message))
+        return result
 
 class _MatUserCorr(object):
     """

@@ -1,11 +1,12 @@
 import numpy as np 
 from abc import ABC, abstractmethod
+from typing import Union
 
 class PropertyClass(ABC):
     """
     Abstract class for property correlations
     """
-    def __init__(self, prop: str):
+    def __init__(self, prop: Union[str, None] = None):
         self.prop = prop
     
     def __call__(self, temperature: float):
@@ -23,12 +24,10 @@ class PropertyClass(ABC):
     def viscosity(self, T: float) -> float:
         pass
     
-
     @abstractmethod
     def heat_capacity(self, T: float) -> float:
         pass
     
- 
     @abstractmethod
     def density_range(self) -> tuple[float]:
         pass
