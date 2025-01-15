@@ -211,7 +211,7 @@ class Material(LoggedClass):
             except ValueError as e:
                 self.log('error', str(e))
             if w:
-                self.log('warning', str(w[-1].message))
+                self.log('warning', str(w.message))
 
         for property in Material.PROPS_NAME:
             correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)

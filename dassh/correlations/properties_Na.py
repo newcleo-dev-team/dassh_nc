@@ -1,6 +1,7 @@
 import numpy as np
 from dassh.correlations.properties_abs import PropertyClass
 from typing import Union
+
 class mat_from_corr(PropertyClass):
     """
     Correlation object for sodium properties

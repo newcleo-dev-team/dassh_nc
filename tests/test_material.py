@@ -209,6 +209,7 @@ class TestBuiltInCorrelations():
             with pytest.raises(SystemExit):
                 Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             assert "Temperature must be smaller than boiling temperature" in caplog.text
+            
     def test_sodium_nak_corr_out_range(self, caplog):
         """
         Test that an error is raised for temperature outside the range of correlations 
