@@ -166,7 +166,7 @@ class TestCoefficients():
         # Define a custom dictionary and use it
         cc = copy.deepcopy(mat_data.bad_coeff)
         with pytest.raises(SystemExit):
-            mat = Material('test', mat_data.temperature_negative_prop, corr_dict=cc)
+            mat = Material('test', mat_data.temperature_sodium_definition, corr_dict=cc)
         assert 'viscosity must be > 0; given' in caplog.text
             
 class TestBuiltInCorrelations():   
@@ -204,12 +204,14 @@ class TestBuiltInCorrelations():
             with pytest.raises(SystemExit):
                 Material(mat, temperature= mat_data.out_range[mat][0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             assert "Temperature must be larger than melting temperature" in caplog.text
-            Material(mat, temperature= mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+            Material(mat, temperature = mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             assert "The thermal conductivity is requested at temperature value" in caplog.text
             with pytest.raises(SystemExit):
                 Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
             assert "Temperature must be smaller than boiling temperature" in caplog.text
-            
+        Material('lbe', temperature = mat_data.out_range['lbe'][3], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+        assert "is requested at temperature value" in caplog.text
+        
     def test_sodium_nak_corr_out_range(self, caplog):
         """
         Test that an error is raised for temperature outside the range of correlations 
@@ -218,7 +220,7 @@ class TestBuiltInCorrelations():
         for mat in mat_data.corr_out_range.keys():
             with pytest.raises(SystemExit):
                 Material(mat, temperature= mat_data.corr_out_range[mat][0])
-            assert 'is below the validity range ' in caplog.text
+            assert 'is below the minimum validity range ' in caplog.text
             with pytest.raises(SystemExit):
                 Material(mat, temperature= mat_data.corr_out_range[mat][1])
             assert 'is above the maximum validity range ' in caplog.text
@@ -293,7 +295,7 @@ class TestTablesAndIntepolation():
         for mat in mat_data.table_out_range.keys():  
             with pytest.raises(SystemExit):  
                 Material(mat, temperature= mat_data.table_out_range[mat][0])
-            assert 'is below the validity range ' in caplog.text
+            assert 'is below the minimum validity range ' in caplog.text
             with pytest.raises(SystemExit):
                 Material(mat, temperature= mat_data.table_out_range[mat][1])
             assert 'is above the maximum validity range ' in caplog.text
@@ -304,9 +306,10 @@ class TestTablesAndIntepolation():
         for a property, but below the maximum validity range
         """
         for mat in mat_data.table_mid_range.keys():    
-            Material(mat, temperature= mat_data.table_mid_range[mat])
+            Material(mat, temperature = mat_data.table_mid_range[mat][0])
             assert 'is above the validity range' in caplog.text
-                
+        Material('sodium', temperature = mat_data.table_mid_range['sodium'][1])
+        assert 'is below the validity range' in caplog.text    
         
                
 class TestUserCorrelation():
@@ -392,7 +395,7 @@ class TestBuiltInDefinition():
         
     def test_bad_temperature(self, caplog):
         """Make sure Material throws error for 0 or negative temperatures"""
-        mat = Material('sodium', 400)
+        mat = Material('sodium', mat_data.temperature_sodium_definition)
         with pytest.raises(SystemExit):
             mat.update(0.0)
         assert 'must be > 0; given' in caplog.text

@@ -108,7 +108,7 @@ class MaterialData:
     mfact: float
     temperature_coeff_file: float
     expected_from_coeff: Dict[str, List[float]]
-    temperature_negative_prop: float
+    temperature_sodium_definition: float
     negative_temperature: float
     corr_names: List[str]
     lead_corr_gurv: Dict[str, List[float]]
@@ -118,9 +118,12 @@ class MaterialData:
     interp_temperature: float 
     interp_expected_values: List[float]
     table_out_range: Dict[str, List[float]]
-    table_mid_range: Dict[str, float]
+    table_mid_range: Dict[str, List[float]]
     corr_out_range: Dict[str, List[float]]
     corr_mid_range: Dict[str, float]
+    water_temperature: float
+    conftest_temp_from_textbook: float
+    three_asm_temperature: List[float]
 
 def pytest_configure(config):
     """
@@ -138,7 +141,7 @@ def pytest_configure(config):
         
     out_range = {
         'lead': [lead_bounds[0]-1, lead_bounds[1]+1] + [2021.0],
-        'lbe': [lbe_bounds[0]-1, lbe_bounds[1]+1] + [1927.0],
+        'lbe': [lbe_bounds[0]-1, lbe_bounds[1]+1] + [1927.0, 399.0],
         'bismuth': [bismuth_bounds[0]-1, bismuth_bounds[1]+1] + [1831.0]
     }    
     
@@ -171,7 +174,7 @@ def pytest_configure(config):
         mfact=file_data["multiplication_factor"],
         temperature_coeff_file=file_data["temperature_coeff_file"],
         expected_from_coeff=file_data["expected_from_coeff"],
-        temperature_negative_prop=file_data["temperature_negative_prop"],
+        temperature_sodium_definition=file_data["temperature_sodium_definition"],
         negative_temperature = file_data["negative_temperature"],
         corr_names = file_data["correlation_names"],
         lead_corr_gurv = file_data["lead_corr_gurvich"],
@@ -183,7 +186,10 @@ def pytest_configure(config):
         table_out_range=file_data["table_out_range"],
         table_mid_range=file_data["table_mid_range"],
         corr_out_range = file_data["corr_out_range"],
-        corr_mid_range=file_data["corr_mid_range"]
+        corr_mid_range=file_data["corr_mid_range"],
+        water_temperature=file_data["water_temperature"],
+        conftest_temp_from_textbook=file_data["conftest_temp_from_textbook"],
+        three_asm_temperature=file_data["three_asm_temperature"]
     )
     
     
@@ -561,7 +567,7 @@ def unrodded_default_params():
 def textbook_params(assembly_default_params):
     """Parameters for simple hexagonal bundle parameters taken from
     Nuclear Systems II textbook (Todreas); Table 4-3 page 159"""
-    mat = {'coolant': dassh.Material('water', 300.0),
+    mat = {'coolant': dassh.Material('water', pytest.mat_data.conftest_temp_from_textbook),
            'duct': dassh.Material('ss316')}
     input = copy.deepcopy(assembly_default_params)
     input['num_rings'] = 5
@@ -675,7 +681,7 @@ def thesis_asm_params(assembly_default_params):
                  + input['pin_diameter'])
     input['duct_ftf'] = [duct_iftf, duct_iftf + 0.001]  # m
     input['AxialRegion'] = {'rods': {'z_lo': 0.0, 'z_hi': 5.0}}
-    mat = {'coolant': dassh.Material('water', 273.3),
+    mat = {'coolant': dassh.Material('water', pytest.mat_data.water_temperature),
            'duct': dassh.Material('ss316')}
     return input, mat
 
@@ -1236,9 +1242,9 @@ def small_reactor(testdir):
 def three_asm_core(testdir, coolant, simple_asm):
     """DASSH Core object for 3-asm core with simple, 7-pin asm"""
     asm_list = np.array([0, 1, 2, np.nan, np.nan, np.nan, np.nan])
-    cool = dassh.Material('sodium', 401)
+    cool = dassh.Material('sodium', pytest.mat_data.three_asm_temperature[0])
     core_obj = dassh.Core(asm_list, 0.12, 1.0, cool,
-                          inlet_temperature=623.15, model='flow')
+                          inlet_temperature=pytest.mat_data.three_asm_temperature[1], model='flow')
     assemblies = []
     loc = [(0, 0), (1, 0), (1, 1)]
     for ai in range(len(loc)):

@@ -38,7 +38,7 @@ from dassh.correlations import (mixing_ctd,
                                 mixing_mit,
                                 mixing_kc)
 from dassh.correlations import grid_rehme, grid_cdd
-
+from pytest import mat_data
 
 def make_assembly(n_ring, pin_pitch, pin_diameter, clad_thickness,
                   wire_pitch, wire_diameter, duct_ftf, coolant_obj,
@@ -82,7 +82,7 @@ def test_correlation_warnings(caplog):
     wire_pitch = pin_diameter * h2d
     inlet_flow_rate = 30.0  # kg /s
     inlet_temp = 273.15 + 350.0  # K
-    coolant_obj = dassh.Material('sodium', 400)
+    coolant_obj = dassh.Material('sodium')
     duct_obj = dassh.Material('ss316')
     make_assembly(n_ring, pin_pitch, pin_diameter, clad_thickness,
                   wire_pitch, wire_diameter, duct_ftf, coolant_obj,
@@ -224,7 +224,7 @@ def test_ctd_laminar_cfb(testdir):
         duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
         inlet_flow_rate = 0.5  # kg /s
         inlet_temp = 273.15
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -284,7 +284,7 @@ def test_cts_laminar_cfb(testdir):
         duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
         inlet_flow_rate = 0.5  # kg /s
         inlet_temp = 273.15
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -349,7 +349,7 @@ def test_ctd_turbulent_cfb(testdir):
         inlet_flow_rate = 30.0  # kg /s; enough to be turbulent
         # inlet_temp = 298.15
         inlet_temp = 273.15
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -539,7 +539,7 @@ def test_flowsplit_x2_ctd(testdir):
         duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
         inlet_flow_rate = flowrate[df.loc[exp]['Regime']]
         inlet_temp = 273.35
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -709,7 +709,7 @@ def test_eddy_diffusivity_constants(testdir):
         duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
         inlet_flow_rate = 30.0  # enough to be turbulent
         inlet_temp = 273.15
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -773,7 +773,7 @@ def test_eddy_diffusivity(testdir):
             duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
             inlet_flow_rate = 100.0  # enough to be turbulent
             inlet_temp = 273.15
-            coolant_obj = dassh.Material('water', 273.3)
+            coolant_obj = dassh.Material('water', mat_data.water_temperature)
             duct_obj = dassh.Material('ss316')
             try:
                 a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -841,7 +841,7 @@ def test_mit_eddy_diffusivity(testdir):
         duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
         inlet_flow_rate = 100.0  # enough to be turbulent
         inlet_temp = 273.15
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring[i], pitch[i], d_pin[i],
@@ -907,7 +907,7 @@ def test_swirl_velocity_constants(testdir):
         duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
         inlet_flow_rate = 30.0  # enough to be turbulent
         inlet_temp = 273.15
-        coolant_obj = dassh.Material('water', 273.3)
+        coolant_obj = dassh.Material('water', mat_data.water_temperature)
         duct_obj = dassh.Material('ss316')
         try:
             a = make_assembly(n_ring, pin_pitch, pin_diameter,
@@ -977,7 +977,7 @@ def test_swirl_velocity(testdir):
             duct_ftf = [duct_inner_ftf, duct_inner_ftf + 0.001]  # m
             inlet_flow_rate = 100.0  # enough to be turbulent
             inlet_temp = 273.15
-            coolant_obj = dassh.Material('water', 273.3)
+            coolant_obj = dassh.Material('water', mat_data.water_temperature)
             duct_obj = dassh.Material('ss316')
             # try:
             #     a = make_assembly(n_ring, pin_pitch, pin_diameter,

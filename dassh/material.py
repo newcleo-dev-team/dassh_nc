@@ -27,6 +27,7 @@ from lbh15 import Lead, Bismuth, LBE, lead_properties, bismuth_properties, lbe_p
 import sympy as sp
 import csv
 import warnings
+from typing import Union, Callable, Any
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -134,53 +135,60 @@ class Material(LoggedClass):
         # print('thermal_conductivity' in line1)
         if line1[0] == 'temperature' and 'thermal_conductivity' in line1:
             self._define_from_table(path)
+        elif 'temperature' in line1 and line1[0] != 'temperature':
+            self.log('error', 'First column must be "temperature" for materials defined by table properties interpolation')
         elif '=' in data[0]:
             self._define_from_user_corr(self._corr_from_file(path))
         else:  
             cdict = self._corr_from_file(path)    
             self._define_from_user_corr(cdict)
             
-    def __get_validity_ranges(self, datapath: str = None, corr=None) -> None:
+    def __get_validity_ranges(self, data: np.ndarray = None, 
+                              header: list[str] = None, corr: Callable[[], Any] = None) -> None:
         """
         Get the validity ranges for all the properties of the material
         
         Parameters
         ----------
-        datapath: str
-            Path to the data table
-        corr: mat_from_corr
-            Object for sodium or NaK correlations
-        lbh15_corr: dict
-            Dictionary with the correlation to use for each property
+        data: np.ndarray
+            Numpy array that contains temperatures (first column) and properties taken from a file
+        header: list[str]
+            Header of the file containing the properties names and the temperature
+        corr: Callable[[], Any]
+            Object for sodium or NaK correlations, returns property values 
+            or validity range for a property
         """
         if corr:  
             correlation_obj = corr()
             for prop_name in self.PROPS_NAME:
                 self.validity_ranges[f"{prop_name}_range"] = \
                     getattr(correlation_obj, f"{prop_name}_range")
-        elif datapath is not None: 
-            with open(datapath, 'r') as f:
-                header = f.readline().strip().split(',')
-            data = np.genfromtxt(datapath, delimiter=",", skip_header=1, filling_values=np.nan)   
+        elif data is not None and header is not None: 
             temperature = data[:, 0]
             properties = data[:, 1:]
             for i, prop_name in enumerate(header[1:]):
-                valid_temps = temperature[~np.isnan(properties[:, i])]
-                self.validity_ranges[f"{prop_name}_range"] = (valid_temps.min(), valid_temps.max())
+                if prop_name in self.PROPS_NAME:
+                    valid_temps = temperature[~np.isnan(properties[:, i])]
+                    self.validity_ranges[f"{prop_name}_range"] = (valid_temps[0], valid_temps[-1])
+                else:
+                    self.log('error', f'Property {prop_name} not recognized')
+        else: 
+            self.log('error', "Both file path and correlation input are missing.")
+            
         
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
         if not path:
             path = os.path.join(_ROOT, 'data', self.name + '.csv')
             
-        # data = pxd.read_csv(path, header=0)
-        data = np.genfromtxt(path, skip_header=1, delimiter=',',
-                             missing_values=0.0)
-        # get validity ranges for properties
-        self.__get_validity_ranges(datapath = path)
-        # Get the columns with string parsing
         with open(path, 'r') as f:
-            cols = f.read().splitlines()[0].split(',')[1:]
+            reader = csv.reader(f)
+            header = next(reader) 
+            data = [] 
+            for row in reader:
+                data.append([float(value) if value else np.nan for value in row])  
+        data = np.array(data)
+        self.__get_validity_ranges(data = data, header = header)
 
         # Check that all values are greater than zero, 
         # if file is provided by the user. 
@@ -193,6 +201,7 @@ class Material(LoggedClass):
         self._data = {}
         # Pull temperatures over which to interpolate; eliminate negative vals
         x = data[:, 0]         # temperatures over which to interpolate
+        cols = header[1:]
         for i in range(len(cols)):
             y = data[:, i + 1]
             x2 = x[y > 0]  # Need to ignore zeros in dependent var
@@ -372,7 +381,7 @@ class Material(LoggedClass):
     
     def __check_limits(self, prop: str):
         """
-        Checks if the temperature is within the validity range of the property
+        Check if the temperature is within the validity range of the property
         
         Parameters
         ----------
@@ -380,14 +389,18 @@ class Material(LoggedClass):
             Property to check
         """
         if self.validity_ranges.get(f"{prop}_range", None):
-            if self.temperature < self.validity_ranges[f"{prop}_range"][0]:
-                msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][0]} K'
+            prop_range = self.validity_ranges[f"{prop}_range"]
+            if self.temperature < min(value[0] for value in self.validity_ranges.values()): 
+                msg = f'Temperature {self.temperature} K is below the minimum validity range for {self.name}: {max(value[0] for value in self.validity_ranges.values())} K'
                 self.log('error', msg)
             elif self.temperature > max(value[1] for value in self.validity_ranges.values()):
                 msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())} K'
                 self.log('error', msg)
-            elif self.temperature > self.validity_ranges[f"{prop}_range"][1]:
-                msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {self.validity_ranges[f"{prop}_range"][1]} K'
+            elif self.temperature > prop_range[1]:
+                msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {prop_range[1]} K'
+                self.log('warning', msg)
+            elif self.temperature < prop_range[0]:
+                msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {prop_range[0]} K'
                 self.log('warning', msg)
                 
     def update(self, temperature):
@@ -471,24 +484,24 @@ class _Matlbh15(LoggedClass):
             result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
                 setattr(self.cool_lbh15, 'T', temperature[ii])
-                with warnings.catch_warnings(record=True) as w:
-                    try:
-                        result[ii] = getattr(self.cool_lbh15, self.prop)
-                    except ValueError as e:
-                        self.log('error', str(e))
-                    if w:
-                        self.log('warning', str(w[-1].message))
+                result[ii] = self.__handle_lbh15_warnings()
             return result
         setattr(self.cool_lbh15, 'T', temperature)
+        result = self.__handle_lbh15_warnings()
+        return result
+                
+    def __handle_lbh15_warnings(self):
+        """Handle warnings from lbh15"""
         with warnings.catch_warnings(record=True) as w:
             try:
-                result = getattr(self.cool_lbh15, self.prop)
+                res = getattr(self.cool_lbh15, self.prop)
             except ValueError as e:
                 self.log('error', str(e))
             if w:
                 self.log('warning', str(w[-1].message))
-        return result
-
+        return res
+    
+    
 class _MatUserCorr(object):
     """
     User-defined correlation object for material properties
