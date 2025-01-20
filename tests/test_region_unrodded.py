@@ -102,6 +102,8 @@ def test_unrodded_reg_clone_deep(c_lrefl_simple):
 
 def test_simple_unrodded_reg_zero_power(c_lrefl_simple):
     """Test that no power temp calc returns no change"""
+    c_lrefl_simple.temp['coolant_int'] *= 623.15
+    c_lrefl_simple.temp['duct_mw'] *= 623.15
     in_temp = c_lrefl_simple.temp['coolant_int']
     t_gap = np.ones(6) * c_lrefl_simple.avg_duct_mw_temp
     c_lrefl_simple.calculate(
@@ -113,6 +115,7 @@ def test_simple_unrodded_reg_zero_power(c_lrefl_simple):
 
 def test_simple_unrodded_reg_none_power(c_lrefl_simple):
     """Test that giving power=None returns no change in temps"""
+    c_lrefl_simple.temp['coolant_int'] *= 623.15
     in_temp = c_lrefl_simple.temp['coolant_int']
     t_gap = np.ones(6) * c_lrefl_simple.avg_duct_mw_temp
     c_lrefl_simple.calculate(

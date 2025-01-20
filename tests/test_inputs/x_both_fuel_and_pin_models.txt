@@ -22,7 +22,7 @@
 # CORE DETAILS: Describe characteristics of the reactor core
 
 [Core]
-    coolant_inlet_temp = 350.0
+    coolant_inlet_temp = 401.0
     coolant_material = sodium
     length             = 375.0
     assembly_pitch     = 12.0
