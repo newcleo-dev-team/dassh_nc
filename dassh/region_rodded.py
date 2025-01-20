@@ -685,8 +685,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             mfr_over_area * self.bundle_params['de'] / self.coolant.viscosity
         if self.non_isotropic:
             self._update_subchannels_properties(t)
-            self.coolant_int_params['vel'] = \
-                self.sc_mfr/self.params['area'][0]/self.sc_properties['density']
+            self.coolant_int_params['sc_vel'] = \
+                    self.sc_mfr \
+                    / self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]\
+                    / self.sc_properties['density']
         #Spacer grid, if present
         if 'grid' in self.corr_constants.keys():
             try:
