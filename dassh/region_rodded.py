@@ -240,7 +240,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """Instantiate RoddedRegion object"""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
-
+        # Flag for non-isotropic coolant properties (radially)
+        self.non_isotropic = True
         # Disable single-pin assemblies for now; maybe revisit later
         if n_ring == 1 or pin_pitch == 0.0:
             self.log('error', 'Single-pin assemblies not supported')
@@ -380,7 +381,32 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             'friction': 0.0,
             'spacer_grid': 0.0,
             'gravity': 0.0}
-
+        # Set up subchannel properties
+        self.sc_properties = {k: np.zeros(self.subchannel.n_sc['coolant']['total']) \
+            for k in self.coolant.PROPS_NAME}
+        
+    ####################################################################
+    def _update_subchannels_properties(self, temp: np.ndarray) -> dict:
+        """
+        Update subchannel properties based on temperature
+        
+        Parameters
+        ----------
+        temp : np.ndarray
+            Array of temperatures
+            
+        Returns
+        -------
+        dict
+            Dictionary of subchannels properties updated 
+        """
+        if isinstance(temp, float):
+            temp = temp*np.ones(self.subchannel.n_sc['coolant']['total'])
+        for i in range(len(temp)):  
+            self.coolant.update(temp[i])
+            for prop in self.coolant.PROPS_NAME:
+                self.sc_properties[prop][i] = getattr(self.coolant, prop)
+            
     ####################################################################
     # SETUP METHODS
     ####################################################################
@@ -541,6 +567,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
              'eddy': 0.0,  # eddy diffusivity
              'swirl': np.zeros(3),  # swirl velocity.
              'htc': np.zeros(3)}  # heat transfer coefficient
+        if self.non_isotropic:
+            self.coolant_int_params['sc_vel'] = \
+                np.zeros(self.subchannel.n_sc['coolant']['total'])
+            self.coolant_int_params['sc_eddy'] = \
+                np.zeros(self.subchannel.n_sc['coolant']['total'])
+            self.coolant_int_params['sc_swirl'] = \
+                np.zeros(self.subchannel.n_sc['coolant']['total'])
         if self.n_bypass > 0:
             self.coolant_byp_params = \
                 {'Re': np.zeros(self.n_bypass),  # bypass-avg Re numbers
@@ -650,8 +683,11 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self.coolant_int_params['vel'] = mfr_over_area / self.coolant.density
         self.coolant_int_params['Re'] = \
             mfr_over_area * self.bundle_params['de'] / self.coolant.viscosity
-
-        # Spacer grid, if present
+        if self.non_isotropic:
+            self._update_subchannels_properties(t)
+            self.coolant_int_params['vel'] = \
+                self.sc_mfr/self.params['area'][0]/self.sc_properties['density']
+        #Spacer grid, if present
         if 'grid' in self.corr_constants.keys():
             try:
                 self.coolant_int_params['grid_loss_coeff'] = \
@@ -811,7 +847,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         # self.coolant.update(temp)
         self._update_coolant(temp)
-
+        if self.non_isotropic:
+            self._update_subchannels_properties(temp)
         # Only reason you wouldn't update all correlated parameters is if
         # the coolant tracker object says not to. If it says not to, skip
         # the update. Otherwise, proceed.
@@ -866,14 +903,28 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Mixing params - these come dimensionless, need to adjust
         if self.corr['mix'] is not None:
             mix = self.corr['mix'](self)
+            if self.non_isotropic:
+                self.coolant_int_params['sc_vel'] = \
+                    self.sc_mfr \
+                    / self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]\
+                    / self.sc_properties['density']
+                self.coolant_int_params['sc_eddy'] = \
+                    (mix[0] * self.coolant_int_params['fs'][0]
+                     * self.coolant_int_params['sc_vel'])
+                tmp = (mix[1] * self.coolant_int_params['sc_vel']
+                       * self.coolant_int_params['fs'][1])
+                self.coolant_int_params['sc_swirl'][self.ht['conv']['ind']] \
+                    = tmp[self.ht['conv']['ind']]
+            
             self.coolant_int_params['eddy'] = \
                 (mix[0] * self.coolant_int_params['fs'][0]
-                 * self.coolant_int_params['vel'])
+                    * self.coolant_int_params['vel'])
             tmp = (mix[1] * self.coolant_int_params['vel']
-                   * self.coolant_int_params['fs'][1])
+                    * self.coolant_int_params['fs'][1])
             self.coolant_int_params['swirl'][1] = tmp
             self.coolant_int_params['swirl'][2] = tmp
-
+            print('eddy', self.coolant_int_params['eddy'])
+           # print('sc_eddy', self.coolant_int_params['sc_eddy'])
     def _update_coolant_byp_params(self, temp_list):
         """Update correlated bundle bypass coolant parameters based
         on current average coolant temperature
@@ -1043,7 +1094,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
-
+        # Update subchannel properties
+        if self.non_isotropic:
+            self._update_subchannels_properties(self.temp['coolant_int'])
         # Bypass coolant temperatures
         if self.n_bypass > 0:
             if self.byp_flow_rate > 0:
@@ -1092,7 +1145,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if self.n_bypass > 0:
             self._update_coolant_byp_params(self.avg_coolant_byp_temp)
         self._calc_duct_temp(p_duct, t_gap, h_gap, adiabatic)
-
+        self._update_subchannels_properties(self.avg_coolant_int_temp)
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION METHODS
     ####################################################################
@@ -1125,15 +1178,21 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # CONDUCTION BETWEEN COOLANT SUBCHANNELS
         # Effective thermal conductivity
-        keff = (self.coolant_int_params['eddy']
-                * self.coolant.density
-                * self.coolant.heat_capacity
-                + self._sf * self.coolant.thermal_conductivity)
-        # keff = 0.0
         tmp = (self.ht['cond']['const']
-               * (self.temp['coolant_int'][self.ht['cond']['adj']]
-                  - self.temp['coolant_int'][:, np.newaxis]))
-        dT += keff * (tmp[:, 0] + tmp[:, 1] + tmp[:, 2])
+                * (self.temp['coolant_int'][self.ht['cond']['adj']]
+                - self.temp['coolant_int'][:, np.newaxis]))
+        if self.non_isotropic:
+            keff = (self.coolant_int_params['sc_eddy']
+                * self.sc_properties['density']
+                * self.sc_properties['heat_capacity']
+                + self._sf * self.sc_properties['thermal_conductivity'])    
+        else:
+            keff = (self.coolant_int_params['eddy']
+                    * self.coolant.density
+                    * self.coolant.heat_capacity
+                    + self._sf * self.coolant.thermal_conductivity)
+            # keff = 0.0
+        dT += keff * (tmp[:, 0] + tmp[:, 1] + tmp[:, 2]) 
 
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
@@ -1159,18 +1218,33 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.ht['conv']['const'] * dT_conv_over_R
 
         # DIVIDE THROUGH BY MCP
-        mCp = 1 / (self.coolant.heat_capacity * self.coolant_int_params['fs'])
-        mCp = mCp[self.subchannel.type[
-            :self.subchannel.n_sc['coolant']['total']]]
+        mCp = 1 / (self.coolant_int_params['fs'])
+        if self.non_isotropic:
+            mCp = mCp[self.subchannel.type[
+            :self.subchannel.n_sc['coolant']['total']]]\
+            / (self.sc_properties['heat_capacity'])
+        else:
+            mCp = mCp[self.subchannel.type[
+                :self.subchannel.n_sc['coolant']['total']]]/self.coolant.heat_capacity 
         dT *= mCp
 
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
-        swirl_consts = (self.ht['swirl']
-                        * self.coolant.density
-                        * self.coolant_int_params['swirl']
-                        / self.coolant_int_params['fs'])
+        #if self.non_isotropic:
+        #    swirl_consts = (self.ht['swirl'] 
+        #                / self.coolant_int_params['fs'])
+        #    swirl_consts = swirl_consts[self.ht['conv']['type']]
+        #    swirl_consts *= self.sc_properties['density'][self.ht['conv']['ind']] \
+        #        * self.coolant_int_params['sc_swirl'][self.ht['conv']['ind']]    
+        #else:
+        swirl_consts = (self.ht['swirl'] * self.coolant_int_params['swirl']
+                    / self.coolant_int_params['fs'])
         swirl_consts = swirl_consts[self.ht['conv']['type']]
+        swirl_consts *= self.coolant.density 
+        #print('1',swirl_consts)
+        #print('2', swirl_consts2)
+        #print(self.coolant_int_params['swirl'])
+        #print(self.coolant_int_params['sc_swirl'])
         # Swirl flow from adjacent subchannel; =0 for interior sc
         # The adjacent subchannel is the one the swirl flow is
         # coming from i.e. it's in the opposite direction of the
