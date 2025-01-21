@@ -24,7 +24,7 @@ import pytest
 import numpy as np
 from dassh import Material
 import copy
-from typing import Dict, List
+from typing import Dict, List, Union
 from pytest import mat_data
 
 
@@ -48,7 +48,8 @@ def property_test(mat: str, t_values: np.array, correct_values: list[float], pro
         mat.update(np.average([t_values[ind], t_values[ind+1]]))
         assert correct_values[ind] == pytest.approx(getattr(mat, property))
         
-def material_comparison(mat: str, use_corr: bool = False, lbh15_corr: Dict[str, str] = {'cp': None, 'k': None, 'rho': None, 'mu': None}):
+def material_comparison(mat: str, use_corr: bool = False, 
+                        lbh15_corr: Union[Dict[str, str], Dict[str, None]] = {'cp': None, 'k': None, 'rho': None, 'mu': None}):
     """ 
     Function to compare all material properties over validity range
     
@@ -166,7 +167,7 @@ class TestCoefficients():
         # Define a custom dictionary and use it
         cc = copy.deepcopy(mat_data.bad_coeff)
         with pytest.raises(SystemExit):
-            mat = Material('test', mat_data.temperature_negative_prop, corr_dict=cc)
+            mat = Material('test', mat_data.temperature_sodium_definition, corr_dict=cc)
         assert 'viscosity must be > 0; given' in caplog.text
             
 class TestBuiltInCorrelations():   
@@ -193,7 +194,7 @@ class TestBuiltInCorrelations():
                      lbh15_correlations = {'cp': mat_data.corr_names[1], 'k': None, 'rho': None, 'mu': None})
         assert f'Correlation {mat_data.corr_names[1]} for cp not available for lead' in caplog.text
              
-    def test_lbh15_temperature_outside_range(self):
+    def test_lbh15_temperature_outside_range(self, caplog):
         """
         Test use of lbh15 in calculating material properties for lead, lbe and bismuth:
         - below the melting temperature
@@ -201,13 +202,39 @@ class TestBuiltInCorrelations():
         - above boiling temperature 
         """
         for mat in mat_data.out_range.keys():    
-            with pytest.raises(ValueError, match="Temperature must be larger than melting temperature"):
-                lbh15_mat = Material(mat, temperature= mat_data.out_range[mat][0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
-            with pytest.warns(UserWarning, match="The thermal conductivity is requested at temperature value"):
-                lbh15_mat = Material(mat, temperature= mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
-            with pytest.raises(ValueError, match="Temperature must be smaller than boiling temperature"):
-                lbh15_mat = Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
-            
+            with pytest.raises(SystemExit):
+                Material(mat, temperature= mat_data.out_range[mat][0], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+            assert "Temperature must be larger than melting temperature" in caplog.text
+            Material(mat, temperature = mat_data.out_range[mat][1], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+            assert "The thermal conductivity is requested at temperature value" in caplog.text
+            with pytest.raises(SystemExit):
+                Material(mat, temperature= mat_data.out_range[mat][2], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+            assert "Temperature must be smaller than boiling temperature" in caplog.text
+        Material('lbe', temperature = mat_data.out_range['lbe'][3], use_correlation = True, lbh15_correlations = {'cp': None, 'k': None, 'rho': None, 'mu': None})
+        assert "is requested at temperature value" in caplog.text
+        
+    def test_sodium_nak_corr_out_range(self, caplog):
+        """
+        Test that an error is raised for temperature outside the range of correlations 
+        for sodium and NaK
+        """
+        for mat in mat_data.corr_out_range.keys():
+            with pytest.raises(SystemExit):
+                Material(mat, temperature= mat_data.corr_out_range[mat][0])
+            assert 'is below the minimum allowed value of the validity range ' in caplog.text
+            with pytest.raises(SystemExit):
+                Material(mat, temperature= mat_data.corr_out_range[mat][1])
+            assert 'is above the maximum allowed value of the validity range ' in caplog.text
+    
+    def test_sodium_nak_corr_mid_range(self, caplog):
+        """
+        Test that a warning is raised for temperature above the validity range
+        for a property, but below the maximum validity range
+        """
+        for mat in mat_data.corr_mid_range.keys():    
+            Material(mat, temperature=mat_data.corr_mid_range[mat], use_correlation=True)
+            assert 'is above the validity range' in caplog.text
+                
 class TestTablesAndIntepolation():
     """
     Class to test material properties using tables and interpolation
@@ -261,6 +288,37 @@ class TestTablesAndIntepolation():
         mat = Material('test_mat', from_file=f)
         mat.update(mat_data.interp_temperature)
         assert mat.density == pytest.approx(mat_data.interp_expected_values[1])     
+    
+    def test_table_out_of_range(self, caplog):
+        """
+        Test that a warning is raised for temperature outside the range of the table
+        """
+        for mat in mat_data.table_out_range.keys():  
+            with pytest.raises(SystemExit):  
+                Material(mat, temperature= mat_data.table_out_range[mat][0])
+            assert 'is below the minimum allowed value of the validity range ' in caplog.text
+            with pytest.raises(SystemExit):
+                Material(mat, temperature= mat_data.table_out_range[mat][1])
+            assert 'is above the maximum allowed value of the validity range ' in caplog.text
+            
+    def test_table_mid_range(self, caplog):
+        """
+        Test that a warning is raised for temperature above the validity range
+        for a property, but below the maximum validity range
+        """
+        for mat in mat_data.table_mid_range.keys():    
+            Material(mat, temperature = mat_data.table_mid_range[mat][0])
+            assert 'is above the validity range' in caplog.text
+        Material('sodium', temperature = mat_data.table_mid_range['sodium'][1])
+        assert 'is below the validity range' in caplog.text    
+    
+    def test_non_existing_property(self, testdir, caplog):
+        """Make sure Material throws error for non-existing property in user-defined table"""
+        f = os.path.join(testdir, 'test_inputs', 'non_exist_prop.csv')
+        with pytest.raises(SystemExit):
+            Material('additional_prop_mat', from_file=f)
+        assert 'Property property5 not recognized' in caplog.text
+        
                
 class TestUserCorrelation():
     """
@@ -345,11 +403,11 @@ class TestBuiltInDefinition():
         
     def test_bad_temperature(self, caplog):
         """Make sure Material throws error for 0 or negative temperatures"""
-        mat = Material('sodium')
+        mat = Material('sodium', mat_data.temperature_sodium_definition)
         with pytest.raises(SystemExit):
             mat.update(0.0)
         assert 'must be > 0; given' in caplog.text
         with pytest.raises(SystemExit):
             mat.update(mat_data.negative_temperature)
-        
+            
 
