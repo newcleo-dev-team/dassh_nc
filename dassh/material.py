@@ -19,6 +19,7 @@ author: matz
 Containers to hold and update material properties
 """
 ########################################################################
+from __future__ import annotations
 import os
 import copy
 import numpy as np
@@ -29,6 +30,7 @@ import csv
 import warnings
 from typing import Union, Callable, Any
 
+
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -36,7 +38,42 @@ _BUILTINS = ['ht9', 'ss316', 'ss304', 'd9', 'bismuth', 'lbe', 'lead',
              'nak', 'potassium', 'sodium', 'water' 'ht9_se2anl',
              'ht9_se2anl_425', 'sodium_se2anl', 'sodium_se2anl_425']
 
-
+def handle_lbh15_warnings(logger: Callable[[str, str], None], cool = None, prop: str = None, 
+                          name: str = None, temp: float = None) -> Union[float, None]:
+    """
+    Handle warnings that may be raised by lbh15 while istantiating a material
+    or while updating material properties
+    
+    Parameters
+    ----------
+    logger: Callable[[str, str], None]
+        Logger function to log the warnings
+    cool: lbh15 object
+        lbh15 liquid metal object 
+    prop: str
+        Property to calculate
+    name: str
+        Name of the material
+    temp: float
+        Temperature at which to calculate the property
+        
+    Returns
+    -------
+    res: Union[float, np.ndarray, None]
+        Value of the property calculated, if no warnings or errors are raised
+    """
+    with warnings.catch_warnings(record=True) as w:
+        try:
+            if cool is not None:
+                res = getattr(cool, prop)
+            elif name is not None and temp is not None:
+                res = Material.MATERIAL_LBH[name](T=temp)
+        except ValueError as e:
+            logger('error', str(e))
+        if w:
+            logger('warning', str(w[-1].message))
+    return res
+    
 class Material(LoggedClass):
     """Container to hold and update material properties
 
@@ -130,9 +167,6 @@ class Material(LoggedClass):
         else:
             line1 = data[0].split(',')
             line1 = [l.lower() for l in line1]
-        # print(line1)
-        # print(line1[0] == 'temperature')
-        # print('thermal_conductivity' in line1)
         if line1[0] == 'temperature' and 'thermal_conductivity' in line1:
             self._define_from_table(path)
         elif 'temperature' in line1 and line1[0] != 'temperature':
@@ -144,7 +178,7 @@ class Material(LoggedClass):
             self._define_from_user_corr(cdict)
             
     def __get_validity_ranges(self, data: np.ndarray = None, 
-                              header: list[str] = None, corr: Callable[[], Any] = None) -> None:
+                              header: list[str] = None, corr: mat_from_corr = None) -> None:
         """
         Get the validity ranges for all the properties of the material
         
@@ -214,13 +248,7 @@ class Material(LoggedClass):
     def _define_from_lbh15(self, lbh15_correlations):
         """Define correlation by using lbh15"""    
         self._data = {}
-        with warnings.catch_warnings(record=True) as w:
-            try:
-                cool_lbh15 = Material.MATERIAL_LBH[self.name](T=self.temperature)
-            except ValueError as e:
-                self.log('error', str(e))
-            if w:
-                self.log('warning', str(w.message))
+        cool_lbh15 = handle_lbh15_warnings(self.log, name = self.name, temp = self.temperature)
 
         for property in Material.PROPS_NAME:
             correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
@@ -379,9 +407,39 @@ class Material(LoggedClass):
         # Only used for constant-property materials
         self._beta = beta
     
-    def __check_limits(self, prop: str):
+    def __check_extreme_limits(self) -> None:
         """
-        Check if the temperature is within the validity range of the property
+        Check if the temperature is within the maximum validity range of the material,
+        i.e. the largest range of all the properties
+        """
+        if self.temperature < min(value[0] for value in self.validity_ranges.values()): 
+            msg = f'Temperature {self.temperature} K is below the minimum validity range for {self.name}: {max(value[0] for value in self.validity_ranges.values())} K'
+            self.log('error', msg)
+        elif self.temperature > max(value[1] for value in self.validity_ranges.values()):
+            msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())} K'
+            self.log('error', msg)
+
+    def __check_internal_limits(self, prop: str) -> None:
+        """
+        Check that the temperature is within the validity range of the property
+        
+        Parameters
+        ----------
+        prop: str
+            Name of the property whose validity range is checked
+        """
+        prop_range = self.validity_ranges[f"{prop}_range"]
+        if self.temperature > prop_range[1]:
+            msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {prop_range[1]} K'
+            self.log('warning', msg)
+        elif self.temperature < prop_range[0]:
+            msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {prop_range[0]} K'
+            self.log('warning', msg)
+                
+    def __check_limits(self, prop: str)-> None:
+        """
+        Check if the temperature is within the validity range of the property 
+        and if it is within the maximum validity range of the material
         
         Parameters
         ----------
@@ -389,19 +447,8 @@ class Material(LoggedClass):
             Property to check
         """
         if self.validity_ranges.get(f"{prop}_range", None):
-            prop_range = self.validity_ranges[f"{prop}_range"]
-            if self.temperature < min(value[0] for value in self.validity_ranges.values()): 
-                msg = f'Temperature {self.temperature} K is below the minimum validity range for {self.name}: {max(value[0] for value in self.validity_ranges.values())} K'
-                self.log('error', msg)
-            elif self.temperature > max(value[1] for value in self.validity_ranges.values()):
-                msg = f'Temperature {self.temperature} K is above the maximum validity range for {self.name}: {max(value[1] for value in self.validity_ranges.values())} K'
-                self.log('error', msg)
-            elif self.temperature > prop_range[1]:
-                msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {prop_range[1]} K'
-                self.log('warning', msg)
-            elif self.temperature < prop_range[0]:
-                msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {prop_range[0]} K'
-                self.log('warning', msg)
+            self.__check_extreme_limits()
+            self.__check_internal_limits(prop)
                 
     def update(self, temperature):
         """Update material properties based on new bulk temperature"""
@@ -484,23 +531,11 @@ class _Matlbh15(LoggedClass):
             result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
                 setattr(self.cool_lbh15, 'T', temperature[ii])
-                result[ii] = self.__handle_lbh15_warnings()
+                result[ii] = handle_lbh15_warnings(self.log, cool = self.cool_lbh15, prop = self.prop)
             return result
         setattr(self.cool_lbh15, 'T', temperature)
-        result = self.__handle_lbh15_warnings()
-        return result
-                
-    def __handle_lbh15_warnings(self):
-        """Handle warnings from lbh15"""
-        with warnings.catch_warnings(record=True) as w:
-            try:
-                res = getattr(self.cool_lbh15, self.prop)
-            except ValueError as e:
-                self.log('error', str(e))
-            if w:
-                self.log('warning', str(w[-1].message))
-        return res
-    
+        result = handle_lbh15_warnings(self.log, cool = self.cool_lbh15, prop = self.prop)
+        return result    
     
 class _MatUserCorr(object):
     """
