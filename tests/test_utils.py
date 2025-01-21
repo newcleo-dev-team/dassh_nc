@@ -22,7 +22,7 @@ Test utility methods
 import pytest
 import dassh
 from dassh import utils
-
+from pytest import mat_data
 
 def test_format_unit(caplog):
     """Test some crazy units and see if they get recognized"""
@@ -198,13 +198,13 @@ def test_q_equals_mcdT():
     coolant outlet temperature or required mass flow rate"""
     p = 1000.0
     t_in = 298.15  # 25 degrees C
-    coolant = dassh.Material('water', 273.3)
+    coolant = dassh.Material('water', mat_data.water_temperature)
     # Test calculation of MFR given outlet temperature
     delta_t = 50.0
     t_out = t_in + delta_t  # 75 degrees C
     coolant.update(t_in + 0.5 * delta_t)
     cp = coolant.heat_capacity
-    coolant.update(273.4)
+    coolant.update(mat_data.water_temperature + 0.1)
     result = utils.Q_equals_mCdT(p, t_in, coolant, t_out=t_out)
     ans = p / cp / delta_t
     assert result == pytest.approx(ans)

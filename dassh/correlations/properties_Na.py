@@ -23,13 +23,6 @@ class mat_from_corr(PropertyClass):
     Transport Properties of Sodium Liquid and Vapor," 
     ANL-RE-95-2, Argonne National Laboratory, 1995.
     """
-    
-    def __init__(self, prop: Union[str, None] = None):
-        self.prop = prop
-    
-    def __call__(self, temperature: float):
-        return getattr(self, self.prop)(temperature)
-    
     def density(self, T: float) -> float:
         """
         Computes sodium density

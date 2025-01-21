@@ -23,11 +23,11 @@ import numpy as np
 import pytest
 import copy
 import dassh
-
+from pytest import mat_data
 
 def test_rr_flowsplit_conservation(textbook_rr):
     """Test flowsplit mass conservation requirement"""
-    textbook_rr._update_coolant_int_params(373)
+    textbook_rr._update_coolant_int_params(mat_data.water_temperature)
     total = 0.0
     total += (textbook_rr.coolant_int_params['fs'][0]
               * textbook_rr.params['area'][0]
