@@ -59,7 +59,7 @@ def handle_lbh15_warnings(logger: Callable[[str, str], None], cool = None, prop:
         
     Returns
     -------
-    res: Union[float, np.ndarray, None]
+    res: Union[float, None]
         Value of the property calculated, if no warnings or errors are raised
     """
     with warnings.catch_warnings(record=True) as w:
@@ -216,7 +216,7 @@ class Material(LoggedClass):
             Numpy array that contains temperatures (first column) and properties taken from a file
         header: list[str]
             Header of the file containing the properties names and the temperature
-        corr: Callable[[], Any]
+        corr: mat_from_corr
             Object for sodium or NaK correlations, returns property values 
             or validity range for a property
         """
