@@ -48,7 +48,7 @@ def property_test(mat: str, t_values: np.array, correct_values: list[float], pro
         mat.update(np.average([t_values[ind], t_values[ind+1]]))
         assert correct_values[ind] == pytest.approx(getattr(mat, property))
         
-def material_comparison(mat: str, use_corr: Union[bool, False] = False, 
+def material_comparison(mat: str, use_corr: bool = False, 
                         lbh15_corr: Union[Dict[str, str], Dict[str, None]] = {'cp': None, 'k': None, 'rho': None, 'mu': None}):
     """ 
     Function to compare all material properties over validity range
