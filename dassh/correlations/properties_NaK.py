@@ -23,12 +23,6 @@ class mat_from_corr(PropertyClass):
     Volume I - Sodium Chemistry and Physical Properties, 
     Gordon and Breach, Science Publishers, Inc., 1972.
     """
-    def __init__(self, prop: Union[str, None] = None):
-        self.prop = prop
-    
-    def __call__(self, temperature: float):
-        return getattr(self, self.prop)(temperature)
-    
     def density(self, T: float) -> float:
         """
         Computes NaK density
