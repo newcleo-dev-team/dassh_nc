@@ -124,12 +124,11 @@ class Material(LoggedClass):
     PROPS_NAME_FULL = dict(zip(PROPS_NAME, LBH15_PROPERTIES)) 
     MATERIAL_NAMES = ['lead', 'bismuth', 'lbe', 'sodium', 'nak', 'potassium', 'water', 'ss304', 'ss316']
     
-    def __init__(self, name, temperature=400, from_file=None,
+    def __init__(self, name, temperature=None, from_file=None,
                  corr_dict=None, lbh15_correlations = None,
                  use_correlation = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
-        self.temperature = temperature
         self.validity_ranges = {}
         # Read data into instance; use again to update properties later       
         if from_file:
@@ -137,7 +136,9 @@ class Material(LoggedClass):
         elif corr_dict:
             self._define_from_user_corr(corr_dict)
         elif use_correlation and self.name in Material.MATERIAL_LBH.keys():
-            self._define_from_lbh15(lbh15_correlations) 
+            if temperature is None:
+                temperature = self.__get_mid_temp(self.validity_ranges, use_correlation)
+            self._define_from_lbh15(lbh15_correlations, temperature) 
         elif use_correlation and self.name in ['sodium', 'nak']:
             self._define_from_correlation()
         else:
@@ -150,9 +151,36 @@ class Material(LoggedClass):
                     msg = f'Cannot find properties for material {name}'
                     self.log('error', msg)
 
+        # Initialize material temperature
+        if temperature is None:
+            self.temperature = self.__get_mid_temp(self.validity_ranges, use_correlation)
+        else: 
+            self.temperature = temperature
         # Update properties based on input temperature
-        self.update(temperature)
-
+        self.update(self.temperature)
+        
+    def __get_mid_temp(self, val_range: dict, use_corr: bool) -> float:
+        """
+        Find the middle temperature of the validity range of the properties
+        
+        Parameters
+        ----------
+        val_range: dict
+            Dictionary containing the validity ranges of the properties
+            
+        Returns
+        -------
+        mid_temp: float
+            Middle temperature of the validity range of the properties
+        """
+        if self.name in self.MATERIAL_LBH.keys() and use_corr: # lbh15
+            return (self.PROP_LBH15[self.name].k().range[0] + self.PROP_LBH15[self.name].k().range[1]) / 2
+        elif val_range: # table or Na/Nak correlations
+            return (min(value[0] for value in self.validity_ranges.values()) \
+                + max(value[1] for value in self.validity_ranges.values())) / 2
+        else: # user-defined correlations or built-in materials (ex. ht9, d9)
+            return 298.15
+        
     def read_from_file(self, path):
         """Determine whether a user-provided CSV file is providing
         correlation coefficients or tabulated data and read them in"""
@@ -245,11 +273,10 @@ class Material(LoggedClass):
                 self.log('error', msg)
             self._data[cols[i]] = _MatInterp(x2, y2)
     
-    def _define_from_lbh15(self, lbh15_correlations):
+    def _define_from_lbh15(self, lbh15_correlations, temperature):
         """Define correlation by using lbh15"""    
         self._data = {}
-        cool_lbh15 = handle_lbh15_warnings(self.log, name = self.name, temp = self.temperature)
-
+        cool_lbh15 = handle_lbh15_warnings(self.log, name = self.name, temp = temperature)
         for property in Material.PROPS_NAME:
             correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
             corr_name = lbh15_correlations[Material.PROPS_NAME_FULL[property]]
