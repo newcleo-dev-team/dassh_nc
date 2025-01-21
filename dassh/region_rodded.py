@@ -925,8 +925,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     * self.coolant_int_params['fs'][1])
             self.coolant_int_params['swirl'][1] = tmp
             self.coolant_int_params['swirl'][2] = tmp
-            print('eddy', self.coolant_int_params['eddy'])
-           # print('sc_eddy', self.coolant_int_params['sc_eddy'])
+            print('swirl', self.coolant_int_params['swirl'])
+            print('sc_swirl', self.coolant_int_params['sc_swirl'])
     def _update_coolant_byp_params(self, temp_list):
         """Update correlated bundle bypass coolant parameters based
         on current average coolant temperature
@@ -1239,10 +1239,16 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         #    swirl_consts *= self.sc_properties['density'][self.ht['conv']['ind']] \
         #        * self.coolant_int_params['sc_swirl'][self.ht['conv']['ind']]    
         #else:
-        swirl_consts = (self.ht['swirl'] * self.coolant_int_params['swirl']
-                    / self.coolant_int_params['fs'])
-        swirl_consts = swirl_consts[self.ht['conv']['type']]
-        swirl_consts *= self.coolant.density 
+        print('density')
+        if self.non_isotropic:
+            swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs'])              
+            swirl_consts = swirl_consts[self.ht['conv']['type']] * self.coolant_int_params['sc_swirl'][self.ht['conv']['type']]
+            swirl_consts *= self.sc_properties['density'][self.ht['conv']['type']]
+        else:
+            swirl_consts = (self.ht['swirl'] * self.coolant_int_params['swirl']
+                        / self.coolant_int_params['fs'])
+            swirl_consts = swirl_consts[self.ht['conv']['type']]
+            swirl_consts *= self.coolant.density 
         #print('1',swirl_consts)
         #print('2', swirl_consts2)
         #print(self.coolant_int_params['swirl'])
