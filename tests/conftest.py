@@ -134,16 +134,6 @@ def pytest_configure(config):
     ###########################################  
     with open("tests/test_data/material_class_data.json", "r") as json_file:
         file_data = json.load(json_file)
-        
-    lead_bounds = lbh15.lead_properties.k().range
-    lbe_bounds = lbh15.lbe_properties.k().range
-    bismuth_bounds = lbh15.bismuth_properties.k().range
-        
-    out_range = {
-        'lead': [lead_bounds[0]-1, lead_bounds[1]+1] + [2021.0],
-        'lbe': [lbe_bounds[0]-1, lbe_bounds[1]+1] + [1927.0, 399.0],
-        'bismuth': [bismuth_bounds[0]-1, bismuth_bounds[1]+1] + [1831.0]
-    }    
     
     pytest.mat_data = MaterialData(
         correlation_mat_names=file_data["cool_names"],
@@ -170,7 +160,7 @@ def pytest_configure(config):
         nak_corr=file_data["nak_corr"],
         properties_list=file_data["properties_list"],
         properties_list_full= file_data["properties_list_full"],
-        out_range = out_range,
+        out_range = file_data["out_range"],
         mfact=file_data["multiplication_factor"],
         temperature_coeff_file=file_data["temperature_coeff_file"],
         expected_from_coeff=file_data["expected_from_coeff"],
