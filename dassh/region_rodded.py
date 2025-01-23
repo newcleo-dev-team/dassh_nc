@@ -570,9 +570,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if self.non_isotropic:
             self.coolant_int_params['sc_vel'] = \
                 np.zeros(self.subchannel.n_sc['coolant']['total'])
-            self.coolant_int_params['sc_eddy'] = \
-                np.zeros(self.subchannel.n_sc['coolant']['total'])
-            self.coolant_int_params['sc_swirl'] = \
+            self.coolant_int_params['sc_htc'] = \
                 np.zeros(self.subchannel.n_sc['coolant']['total'])
         if self.n_bypass > 0:
             self.coolant_byp_params = \
@@ -584,7 +582,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Update shape factor if correlation was specified
         if self.corr['sf'] is not None:
             self._sf = self.corr['sf'](self)
-
+            
         # Check P/D and W/D ratios for acceptability if CTD/UCTD.
         # Already checked for turbulent value in read_input. Here,
         # need to check if flow is laminar.
@@ -850,7 +848,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # self.coolant.update(temp)
         self._update_coolant(temp)
         if self.non_isotropic:
-            self._update_subchannels_properties(temp)
+            self._update_subchannels_properties(self.temp['coolant_int'])
         # Only reason you wouldn't update all correlated parameters is if
         # the coolant tracker object says not to. If it says not to, skip
         # the update. Otherwise, proceed.
@@ -888,12 +886,24 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             tmp * self.coolant_int_params['fs'][2] * self.params['de'][2]
 
         # Heat transfer coefficient (via Nusselt number)
+        if self.non_isotropic:
+            tmp = (self.sc_properties['density'] * self.coolant_int_params['sc_vel']
+               / self.sc_properties['viscosity'])
+            self.coolant_int_params['Re_sc_nu'] = \
+                tmp *  self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
+            nu_sc = self.corr['nu'](self.coolant,
+                                    self.coolant_int_params['Re_sc_nu'],
+                                    self.htc_params['duct'],
+                                    self.sc_properties)
+            self.coolant_int_params['sc_htc'] = \
+            self.sc_properties['thermal_conductivity'][self.ht['conv']['ind']] \
+            * nu_sc[self.ht['conv']['ind']] / self.params['de'][self.ht['conv']['type']]
+        
         nu = self.corr['nu'](self.coolant,
-                             self.coolant_int_params['Re_sc'],
-                             self.htc_params['duct'])
+                            self.coolant_int_params['Re_sc'],
+                            self.htc_params['duct'])
         self.coolant_int_params['htc'] = \
-            self.coolant.thermal_conductivity * nu / self.params['de']
-
+        self.coolant.thermal_conductivity * nu / self.params['de']
         # MODIFICATION 2022-11-29: No longer updating friction factor
         # during the sweep. It is now static and  determined at the
         # start of the calculation, based on bundle-average coolant
@@ -910,13 +920,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     self.sc_mfr \
                     / self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]\
                     / self.sc_properties['density']
-                self.coolant_int_params['sc_eddy'] = \
-                    (mix[0] * self.coolant_int_params['fs'][0]
-                     * self.coolant_int_params['sc_vel'])
-                tmp = (mix[1] * self.coolant_int_params['sc_vel']
-                       * self.coolant_int_params['fs'][1])
-                self.coolant_int_params['sc_swirl'][self.ht['conv']['ind']] \
-                    = tmp[self.ht['conv']['ind']]
             
             self.coolant_int_params['eddy'] = \
                 (mix[0] * self.coolant_int_params['fs'][0]
@@ -925,8 +928,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     * self.coolant_int_params['fs'][1])
             self.coolant_int_params['swirl'][1] = tmp
             self.coolant_int_params['swirl'][2] = tmp
-            print('swirl', self.coolant_int_params['swirl'])
-            print('sc_swirl', self.coolant_int_params['sc_swirl'])
+
     def _update_coolant_byp_params(self, temp_list):
         """Update correlated bundle bypass coolant parameters based
         on current average coolant temperature
@@ -1091,14 +1093,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Interior coolant temperatures: calculate using coolant
         # properties from previous axial step
+        
         self.temp['coolant_int'] += \
             self._calc_coolant_int_temp(dz, q['pins'], q['cool'], ebal)
 
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
-        # Update subchannel properties
-        if self.non_isotropic:
-            self._update_subchannels_properties(self.temp['coolant_int'])
         # Bypass coolant temperatures
         if self.n_bypass > 0:
             if self.byp_flow_rate > 0:
@@ -1184,7 +1184,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 * (self.temp['coolant_int'][self.ht['cond']['adj']]
                 - self.temp['coolant_int'][:, np.newaxis]))
         if self.non_isotropic:
-            keff = (self.coolant_int_params['sc_eddy']
+            keff = (self.coolant_int_params['eddy']
                 * self.sc_properties['density']
                 * self.sc_properties['heat_capacity']
                 + self._sf * self.sc_properties['thermal_conductivity'])    
@@ -1198,7 +1198,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
-        tmp = self.coolant_int_params['htc'][self.ht['conv']['type']]
+        if self.non_isotropic:
+            tmp = self.coolant_int_params['sc_htc']
+        else:
+            tmp = self.coolant_int_params['htc'][self.ht['conv']['type']]
         # Low flow case: use SE2ANL model
         if self._conv_approx:
             # Resistance between coolant and duct MW
@@ -1232,27 +1235,15 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
-        #if self.non_isotropic:
-        #    swirl_consts = (self.ht['swirl'] 
-        #                / self.coolant_int_params['fs'])
-        #    swirl_consts = swirl_consts[self.ht['conv']['type']]
-        #    swirl_consts *= self.sc_properties['density'][self.ht['conv']['ind']] \
-        #        * self.coolant_int_params['sc_swirl'][self.ht['conv']['ind']]    
-        #else:
-        print('density')
         if self.non_isotropic:
-            swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs'])              
-            swirl_consts = swirl_consts[self.ht['conv']['type']] * self.coolant_int_params['sc_swirl'][self.ht['conv']['type']]
-            swirl_consts *= self.sc_properties['density'][self.ht['conv']['type']]
+            swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']              
+            swirl_consts = swirl_consts[self.ht['conv']['type']]
+            swirl_consts *= self.sc_properties['density'][self.ht['conv']['ind']]
         else:
             swirl_consts = (self.ht['swirl'] * self.coolant_int_params['swirl']
                         / self.coolant_int_params['fs'])
             swirl_consts = swirl_consts[self.ht['conv']['type']]
             swirl_consts *= self.coolant.density 
-        #print('1',swirl_consts)
-        #print('2', swirl_consts2)
-        #print(self.coolant_int_params['swirl'])
-        #print(self.coolant_int_params['sc_swirl'])
         # Swirl flow from adjacent subchannel; =0 for interior sc
         # The adjacent subchannel is the one the swirl flow is
         # coming from i.e. it's in the opposite direction of the
