@@ -44,7 +44,7 @@ q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
 module_logger = logging.getLogger('dassh.region_rodded')
 
 
-def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False):
+def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, non_isotropic=False):
     """Create RoddedRegion object within DASSH Assembly
 
     Parameters
@@ -98,7 +98,8 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False):
                       inp['shape_factor'],
                       se2geo,
                       update_tol,
-                      gravity)
+                      gravity, 
+                      non_isotropic)
 
     # Add z lower/upper boundaries
     rr.z = [inp['AxialRegion']['rods']['z_lo'],
@@ -236,12 +237,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, gravity=False):
+                 param_update_tol=0.0, gravity=False, non_isotropic=False):
         """Instantiate RoddedRegion object"""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
         # Flag for non-isotropic coolant properties (radially)
-        self.non_isotropic = True
+        self.non_isotropic = non_isotropic
         # Disable single-pin assemblies for now; maybe revisit later
         if n_ring == 1 or pin_pitch == 0.0:
             self.log('error', 'Single-pin assemblies not supported')
@@ -1093,7 +1094,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Interior coolant temperatures: calculate using coolant
         # properties from previous axial step
-        
         self.temp['coolant_int'] += \
             self._calc_coolant_int_temp(dz, q['pins'], q['cool'], ebal)
 
