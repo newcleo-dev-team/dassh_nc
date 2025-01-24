@@ -387,7 +387,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             for k in self.coolant.PROPS_NAME}
         
     ####################################################################
-    def _update_subchannels_properties(self, temp: np.ndarray) -> dict:
+    def _update_subchannels_properties(self, temp: np.ndarray) -> None:
         """
         Update subchannel properties based on temperature
         
@@ -395,11 +395,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         ----------
         temp : np.ndarray
             Array of temperatures
-            
-        Returns
-        -------
-        dict
-            Dictionary of subchannels properties updated 
         """
         if isinstance(temp, float):
             temp = temp*np.ones(self.subchannel.n_sc['coolant']['total'])
