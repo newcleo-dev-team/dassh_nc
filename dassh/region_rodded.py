@@ -386,7 +386,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Set up subchannel properties
         self.sc_properties = {k: np.zeros(self.subchannel.n_sc['coolant']['total']) \
             for k in self.coolant.PROPS_NAME}
-        
+        self._sc_coolant = self.coolant.clone()
     ####################################################################
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
         """
@@ -398,9 +398,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Array of temperatures
         """
         for i in range(len(temp)):  
-            self.coolant.update(temp[i])
+            self._sc_coolant.update(temp[i])
             for prop in self.coolant.PROPS_NAME:
-                self.sc_properties[prop][i] = getattr(self.coolant, prop)
+                self.sc_properties[prop][i] = getattr(self._sc_coolant, prop)
                 
     def _activate_subchannel_properties(self, temp: float) -> None:
         """
@@ -412,9 +412,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         temp : float
             Temperature at which properties are calculated 
         """
-        self.coolant.update(temp)
+        self._sc_coolant.update(temp)
         for prop in self.coolant.PROPS_NAME:
-            self.sc_properties[prop] = getattr(self.coolant, prop)
+            self.sc_properties[prop] = getattr(self._sc_coolant, prop)
             
     ####################################################################
     # SETUP METHODS
@@ -1179,23 +1179,44 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # CONDUCTION BETWEEN COOLANT SUBCHANNELS
         # Effective thermal conductivity
-        cond_temp_difference = (self.ht['cond']['const']
+        #print(self.coolant_int_params['eddy'], self._sf)
+        
+        if not self._rad_isotropic:
+            keff = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+            for i in range(self.subchannel.n_sc['coolant']['total']):
+                for k in range(3):
+                    j = self.ht['cond']['adj'][i][k]
+                    if self.ht['cond']['adj'][i][k] == 0 and k == 2:
+                        rho_ij = 0
+                        cp_ij = 0
+                        k_ij = 0
+                    else:
+                        rho_ij = (self.sc_properties['density'][i] + self.sc_properties['density'][j])/2
+                        cp_ij = (self.sc_properties['heat_capacity'][i] + self.sc_properties['heat_capacity'][j])/2
+                        k_ij = (self.sc_properties['thermal_conductivity'][i] + self.sc_properties['thermal_conductivity'][j])/2
+                    keff[i][k] = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij 
+             #   print(keff)
+             #   print(self.ht['cond']['adj'])
+            cond_temp_difference = keff * (self.ht['cond']['const']
                 * (self.temp['coolant_int'][self.ht['cond']['adj']]
                 - self.temp['coolant_int'][:, np.newaxis]))
-        if not self._rad_isotropic:
-            keff = (self.coolant_int_params['eddy']
-                * self.sc_properties['density']
-                * self.sc_properties['heat_capacity']
-                + self._sf * self.sc_properties['thermal_conductivity'])    
+            dT += cond_temp_difference[:, 0] + cond_temp_difference[:, 1] + cond_temp_difference[:, 2]
+            mcp_cond = self.sc_mfr * self.sc_properties['heat_capacity']
+          #  print(mcp_cond * (cond_temp_difference[:, 0] + \
+          #      cond_temp_difference[:, 1] + cond_temp_difference[:, 2])*dz)
         else:
             keff = (self.coolant_int_params['eddy']
                     * self.coolant.density
                     * self.coolant.heat_capacity
                     + self._sf * self.coolant.thermal_conductivity)
-            # keff = 0.0
-        dT += keff * (cond_temp_difference[:, 0] + \
-            cond_temp_difference[:, 1] + cond_temp_difference[:, 2]) 
-
+            cond_temp_difference = (self.ht['cond']['const']
+                * (self.temp['coolant_int'][self.ht['cond']['adj']]
+                - self.temp['coolant_int'][:, np.newaxis]))
+            dT += keff * (cond_temp_difference[:, 0] + \
+                cond_temp_difference[:, 1] + cond_temp_difference[:, 2]) 
+            mcp_cond = self.sc_mfr * self.coolant.heat_capacity
+           # print(mcp_cond * keff * (cond_temp_difference[:, 0] + \
+           #     cond_temp_difference[:, 1] + cond_temp_difference[:, 2])*dz)
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
         if not self._rad_isotropic:
@@ -1235,14 +1256,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
+        swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']              
+        swirl_consts = swirl_consts[self.ht['conv']['type']]
         if not self._rad_isotropic:
-            swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']              
-            swirl_consts = swirl_consts[self.ht['conv']['type']]
-            swirl_consts *= self.sc_properties['density'][self.ht['conv']['ind']]
+            swirl_consts *= (self.sc_properties['density'][self.ht['conv']['ind']] + \
+                self.sc_properties['density'][self.subchannel.sc_adj[
+                self.ht['conv']['ind'], self._adj_sw]])/2
         else:
-            swirl_consts = (self.ht['swirl'] * self.coolant_int_params['swirl']
-                        / self.coolant_int_params['fs'])
-            swirl_consts = swirl_consts[self.ht['conv']['type']]
             swirl_consts *= self.coolant.density 
         # Swirl flow from adjacent subchannel; =0 for interior sc
         # The adjacent subchannel is the one the swirl flow is
@@ -1259,6 +1279,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 self.ht['conv']['ind'], self._adj_sw]]
                 - self.temp['coolant_int'][self.ht['conv']['ind']]))
 
+     #   mcp_swirl = self.sc_mfr[self.ht['conv']['ind']] / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
+     #   print(np.sum(mcp_swirl * (swirl_consts
+     #        * (self.temp['coolant_int'][self.subchannel.sc_adj[
+     #           self.ht['conv']['ind'], self._adj_sw]]
+     #           - self.temp['coolant_int'][self.ht['conv']['ind']]))*dz))
+        
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
             self.update_ebal(dz * np.sum(q), dz * qduct)
