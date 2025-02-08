@@ -1196,10 +1196,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         dT = q * self.ht['inv_q_denom']
         # CONDUCTION BETWEEN COOLANT SUBCHANNELS
         # Effective thermal conductivity
-        keff = self._get_effective_conductivity()
-        cond_temp_difference = keff * (self.ht['cond']['const']
-            * (self.temp['coolant_int'][self.ht['cond']['adj']]
-            - self.temp['coolant_int'][:, np.newaxis]))
+        cond_temp_difference = self._get_cond_temp_difference()
         dT +=  (cond_temp_difference[:, 0] + \
             cond_temp_difference[:, 1] + cond_temp_difference[:, 2]) 
             
@@ -1273,45 +1270,48 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.update_ebal(dz * np.sum(q), dz * qduct)
         return dT * dz
     
-    def _get_effective_conductivity(self) -> Union[float, np.ndarray]:
+    def _get_cond_temp_difference(self) -> np.ndarray:
         """
         Calculate the effective thermal conductivity
         
         Returns
         -------
-        Union[float, np.ndarray]
-            Effective thermal conductivity
+        np.ndarray
+            Array of conduction terms for each subchannel
             
         Notes
         -----
         The effective thermal conductivity is calculated as the sum of a
         purely conductive term and a term that accounts for the effect of
-        eddy diffucivity. In case of radially isotropic properties, it is
-        a single float value, since it is isotropic as well. Otherwise, 
-        it is a 2D array with shape (n_sc, 3), where n_sc is the number of
-        coolant subchannels and 3 is the number of adjacent subchannels for
-        each subchannel.
+        eddy diffusivity. In case of non radially isotropic properties, 
+        the effective thermal conductivity is calculated average properties
+        between adjacent subchannels. In both cases, the term is multiplied
+        by the temperature difference between the subchannels.
         """
+        cond_temp_difference = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
         if not self._rad_isotropic:
-            keff = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
             for i in range(self.subchannel.n_sc['coolant']['total']):
                 for k in range(3):
                     j = self.ht['cond']['adj'][i][k]
                     if self.subchannel.type[j] == 0 and k == 2:
-                        rho_ij = 0
-                        cp_ij = 0
-                        k_ij = 0
+                        continue
                     else:
                         rho_ij = self._calc_mass_flow_average_property('density', i, j)
                         cp_ij = self._calc_mass_flow_average_property('heat_capacity', i, j)
                         k_ij = self._calc_mass_flow_average_property('thermal_conductivity', i, j)
-                    keff[i][k] = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij       
+                        keff_ij = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij       
+                        cond_temp_difference[i][k] = keff_ij * (self.ht['cond']['const'][i][k]
+                            * (self.temp['coolant_int'][j]
+                            - self.temp['coolant_int'][i]))
         else:
             keff = (self.coolant_int_params['eddy']
                     * self.coolant.density
                     * self.coolant.heat_capacity
                     + self._sf * self.coolant.thermal_conductivity)
-        return keff
+            cond_temp_difference = keff * (self.ht['cond']['const']
+                * (self.temp['coolant_int'][self.ht['cond']['adj']]
+                - self.temp['coolant_int'][:, np.newaxis]))
+        return cond_temp_difference
     
     def _calc_mass_flow_average_property(self, prop: str, i: Union[int, np.ndarray], 
                                          j: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
