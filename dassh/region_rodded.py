@@ -887,15 +887,19 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Re_partial = (self.sc_properties['density'] * self.coolant_int_params['sc_vel']
                / self.sc_properties['viscosity'])
             self.coolant_int_params['Re_all_sc'] = \
-                Re_partial *  self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]   
-            self.coolant_int_params['sc_htc'] = self._get_htc_rad_non_isotropic(self.coolant_int_params['Re_all_sc'],
-                                                                                self.htc_params['duct'],
-                                                                                self.sc_properties)        
-        nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
-                            self.htc_params['duct'],
-                            coolant_obj = self.coolant)
-        self.coolant_int_params['htc'] = \
-            self.coolant.thermal_conductivity * nu / self.params['de']
+                Re_partial \
+                * self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]   
+            self.coolant_int_params['sc_htc'] = \
+                self._get_htc_rad_non_isotropic(
+                    self.coolant_int_params['Re_all_sc'],
+                    self.htc_params['duct'],
+                    self.sc_properties)    
+        else:    
+            nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
+                                self.htc_params['duct'],
+                                coolant_obj = self.coolant)
+            self.coolant_int_params['htc'] = \
+                self.coolant.thermal_conductivity * nu / self.params['de']
         # MODIFICATION 2022-11-29: No longer updating friction factor
         # during the sweep. It is now static and  determined at the
         # start of the calculation, based on bundle-average coolant
@@ -1328,9 +1332,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Union[float, np.ndarray]
             Mass flow rate weighted average of the property between the two subchannels
         """
-        mi = self.sc_mfr[i]
-        mj = self.sc_mfr[j]
-        return (self.sc_properties[prop][i] * mi + self.sc_properties[prop][j] * mj) / (mi + mj)
+        return (self.sc_properties[prop][i] * self.sc_mfr[i] 
+                + self.sc_properties[prop][j] * self.sc_mfr[j]) \
+                / (self.sc_mfr[i] + self.sc_mfr[j])
 
 
             
@@ -1600,8 +1604,11 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 t_in = self.temp['coolant_int']
                 # Get rid of interior temps, only want edge/corner
                 t_in = t_in[self.subchannel.n_sc['coolant']['interior']:]
-                htc_in = self.coolant_int_params['htc'][1:]
-                htc_in = htc_in[self._duct_idx]
+                if not self._rad_isotropic:
+                    htc_in = self.coolant_int_params['sc_htc'][self.subchannel.n_sc['coolant']['interior']:]
+                else:
+                    htc_in = self.coolant_int_params['htc'][1:]
+                    htc_in = htc_in[self._duct_idx]
             else:
                 t_in = self.temp['coolant_byp'][i - 1]
                 htc_in = self.coolant_byp_params['htc'][i - 1]

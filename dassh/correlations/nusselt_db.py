@@ -38,12 +38,12 @@ def calculate_sc_Nu(sc_Re, consts=[], coolant_obj = None, sc_prop = None):
     correlation"""
     if consts == []:
         consts = _DEFAULT_DB_CONSTS
-    if sc_prop is not None:
+    if sc_prop is not None and coolant_obj is None:
         Pr = _calc_sc_prandtl(sc_prop)
-    elif coolant_obj is not None:
+    elif coolant_obj is not None and sc_prop is None:
         Pr = _calc_prandtl(coolant_obj)
     else:
-        raise ValueError('Either coolant object or subchannel properties'
+        raise ValueError('One between coolant object or subchannel properties'
                          ' must be provided')
     # for i in range(len(Nu)):
     #     Nu[i] = _dittus_boelter(sc_Re[i], Pr, consts)
