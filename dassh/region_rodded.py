@@ -1267,12 +1267,17 @@ class RoddedRegion(LoggedClass, DASSH_Region):
              
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
-            self.update_ebal(dz * np.sum(q), dz * qduct)
+            if not self._rad_isotropic:
+                mcpdT_i = self.sc_mfr*self.sc_properties['heat_capacity']*dT*dz
+                self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
+            else:
+                mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT * dz
+                self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
         return dT * dz
     
     def _get_cond_temp_difference(self) -> np.ndarray:
         """
-        Calculate the effective thermal conductivity
+        Calculate the effective conduction term
         
         Returns
         -------
@@ -2282,8 +2287,12 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
         # Add clad-to-coolant htc for bundle : use "bundle Nu" because
         # we do heat transfer to pins based on bundle-average Re
         # rather than subchannel Re
-        corr_names['pin_nu'] = 'dittus-boelter'
-        corr['pin_nu'] = nusselt_db.calculate_bundle_Nu
+        if not bundle._rad_isotropic:
+            corr_names['pin_nu'] = 'dittus-boelter'
+            corr['pin_nu'] = nusselt_db.calculate_sc_Nu
+        else:
+            corr_names['pin_nu'] = 'dittus-boelter'
+            corr['pin_nu'] = nusselt_db.calculate_bundle_Nu
     else:
         msg = 'Unknown correlation specified for Nusselt number: '
         module_logger.error(msg + nu)
