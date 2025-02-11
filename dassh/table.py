@@ -1028,11 +1028,15 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                # Average Cp
-                ebal_asm[5] = reg.ebal['mcpdT_i'] / reg.int_flow_rate/ \
+                
+                ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
                     (asm.avg_coolant_temp - r_obj.inlet_temp)
         # Assembly mass flow rate
         ebal_asm[4] = asm.flow_rate
+        # Average Cp
+        if ebal_asm[5] == 0:
+            ebal_asm[5] = self._get_asm_avg_cp(asm, r_obj)
+        # Temperature rise
         ebal_asm[6] = asm.avg_coolant_temp - r_obj.inlet_temp
         return ebal_asm
 
@@ -1090,6 +1094,14 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         core_tot[2] = _OMIT
         core_tot[3] = _OMIT
         return core_tot
+
+    @staticmethod
+    def _get_asm_avg_cp(asm, r_obj):
+        asm.region[0].coolant.update(r_obj.inlet_temp)
+        cp1 = asm.region[0].coolant.heat_capacity
+        asm.region[0].coolant.update(asm.avg_coolant_temp)
+        cp2 = asm.region[0].coolant.heat_capacity
+        return np.average([cp1, cp2])
 
     @staticmethod
     def _get_gap_avg_cp(r_obj):
