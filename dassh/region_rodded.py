@@ -1259,20 +1259,15 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                  * self.temp['coolant_int'][self.ht['conv']['ind']]) \
                  / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]    
                  
-            sss = swirl_exchange*dz*self.sc_mfr[self.ht['conv']['ind']]*self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
         else:
             swirl_consts *= self.coolant.density 
             swirl_exchange = (swirl_consts*
                 (self.temp['coolant_int'][self.subchannel.sc_adj[
                   self.ht['conv']['ind'], self._adj_sw]]
                   - self.temp['coolant_int'][self.ht['conv']['ind']]))
-            sss = swirl_exchange*dz*self.sc_mfr[self.ht['conv']['ind']]*self.coolant.heat_capacity
             
         dT[self.ht['conv']['ind']] += swirl_exchange
 
-       # print(sss)
-       # print(np.sum(sss))
-        
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
             if not self._rad_isotropic:
