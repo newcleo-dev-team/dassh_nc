@@ -1238,18 +1238,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         dT *= mCp
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
-        swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']]
-        if not self._rad_isotropic:
-            rhoij = self._calc_mass_flow_average_property('density', self.ht['conv']['ind'], 
-                                                          self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]) 
-            cpij = self._calc_mass_flow_average_property('heat_capacity', self.ht['conv']['ind'], 
-                                                         self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw])
-            rhoij = self._calc_mass_flow_average_property('density', self.ht['conv']['ind'], 
-                                                          self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw])
-            swirl_consts *= rhoij * cpij / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
-        else:
-            swirl_consts *= self.coolant.density 
         # Swirl flow from adjacent subchannel; =0 for interior sc
         # The adjacent subchannel is the one the swirl flow is
         # coming from i.e. it's in the opposite direction of the
@@ -1259,12 +1247,32 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # wise direction is 27; the preceding one is 25.
         # - clockwise: use 25 as the swirl adjacent sc
         # - counterclockwise: use 27 as the swirl adjacent sc
-        dT[self.ht['conv']['ind']] += \
-            (swirl_consts
-             * (self.temp['coolant_int'][self.subchannel.sc_adj[
-                self.ht['conv']['ind'], self._adj_sw]]
-                - self.temp['coolant_int'][self.ht['conv']['ind']]))
-             
+        swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']  
+        swirl_consts = swirl_consts[self.ht['conv']['type']]
+        if not self._rad_isotropic:
+            swirl_exchange = swirl_consts* \
+                (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
+                 * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                 * self.temp['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                 - self.sc_properties['density'][self.ht['conv']['ind']]
+                 * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
+                 * self.temp['coolant_int'][self.ht['conv']['ind']]) \
+                 / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]    
+                 
+            sss = swirl_exchange*dz*self.sc_mfr[self.ht['conv']['ind']]*self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
+        else:
+            swirl_consts *= self.coolant.density 
+            swirl_exchange = (swirl_consts*
+                (self.temp['coolant_int'][self.subchannel.sc_adj[
+                  self.ht['conv']['ind'], self._adj_sw]]
+                  - self.temp['coolant_int'][self.ht['conv']['ind']]))
+            sss = swirl_exchange*dz*self.sc_mfr[self.ht['conv']['ind']]*self.coolant.heat_capacity
+            
+        dT[self.ht['conv']['ind']] += swirl_exchange
+
+       # print(sss)
+       # print(np.sum(sss))
+        
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
             if not self._rad_isotropic:
@@ -1298,7 +1306,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             for i in range(self.subchannel.n_sc['coolant']['total']):
                 for k in range(3):
                     j = self.ht['cond']['adj'][i][k]
-                    if self.subchannel.type[j] == 0 and k == 2:
+                    if j == 0 and k == 2:
                         continue
                     else:
                         rho_ij = self._calc_mass_flow_average_property('density', i, j)
