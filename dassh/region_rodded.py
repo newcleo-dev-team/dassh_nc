@@ -32,7 +32,7 @@ from dassh.logged_class import LoggedClass
 from dassh.correlations import check_correlation
 from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
-from dassh.material import _MatTracker
+from dassh.material import _MatTracker, Material
 from typing import Union, Dict, List
 
 
@@ -399,7 +399,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         for i in range(len(temp)):  
             self.coolant.update(temp[i])
-            for prop in self.coolant.PROPS_NAME:
+            for prop in self.sc_properties.keys():
                 self.sc_properties[prop][i] = getattr(self.coolant, prop)
             
     ####################################################################
@@ -676,7 +676,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self.coolant_int_params['vel'] = mfr_over_area / self.coolant.density
         self.coolant_int_params['Re'] = \
             mfr_over_area * self.bundle_params['de'] / self.coolant.viscosity
-        #Spacer grid, if present
+        # Spacer grid, if present
         if 'grid' in self.corr_constants.keys():
             try:
                 self.coolant_int_params['grid_loss_coeff'] = \
@@ -771,7 +771,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         else:
             if not self._rad_isotropic:
                 mcp = self.sc_mfr*self.sc_properties['heat_capacity']
-                return  np.dot(mcp, (self.temp['coolant_int']) )/ np.sum(mcp)
+                return  np.dot(mcp, self.temp['coolant_int'])/ np.sum(mcp)
             else:
                 return (np.dot(self.sc_mfr, self.temp['coolant_int'])
                     / self.int_flow_rate)
@@ -866,35 +866,17 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # the calculation, basedon bundle-average coolant temperature.
         # Flow split parameters
         # if self.corr['fs'] is not None:
-        #     self.coolant_int_params['fs'] = self.corr['fs'](self)
-
-        # Subchannel Reynolds numbers
-        Re_partial = (self.coolant.density * self.coolant_int_params['vel']
-               / self.coolant.viscosity)
-        self.coolant_int_params['Re_sc'][0] = \
-            Re_partial * self.coolant_int_params['fs'][0] * self.params['de'][0]
-        self.coolant_int_params['Re_sc'][1] = \
-            Re_partial * self.coolant_int_params['fs'][1] * self.params['de'][1]
-        self.coolant_int_params['Re_sc'][2] = \
-            Re_partial * self.coolant_int_params['fs'][2] * self.params['de'][2]
-
+        #     self.coolant_int_params['fs'] = self.corr['fs'](self)          
         # Heat transfer coefficient (via Nusselt number)
-        if not self._rad_isotropic:
-            self.coolant_int_params['sc_vel'] = \
-                self.sc_mfr \
-                / self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]\
-                / self.sc_properties['density']
-            Re_partial = (self.sc_properties['density'] * self.coolant_int_params['sc_vel']
-               / self.sc_properties['viscosity'])
-            self.coolant_int_params['Re_all_sc'] = \
-                Re_partial \
-                * self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]   
+        if not self._rad_isotropic:   
+            self._calculate_Reynolds(sc_props=self.sc_properties)
             self.coolant_int_params['sc_htc'] = \
                 self._get_htc_rad_non_isotropic(
                     self.coolant_int_params['Re_all_sc'],
                     self.htc_params['duct'],
                     self.sc_properties)    
         else:    
+            self._calculate_Reynolds(cool_obj=self.coolant)
             nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
                                 self.htc_params['duct'],
                                 coolant_obj = self.coolant)
@@ -918,7 +900,28 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     * self.coolant_int_params['fs'][1])
             self.coolant_int_params['swirl'][1] = swirl_vel
             self.coolant_int_params['swirl'][2] = swirl_vel
-
+            
+    def _calculate_Reynolds(self, sc_props: Dict[str, np.ndarray] = None, 
+                            cool_obj: Material = None) -> None:
+        if sc_props is not None and cool_obj is None:
+            self.coolant_int_params['sc_vel'] = \
+                self.sc_mfr \
+                / self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]\
+                / sc_props['density']
+            Re_partial = (self.sc_properties['density'] * self.coolant_int_params['sc_vel']
+               / sc_props['viscosity'])
+            self.coolant_int_params['Re_all_sc'] = \
+                Re_partial \
+                * self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
+        elif cool_obj is not None and sc_props is None:
+            Re_partial = (cool_obj.density * self.coolant_int_params['vel']
+               / cool_obj.viscosity)
+            for i in range(3):
+                self.coolant_int_params['Re_sc'][i] = \
+                    Re_partial * self.coolant_int_params['fs'][i] * self.params['de'][i]
+        else:
+            raise ValueError('Either sc_props or cool_obj must be provided in Re calculation')
+        
     def _get_htc_rad_non_isotropic(self, re_sc: np.ndarray, db_consts: List[float], 
                                    props: Dict[str, np.ndarray]) -> np.ndarray:
         """
