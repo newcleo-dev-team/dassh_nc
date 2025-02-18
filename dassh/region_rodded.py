@@ -868,16 +868,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # if self.corr['fs'] is not None:
         #     self.coolant_int_params['fs'] = self.corr['fs'](self)          
         # Heat transfer coefficient (via Nusselt number)
-        self._calculate_Reynolds()
-        if not self._rad_isotropic:   
-            self.coolant_int_params['sc_htc'] = \
-                self._get_htc_rad_non_isotropic()    
-        else:    
-            nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
-                                self.htc_params['duct'],
-                                coolant_obj = self.coolant)
-            self.coolant_int_params['htc'] = \
-                self.coolant.thermal_conductivity * nu / self.params['de']
+        self._calculate_htc()
         # MODIFICATION 2022-11-29: No longer updating friction factor
         # during the sweep. It is now static and  determined at the
         # start of the calculation, based on bundle-average coolant
@@ -897,10 +888,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.coolant_int_params['swirl'][1] = swirl_vel
             self.coolant_int_params['swirl'][2] = swirl_vel
             
-    def _calculate_Reynolds(self) -> None:
+    def _calculate_htc(self) -> None:
         """
-        Calculate Reynolds number for each subchannel in case of non-isotropic properties
-        or for each type of subchannel in case of isotropic properties
+        Calculate heat transfer coefficient for each subchannel in case of non-isotropic properties
+        or for each type of subchannel in case of isotropic properties, based on Reynolds number
 
         """
         if not self._rad_isotropic:
@@ -913,15 +904,21 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.coolant_int_params['Re_all_sc'] = \
                 Re_partial \
                 * self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
+            self.coolant_int_params['sc_htc'] = \
+                self._calculate_htc_rad_non_isotropic()
         else:
             Re_partial = self.coolant.density * self.coolant_int_params['vel'] \
                / self.coolant.viscosity
             for i in range(3):
                 self.coolant_int_params['Re_sc'][i] = \
                     Re_partial * self.coolant_int_params['fs'][i] * self.params['de'][i]
-
-        
-    def _get_htc_rad_non_isotropic(self) -> np.ndarray:
+            nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
+                                self.htc_params['duct'],
+                                coolant_obj = self.coolant)
+            self.coolant_int_params['htc'] = \
+                self.coolant.thermal_conductivity * nu / self.params['de']
+            
+    def _calculate_htc_rad_non_isotropic(self) -> np.ndarray:
         """
         Calculate heat transfer coefficient for each subchannel in case of radially
         non-isotropic properties
@@ -1264,10 +1261,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
             if not self._rad_isotropic:
                 mcpdT_i = self.sc_mfr*self.sc_properties['heat_capacity']*dT*dz
-                self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
             else:
                 mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT * dz
-                self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
+            self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
         return dT * dz
     
     def _get_cond_temp_difference(self) -> np.ndarray:
@@ -1283,10 +1279,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         -----
         The effective thermal conductivity is calculated as the sum of a
         purely conductive term and a term that accounts for the effect of
-        eddy diffusivity. In case of non radially isotropic properties, 
-        the effective thermal conductivity is calculated average properties
-        between adjacent subchannels. In both cases, the term is multiplied
-        by the temperature difference between the subchannels.
+        eddy diffusivity. In case of radially non isotropic properties, 
+        the effective thermal conductivity is calculated by averaging properties
+        between adjacent subchannels. In both isotropic and non isotropic cases,
+        the term is multiplied by the temperature difference between the subchannels.
         """
         cond_temp_difference = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
         if not self._rad_isotropic:
@@ -1313,8 +1309,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 - self.temp['coolant_int'][:, np.newaxis]))
         return cond_temp_difference
     
-    def _calc_mass_flow_average_property(self, prop: str, i: Union[int, np.ndarray], 
-                                         j: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
+    def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) -> float:
         """
         Calculate the mass flow rate weighted average of a property between two subchannels
         
@@ -1322,14 +1317,14 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         ----------
         prop : str
             Property to calculate
-        i : Union[int, np.ndarray]
+        i : int
             Index of the first subchannel
-        j : Union[int, np.ndarray]
+        j : int
             Index of the second subchannel
         
         Returns
         -------
-        Union[float, np.ndarray]
+        float
             Mass flow rate weighted average of the property between the two subchannels
         """
         return (self.sc_properties[prop][i] * self.sc_mfr[i] 
@@ -1698,7 +1693,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Heat transfer coefficient (via Nu) for clad-coolant
         if not self._rad_isotropic:
-            htc_scaled = self._get_htc_rad_non_isotropic() * self._q_p2sc 
+            htc_scaled = self._calculate_htc_rad_non_isotropic() * self._q_p2sc 
             htc = htc_scaled[self.subchannel.pin_adj]
             htc = np.ma.masked_array(htc, self.subchannel.pin_adj < 0)
             htc = np.sum(htc, axis=1) 
