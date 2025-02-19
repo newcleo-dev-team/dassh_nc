@@ -70,11 +70,10 @@ class Assembly(LoggedClass):
 
     def __init__(self, name, loc, asm_input, mat_dict, inlet_temp,
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
-                 param_update_tol=0.0, gravity=False):
+                 param_update_tol=0.0, gravity=False, rad_isotropic=True):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')
-
         # Assembly attributes
         self._name = name
         self._loc = loc
@@ -102,7 +101,8 @@ class Assembly(LoggedClass):
                                    flow_rate,
                                    se2geo,
                                    param_update_tol,
-                                   gravity)
+                                   gravity,
+                                   rad_isotropic)
             ]
 
         # Create other requested unrodded regions

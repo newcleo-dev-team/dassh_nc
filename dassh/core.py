@@ -1285,9 +1285,9 @@ class Core(LoggedClass):
             self.coolant_gap_params['htc'] = np.zeros(self.n_sc)
         elif self.model == 'flow':
             nu = nusselt_db.calculate_sc_Nu(
-                self.gap_coolant,
                 self.coolant_gap_params['Re_sc'],
-                self._htc_params)
+                self._htc_params,
+                coolant_obj=self.gap_coolant)
             self.coolant_gap_params['htc'] = \
                 (self.gap_coolant.thermal_conductivity
                  * nu / self.gap_params['de'])

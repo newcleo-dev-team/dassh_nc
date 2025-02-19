@@ -1028,11 +1028,14 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-
+                
+                ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
+                    (asm.avg_coolant_temp - r_obj.inlet_temp)
         # Assembly mass flow rate
         ebal_asm[4] = asm.flow_rate
         # Average Cp
-        ebal_asm[5] = self._get_asm_avg_cp(asm, r_obj)
+        if ebal_asm[5] == 0:
+            ebal_asm[5] = self._get_asm_avg_cp(asm, r_obj)
         # Temperature rise
         ebal_asm[6] = asm.avg_coolant_temp - r_obj.inlet_temp
         return ebal_asm

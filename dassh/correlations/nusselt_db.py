@@ -33,16 +33,21 @@ def calculate_bundle_Nu(coolant_obj, bundle_Re, consts=[]):
     return _dittus_boelter(bundle_Re, Pr, consts)
 
 
-def calculate_sc_Nu(coolant_obj, sc_Re, consts=[]):
+def calculate_sc_Nu(sc_Re, consts=[], coolant_obj = None, sc_prop = None):
     """Calculate subchannel-specific Nu with the Dittus-Boelter
     correlation"""
     if consts == []:
         consts = _DEFAULT_DB_CONSTS
-    Pr = _calc_prandtl(coolant_obj)
-    Nu = _dittus_boelter(sc_Re, Pr, consts)
+    if sc_prop is not None and coolant_obj is None:
+        Pr = _calc_sc_prandtl(sc_prop)
+    elif coolant_obj is not None and sc_prop is None:
+        Pr = _calc_prandtl(coolant_obj)
+    else:
+        raise ValueError('One between coolant object or subchannel properties'
+                         ' must be provided')
     # for i in range(len(Nu)):
     #     Nu[i] = _dittus_boelter(sc_Re[i], Pr, consts)
-    return Nu
+    return _dittus_boelter(sc_Re, Pr, consts)
 
 
 def _calc_prandtl(coolant_obj):
@@ -50,6 +55,9 @@ def _calc_prandtl(coolant_obj):
     return (coolant_obj.heat_capacity * coolant_obj.viscosity
             / coolant_obj.thermal_conductivity)
 
+def _calc_sc_prandtl(sc_prop):
+    """Calculate Prandtl number for subchannels"""
+    return sc_prop['heat_capacity'] * sc_prop['viscosity'] / sc_prop['thermal_conductivity']
 
 def _dittus_boelter(Re, Pr, consts):
     """Return the Nussult number evaluated by the Dittus-Boelter

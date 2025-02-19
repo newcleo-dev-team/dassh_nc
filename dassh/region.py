@@ -68,6 +68,7 @@ class DASSH_Region(object):
         self.ebal = {}
         self.ebal['power'] = 0.0  # Power added to asm
         self.ebal['duct'] = np.zeros(n_node_duct)  # edge/corner sc
+        self.ebal['mcpdT_i'] = 0.0 # Power added to coolant
         self.ebal['per_hex_side'] = np.zeros(6)  # sum of 'from_duct'
         if n_bypass > 0:
             self.ebal['duct_byp_in'] = np.zeros((n_bypass, n_node_duct))
@@ -231,7 +232,7 @@ class DASSH_Region(object):
             self.temp['duct_mw'][d] *= avg_cool_int_temp
             self.temp['duct_surf'][d] *= avg_cool_int_temp
 
-    def update_ebal(self, q_in, q_from_duct):
+    def update_ebal(self, q_in, q_from_duct, mcpdT_i = 0):
         """Update the region energy-balance tallies
 
         Parameters
@@ -248,6 +249,7 @@ class DASSH_Region(object):
         """
         self.ebal['power'] += q_in
         self.ebal['duct'] += q_from_duct
+        self.ebal['mcpdT_i'] += np.sum(mcpdT_i)
 
     def update_ebal_byp(self, byp_idx, q_duct_in, q_duct_out):
         """Update the bypass gap coolant energy balance tallies

@@ -859,7 +859,8 @@ class _RREquivalent(RoddedRegion):
                      'total_flow_rate',
                      'htc_params',
                      '_sf',
-                     '_spacer_grid']
+                     '_spacer_grid',
+                     '_rad_isotropic']
 
     def __init__(self, asm_input, mat_dict, fr, se2geo=False):
         """Instantiate RoddedRegion object and pull out useful attr"""
