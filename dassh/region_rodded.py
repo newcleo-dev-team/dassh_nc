@@ -905,7 +905,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 Re_partial \
                 * self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
             self.coolant_int_params['sc_htc'] = \
-                self._calculate_htc_rad_non_isotropic()
+                self._calculate_htc_rad_non_isotropic(self.htc_params['duct'])
         else:
             Re_partial = self.coolant.density * self.coolant_int_params['vel'] \
                / self.coolant.viscosity
@@ -918,10 +918,15 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.coolant_int_params['htc'] = \
                 self.coolant.thermal_conductivity * nu / self.params['de']
             
-    def _calculate_htc_rad_non_isotropic(self) -> np.ndarray:
+    def _calculate_htc_rad_non_isotropic(self, htc_const: List) -> np.ndarray:
         """
         Calculate heat transfer coefficient for each subchannel in case of radially
         non-isotropic properties
+        
+        Parameters
+        ----------
+        htc_const : List
+            List of heat transfer coefficient constants        
             
         Returns
         -------
@@ -929,7 +934,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Heat transfer coefficient for each subchannel           
         """
         nu_sc = self.corr['nu'](self.coolant_int_params['Re_all_sc'],
-                                consts = self.htc_params['duct'],
+                                consts = htc_const,
                                 sc_prop = self.sc_properties)
         htc = \
                 self.sc_properties['thermal_conductivity'] \
@@ -1693,7 +1698,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Heat transfer coefficient (via Nu) for clad-coolant
         if not self._rad_isotropic:
-            htc_scaled = self._calculate_htc_rad_non_isotropic() * self._q_p2sc 
+            htc_scaled = self._calculate_htc_rad_non_isotropic(self.pin_model.htc_params) * self._q_p2sc 
             htc = htc_scaled[self.subchannel.pin_adj]
             htc = np.ma.masked_array(htc, self.subchannel.pin_adj < 0)
             htc = np.sum(htc, axis=1) 
