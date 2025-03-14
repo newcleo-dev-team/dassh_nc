@@ -125,6 +125,33 @@ class MaterialData:
     conftest_temp_from_textbook: float
     three_asm_temperature: List[float]
 
+@dataclass
+class RRData:
+    mock_AP: Dict[str, Any]
+    corr_list: List[str]
+    inlet_temp: float
+    outlet_temp: float
+    fs_tol: float
+    geo_params_ans1: float
+    geo_params_ans2: float
+    geo_params_nrods: int
+    geo_params_abs_tol1: float
+    geo_params_abs_tol2: float
+    double_duct_tol: float
+    single_pin: Dict[str, Any]
+    duct_areas_tol: float
+    thesis_Dh: Dict[str, Any]
+    qmcdt_tol: float
+    avg_temp: Dict[str, float]
+    none_pow_value: float
+    zero_pow_adj: Dict[str, float]
+    perturb_temp: float
+    zero_pow_cool_val: float
+    duct_temp_mf: float
+    byp_val: float
+    acc_met: Dict[str, Any]
+    clone_data: Dict[str, Any]
+    
 def pytest_configure(config):
     """
     Setup test data for the DASSH test suite
@@ -181,7 +208,37 @@ def pytest_configure(config):
         conftest_temp_from_textbook=file_data["conftest_temp_from_textbook"],
         three_asm_temperature=file_data["three_asm_temperature"]
     )
-    
+    ###############################################
+    # Setup test data for RoddedRegion class tests
+    ###############################################
+    with open("tests/test_data/RoddedRegion_class_data.json", "r") as json_file:
+        file_data = json.load(json_file)
+    pytest.rr_data = RRData(
+        mock_AP = file_data["mock_AP"],
+        corr_list = file_data["corr_list"],
+        inlet_temp = file_data["inlet_temp"],
+        outlet_temp = file_data["outlet_temp"],
+        fs_tol = file_data["fs_tol"],
+        geo_params_ans1 = file_data["geo_params_ans1"],
+        geo_params_ans2 = file_data["geo_params_ans2"],
+        geo_params_nrods = file_data["geo_params_nrods"],
+        geo_params_abs_tol1 = file_data["geo_params_abs_tol1"],
+        geo_params_abs_tol2 = file_data["geo_params_abs_tol2"],
+        double_duct_tol = file_data["double_duct_tol"],
+        single_pin = file_data["single_pin"],
+        duct_areas_tol = file_data["duct_areas_tol"],
+        thesis_Dh = file_data["thesis_Dh"],
+        qmcdt_tol = file_data["qmcdt_tol"],
+        avg_temp = file_data["avg_temp"],
+        none_pow_value = file_data["none_pow_value"],
+        zero_pow_adj = file_data["zero_pow_adj"],
+        perturb_temp = file_data["perturb_temp"],
+        zero_pow_cool_val = file_data["zero_pow_cool_val"],
+        duct_temp_mf = file_data["duct_temp_mf"],
+        byp_val = file_data["byp_val"],
+        acc_met = file_data["acc_met"],
+        clone_data = file_data["clone_data"]
+    )
     
 # def pytest_configure(config):
 #     # register an additional marker
