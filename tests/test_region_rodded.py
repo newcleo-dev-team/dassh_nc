@@ -1146,9 +1146,22 @@ class TestClone():
                 print(attr, id_clone, id_original)
         assert len(non_matches) == 0
 
+class TestNonIsotropic():
+    """
+    Class to test the RoddedRegion class with non-isotropic properties
+    """
+    def test_update_subchannels_properties(self, simple_ctrl_rr):
+        simple_ctrl_rr.sc_properties = \
+            {k: np.zeros(rr_data.non_isotropic['n_sc']) 
+                for k in mat_data.properties_list}
+        simple_ctrl_rr._update_subchannels_properties(
+            np.array(rr_data.non_isotropic['sc_temps']))
+        for prop in mat_data.properties_list:
+            assert simple_ctrl_rr.sc_properties[prop] == \
+                pytest.approx(rr_data.non_isotropic[prop], 
+                    rel = rr_data.non_isotropic['tol'])
 
-
-
+    
 # @pytest.mark.skip(reason='milos is playing with this')
 # def test_bypass_iterate(c_ctrl_rr):
 #     """."""

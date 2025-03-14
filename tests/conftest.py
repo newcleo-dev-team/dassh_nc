@@ -151,6 +151,7 @@ class RRData:
     byp_val: float
     acc_met: Dict[str, Any]
     clone_data: Dict[str, Any]
+    non_isotropic: Dict[str, float]
     
 def pytest_configure(config):
     """
@@ -237,7 +238,8 @@ def pytest_configure(config):
         duct_temp_mf = file_data["duct_temp_mf"],
         byp_val = file_data["byp_val"],
         acc_met = file_data["acc_met"],
-        clone_data = file_data["clone_data"]
+        clone_data = file_data["clone_data"],
+        non_isotropic = file_data["non_isotropic"]
     )
     
 # def pytest_configure(config):
