@@ -1150,18 +1150,40 @@ class TestNonIsotropic():
     """
     Class to test the RoddedRegion class with non-isotropic properties
     """
-    def test_update_subchannels_properties(self, simple_ctrl_rr):
-        simple_ctrl_rr.sc_properties = \
-            {k: np.zeros(rr_data.non_isotropic['n_sc']) 
-                for k in mat_data.properties_list}
-        simple_ctrl_rr._update_subchannels_properties(
+    def test_update_subchannels_properties(self, simple_ctrl_rr_non_iso):
+        """
+        Test the _update_subchannels_properties method of RoddedRegion
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_non_iso : dassh.region_rodded.RoddedRegion
+            Simple RoddedRegion object with non-isotropic properties
+        """
+        simple_ctrl_rr_non_iso._update_subchannels_properties(
             np.array(rr_data.non_isotropic['sc_temps']))
         for prop in mat_data.properties_list:
-            assert simple_ctrl_rr.sc_properties[prop] == \
+            assert simple_ctrl_rr_non_iso.sc_properties[prop] == \
                 pytest.approx(rr_data.non_isotropic[prop], 
-                    rel = rr_data.non_isotropic['tol'])
+                    rel = rr_data.non_isotropic['tol1'])
 
+    def test_avg_coolant_int_temp(self, simple_ctrl_rr_non_iso):
+        """
+        Test the avg_coolant_int_temp method of RoddedRegion
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_non_iso : dassh.region_rodded.RoddedRegion
+            Simple RoddedRegion object with non-isotropic properties
+        """
+        simple_ctrl_rr_non_iso.temp['coolant_int'] = \
+            np.array(rr_data.non_isotropic['sc_temps'])
+        simple_ctrl_rr_non_iso._update_subchannels_properties(
+            np.array(rr_data.non_isotropic['sc_temps']))
+        assert simple_ctrl_rr_non_iso.avg_coolant_int_temp == \
+            pytest.approx(rr_data.non_isotropic['Tavg_ans'], rel = rr_data.non_isotropic['tol2'])
+        
     
+        
 # @pytest.mark.skip(reason='milos is playing with this')
 # def test_bypass_iterate(c_ctrl_rr):
 #     """."""

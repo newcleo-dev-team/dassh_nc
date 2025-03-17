@@ -557,7 +557,7 @@ def activate_rodded_region(region_to_activate, avg_temp, base=True):
     return tmp
 
 
-def make_rodded_region_fixture(name, bundle_params, mat_params, fr):
+def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True):
     return dassh.RoddedRegion(name,
                               bundle_params['num_rings'],
                               bundle_params['pin_pitch'],
@@ -579,7 +579,8 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr):
                               bundle_params['bypass_gap_flow_fraction'],
                               bundle_params['bypass_gap_loss_coeff'],
                               bundle_params['wire_direction'],
-                              bundle_params['shape_factor'])
+                              bundle_params['shape_factor'],
+                              rad_isotropic=rad_iso)
 
 
 @pytest.fixture(scope='module')
@@ -845,6 +846,14 @@ def simple_ctrl_rr(simple_ctrl_params):
                                     simple_ctrl_params[1], flowrate)
     return activate_rodded_region(rr, 623.15)
 
+@pytest.fixture
+def simple_ctrl_rr_non_iso(simple_ctrl_params):
+    """DASSH RoddedRegion object: simple hexagonal bundle parameters
+    for double-ducted assembly"""
+    flowrate = 1.0
+    rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
+                                    simple_ctrl_params[1], flowrate, rad_iso=False)
+    return activate_rodded_region(rr, 623.15)
 
 @pytest.fixture
 def simple_ctrl_asm(simple_ctrl_params, simple_ctrl_rr, small_core_power):
