@@ -1182,7 +1182,21 @@ class TestNonIsotropic():
         assert simple_ctrl_rr_non_iso.avg_coolant_int_temp == \
             pytest.approx(rr_data.non_isotropic['Tavg_ans'], rel = rr_data.non_isotropic['tol2'])
         
-    
+    def test_non_isotropic_htc(self, simple_ctrl_rr_non_iso):
+        """
+        Test the _calculate_htc method of RoddedRegion
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_non_iso : dassh.region_rodded.RoddedRegion
+            Simple RoddedRegion object with non-isotropic properties
+        """
+        simple_ctrl_rr_non_iso._update_subchannels_properties(
+            np.array(rr_data.non_isotropic['sc_temps']))
+        simple_ctrl_rr_non_iso._calculate_htc()
+        assert simple_ctrl_rr_non_iso.coolant_int_params['sc_htc'] == \
+            pytest.approx(rr_data.non_isotropic['htc_ans'], rel = rr_data.non_isotropic['tol1'])
+        
         
 # @pytest.mark.skip(reason='milos is playing with this')
 # def test_bypass_iterate(c_ctrl_rr):
