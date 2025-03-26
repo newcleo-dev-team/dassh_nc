@@ -142,6 +142,7 @@ class RRData:
     duct_areas_tol: float
     thesis_Dh: Dict[str, Any]
     qmcdt_tol: float
+    rr_temp_decimal: int
     avg_temp: Dict[str, float]
     none_pow_value: float
     zero_pow_adj: Dict[str, float]
@@ -230,6 +231,7 @@ def pytest_configure(config):
         duct_areas_tol = file_data["duct_areas_tol"],
         thesis_Dh = file_data["thesis_Dh"],
         qmcdt_tol = file_data["qmcdt_tol"],
+        rr_temp_decimal = file_data["rr_temp_decimal"],
         avg_temp = file_data["avg_temp"],
         none_pow_value = file_data["none_pow_value"],
         zero_pow_adj = file_data["zero_pow_adj"],
@@ -841,19 +843,19 @@ def simple_ctrl_params(assembly_default_params):
 def simple_ctrl_rr(simple_ctrl_params):
     """DASSH RoddedRegion object: simple hexagonal bundle parameters
     for double-ducted assembly"""
-    flowrate = 1.0
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
                                     simple_ctrl_params[1], flowrate)
-    return activate_rodded_region(rr, 623.15)
+    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
 @pytest.fixture
 def simple_ctrl_rr_non_iso(simple_ctrl_params):
     """DASSH RoddedRegion object: simple hexagonal bundle parameters
     for double-ducted assembly"""
-    flowrate = 1.0
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
                                     simple_ctrl_params[1], flowrate, rad_iso=False)
-    return activate_rodded_region(rr, 623.15)
+    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
 @pytest.fixture
 def simple_ctrl_asm(simple_ctrl_params, simple_ctrl_rr, small_core_power):
