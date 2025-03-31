@@ -337,11 +337,13 @@ class TestPower():
     Class to test that the power is correctly delivered to the coolant 
     """
     def test_asm_zero_power(self, c_fuel_rr):
-        """Test that the power put into the coolant subchannels is zero"""
+        """Test that the power put into the coolant subchannels is zero
+        if the assigned power is zero"""
         pcoolant = np.zeros(c_fuel_rr.subchannel.n_sc['coolant']['total'])
         ppin = np.zeros(c_fuel_rr.n_pin)
         res = c_fuel_rr._calc_int_sc_power(ppin, pcoolant)
-        assert not np.any(res)  # all should be zero
+        zero_power = np.zeros(c_fuel_rr.subchannel.n_sc['coolant']['total'])
+        assert np.array_equal(res, zero_power)  # all should be zero
 
 
     def test_rr_none_power(self, c_fuel_rr):
@@ -372,33 +374,29 @@ class TestPower():
         assert np.sum(res) == pytest.approx(ans)
         
         
-    def test_coolant_temp_rougly_qmcdt(self, c_fuel_rr):
+    def test_coolant_temp_roughly_qmcdt(self, c_fuel_rr):
         """Test that the change in interior subchannel coolant temperature
         over one axial step roughly approximates Q = mCdT"""
         tmp_asm = c_fuel_rr.clone()
         power = mock_AssemblyPower(c_fuel_rr)
-        dz, sc = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp,
+        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp,
                                                     rr_data.outlet_temp)
 
-        # Power added overall
         ans = dz * (np.sum(power['pins']) + np.sum(power['cool']))
 
-        # Calculate average dT
         dT = tmp_asm._calc_coolant_int_temp(dz, power['pins'], power['cool'])
         tot = 0.0
         for i in range(len(tmp_asm.temp['coolant_int'])):
-            # tot += (tmp_asm.params['area'][tmp_asm.subchannel.type[i] - 1]
-            #         * dT[i])
             tot += tmp_asm.params['area'][tmp_asm.subchannel.type[i]] * dT[i]
         dT = tot / tmp_asm.bundle_params['area']
-        # Q = mCdT in the coolant
+
         res = tmp_asm.int_flow_rate * tmp_asm.coolant.heat_capacity * dT
 
         print('dz (m): ' + str(dz))
         print('Power added (W): ' + str(ans))
         print('Mdot (kg/s): ' + str(tmp_asm.int_flow_rate))
         print('Cp (J/kgK): ' + str(tmp_asm.coolant.heat_capacity))
-        print('Tout (K): ' + str(dT))
+        print('dT (K): ' + str(dT))
         print('res (W): ' + str(res))
         assert ans == pytest.approx(res, rr_data.qmcdt_tol)
     
@@ -409,10 +407,10 @@ class TestCoolantIntTemperature():
     in the interior assembly region
     """
     def test_rr_temp_properties(self, c_fuel_rr):
-        # this is not limited to the interior subchannels, but here for simplicity
         """Test that temperature property attributes return the correct
-        structures and values"""
-        # Inlet temperature: 350 + 273.15 (K)
+        structures and values. This is not limited to the interior subchannels,
+        but here for simplicity"""
+
         # Coolant internal temperatures
         ans = np.ones(c_fuel_rr.subchannel.n_sc['coolant']['total']) * rr_data.inlet_temp
         assert np.array_equal(c_fuel_rr.temp['coolant_int'], ans)
@@ -445,7 +443,6 @@ class TestCoolantIntTemperature():
         print(textbook_active_rr.d['wcorner'])
         print(textbook_active_rr.duct_ftf)
         print(textbook_active_rr.L[1][1])
-        # print(textbook_asm.duct_midwall_temp_j)
         print(textbook_active_rr.avg_duct_mw_temp)
         assert textbook_active_rr.avg_duct_mw_temp == \
             pytest.approx(rr_data.avg_temp['ans'], rr_data.avg_temp['tol'])
@@ -453,13 +450,7 @@ class TestCoolantIntTemperature():
 
     def test_rr_overall_average_temperatures(self, simple_ctrl_rr):
         """Test whether I can know the overall average coolant temp"""
-        # Let's mess some of them up and see what happens ...TBD, never
-        # actually implemented that one....
         print(simple_ctrl_rr.avg_coolant_temp)
-        print(simple_ctrl_rr.avg_coolant_int_temp)
-        # Can you format it as a string? Checking to ensure not np array
-        print('{:.2f}'.format(simple_ctrl_rr.avg_coolant_temp))
-        # As input, all subchannels should have temp of 623.15
         assert simple_ctrl_rr.avg_coolant_temp == pytest.approx(rr_data.inlet_temp)
         
         
@@ -473,31 +464,28 @@ class TestCoolantIntTemperature():
     def test_zero_power_coolant_interior_adj_temp(self, c_fuel_rr):
         """Test that if only one subchannel has nonzero dT, only the
         adjacent channels are affected"""
-        dz, sc = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
-                                                    rr_data.inlet_temp,
-                                                    rr_data.outlet_temp)
+        dz, _ = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
+                                                     rr_data.inlet_temp,
+                                                     rr_data.outlet_temp)
         print('dz = ' + str(dz) + '\n')
         unperturbed_temperature = c_fuel_rr.temp['coolant_int']
         coolant_power = np.zeros(c_fuel_rr.subchannel.n_sc['coolant']['total'])
         pin_power = np.zeros(c_fuel_rr.n_pin)
         for sc in range(c_fuel_rr.subchannel.n_sc['coolant']['interior'] - 1):
-            # adj_sc = c_fuel_rr.subchannel.sc_adj[sc] - 1
             adj_sc = c_fuel_rr.subchannel.sc_adj[sc]
 
             # Perturb the temperature, calculate new temperatures, then
             # unperturb the temperature
             c_fuel_rr.temp['coolant_int'][sc] += rr_data.zero_pow_adj['perturb_temp']
             res = c_fuel_rr._calc_coolant_int_temp(rr_data.zero_pow_adj['z'], pin_power, coolant_power)
-            print(res.shape)
             c_fuel_rr.temp['coolant_int'][sc] -= rr_data.zero_pow_adj['perturb_temp']
             assert np.allclose(c_fuel_rr.temp['coolant_int'],
-                            unperturbed_temperature)
+                               unperturbed_temperature)
 
             dT = []
             m = []
             for s in range(len(res)):  # only does coolant channels
                 if s in adj_sc or s == sc:
-                    # s_type = c_fuel_rr.subchannel.type[s] - 1
                     s_type = c_fuel_rr.subchannel.type[s]
                     print(s, s_type, rr_data.inlet_temp, res[s])
                     dT.append(res[s])
@@ -505,11 +493,8 @@ class TestCoolantIntTemperature():
                             * c_fuel_rr.int_flow_rate
                             * c_fuel_rr.params['area'][s_type]
                             / c_fuel_rr.bundle_params['area'])
-                    # assert res[s] != 0.0
                     assert res[s] != pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
-
                 else:
-                    # assert res[s] == 0.0
                     assert res[s] == pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
             # Assert the balance
             mdT = [m[i] * dT[i] for i in range(len(dT))]
@@ -526,7 +511,7 @@ class TestCoolantIntTemperature():
         tmp_asm = c_fuel_rr.clone()
 
         power = mock_AssemblyPower(c_fuel_rr)
-        dz, sc = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp, 
+        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp, 
                                                       rr_data.outlet_temp)
 
         # Power added overall
@@ -538,7 +523,7 @@ class TestCoolantIntTemperature():
         # Calculate Q = mCdT in each channel
         Q = 0.0
         for sc in range(len(dT)):
-            # sc_type = tmp_asm.subchannel.type[sc] - 1
+
             sc_type = tmp_asm.subchannel.type[sc]
             mfr = (tmp_asm.coolant_int_params['fs'][sc_type]
                 * tmp_asm.int_flow_rate
@@ -554,25 +539,22 @@ class TestCoolantIntTemperature():
         assert ans == pytest.approx(Q)
 
 
-    def test_zero_power_coolant_pertub_wall_temp(self, c_fuel_rr):
+    def test_zero_power_coolant_perturb_wall_temp(self, c_fuel_rr):
         """Test that if wall temperature is perturbed, only the adjacent
         edge/corner coolant subchannel has temperature change"""
 
         c_fuel_rr._update_coolant_int_params(rr_data.inlet_temp)
-        # print(c_fuel_rr.coolant.temperature)
-        dz, sc = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
-                                                    rr_data.inlet_temp,
-                                                    rr_data.outlet_temp)
+        dz, _ = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
+                                                     rr_data.inlet_temp, rr_data.outlet_temp)
         p_coolant = np.zeros(c_fuel_rr.subchannel.n_sc['coolant']['total'])
         p_pin = np.zeros(c_fuel_rr.n_pin)
 
         htc = c_fuel_rr.coolant_int_params['htc']
         cp = c_fuel_rr.coolant.heat_capacity
-        fr = (c_fuel_rr.int_flow_rate
-            * c_fuel_rr.coolant_int_params['fs']
-            * c_fuel_rr.params['area']
-            / c_fuel_rr.bundle_params['area'])
-        OLD_HTCONSTS = dassh.region_rodded.calculate_ht_constants(c_fuel_rr)
+        mfr = (c_fuel_rr.int_flow_rate
+               * c_fuel_rr.coolant_int_params['fs']
+               * c_fuel_rr.params['area']
+               / c_fuel_rr.bundle_params['area'])
         A = np.zeros(3)
         A[1] = c_fuel_rr.L[1][1] * dz
         # A[2] = c_fuel_rr.d['wcorner_m'][0] * 2 * dz
@@ -580,7 +562,6 @@ class TestCoolantIntTemperature():
         # Loop over wall sc, perturb each one
         for w_sc in range(c_fuel_rr.subchannel.n_sc['duct']['total']):
             idx_sc_type = w_sc + c_fuel_rr.subchannel.n_sc['coolant']['total']
-            # adj_sc = c_fuel_rr.subchannel.sc_adj[idx_sc_type] - 1
             adj_sc = c_fuel_rr.subchannel.sc_adj[idx_sc_type]
 
             # Perturb the duct temperature, calculate new coolant temps,
@@ -590,28 +571,26 @@ class TestCoolantIntTemperature():
             res = c_fuel_rr._calc_coolant_int_temp(dz, p_pin, p_coolant)
             for s in range(len(res)):  # only does coolant channels
                 if s in adj_sc:
-                    # s_type = c_fuel_rr.subchannel.type[s] - 1
                     s_type = c_fuel_rr.subchannel.type[s]
                     test = (A[s_type] * htc[s_type] * rr_data.perturb_temp
-                            / fr[s_type] / cp)
-                    if not res[s] == pytest.approx(test):
-                        print('dz = ' + str(dz) + '\n')
-                        print(c_fuel_rr.subchannel.n_sc)
-                        print(OLD_HTCONSTS[s_type][2 + s_type])
-                        print('htc expected: ' + str(htc))
-                        print('cp expected: ' + str(cp))
-                        print('fs expected: '
-                            + str(c_fuel_rr.coolant_int_params['fs']))
-                        print('wall sc: ' + str(idx_sc_type))
-                        print('wall adj: ' + str(adj_sc))
-                        print('wall temp: '
-                            + str(c_fuel_rr.temp['duct_surf'][0, 0, w_sc]))
-                        print('cool sc: ' + str(s))
-                        print('cool sc type: ' + str(s_type))
-                        print('cool in temp: '
-                            + str(c_fuel_rr.temp['coolant_int'][s]))
-                        print('cool out temp: ' + str(res[s] + rr_data.inlet_temp))
-                        print('test: ' + str(test))
+                            / mfr[s_type] / cp)
+                   # if not res[s] == pytest.approx(test):
+                    print('dz = ' + str(dz) + '\n')
+                    print(c_fuel_rr.subchannel.n_sc)
+                    print('htc expected: ' + str(htc))
+                    print('cp expected: ' + str(cp))
+                    print('fs expected: '
+                        + str(c_fuel_rr.coolant_int_params['fs']))
+                    print('wall sc: ' + str(idx_sc_type))
+                    print('wall adj: ' + str(adj_sc))
+                    print('wall temp: '
+                        + str(c_fuel_rr.temp['duct_surf'][0, 0, w_sc]))
+                    print('cool sc: ' + str(s))
+                    print('cool sc type: ' + str(s_type))
+                    print('cool in temp: '
+                        + str(c_fuel_rr.temp['coolant_int'][s]))
+                    print('cool out temp: ' + str(res[s] + rr_data.inlet_temp))
+                    print('test: ' + str(test))
                     assert res[s] == pytest.approx(test)
                 else:
                     assert res[s] == pytest.approx(0.0)
@@ -627,7 +606,6 @@ class TestCoolantIntTemperature():
         pin_power = np.zeros(c_fuel_rr.n_pin)
         res = c_fuel_rr._calc_coolant_int_temp(rr_data.zero_pow_cool_val, pin_power, pcoolant)
         # Temperature should be unchanged relative to the previous level
-        # (res is delta T)
         assert np.allclose(res, 0.0)
         
         
@@ -643,7 +621,7 @@ class TestDuctTemperature():
         c_fuel_rr._update_coolant_int_params(rr_data.inlet_temp)
         gap_htc = c_fuel_rr.coolant_int_params['htc'][1:]
         gap_htc = gap_htc[
-            c_fuel_rr.subchannel.type[
+                c_fuel_rr.subchannel.type[
                 c_fuel_rr.subchannel.n_sc['coolant']['interior']:
                 c_fuel_rr.subchannel.n_sc['coolant']['total']] - 1]
         duct_power = np.zeros(c_fuel_rr.n_duct
@@ -669,11 +647,10 @@ class TestDuctTemperature():
                     * c_fuel_rr.avg_coolant_int_temp)
         c_fuel_rr._update_coolant_int_params(rr_data.inlet_temp)
         gap_htc = c_fuel_rr.coolant_int_params['htc'][1:]
-        gap_htc = gap_htc[
-            c_fuel_rr.subchannel.type[
-                c_fuel_rr.subchannel.n_sc['coolant']['interior']:
-                c_fuel_rr.subchannel.n_sc['coolant']['total']] - 1]
-        dz, sc = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
+        gap_htc = gap_htc[c_fuel_rr.subchannel.type[
+                          c_fuel_rr.subchannel.n_sc['coolant']['interior']:
+                          c_fuel_rr.subchannel.n_sc['coolant']['total']] - 1]
+        dz, _ = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
                                                     rr_data.inlet_temp,
                                                     rr_data.outlet_temp)
 
@@ -684,11 +661,6 @@ class TestDuctTemperature():
         # Calculate new temperatures
         c_fuel_rr._calc_duct_temp(power['duct'], gap_temps, gap_htc)
         dT_s = c_fuel_rr.temp['duct_surf'] - rr_data.inlet_temp
-
-        # print(c_fuel_rr.temp['duct_surf'][0, 0, 0])
-        # print(c_fuel_rr.temp['duct_mw'][0, 0])
-        # print(c_fuel_rr.temp['duct_surf'][0, 1, 0])
-        # assert 0
 
         # Steady state - all heat added to ducts is leaving ducts via
         # convection to the adjacent coolant
@@ -717,8 +689,7 @@ class TestDuctTemperature():
         """Test adiabatic flag for duct temp calculation"""
         # 2020-12-09: removed coolant parameter update from duct temp
         # method so I need to do it externally here...no biggie.
-        c_fuel_rr._update_coolant_int_params(
-            c_fuel_rr.avg_coolant_int_temp)
+        c_fuel_rr._update_coolant_int_params(c_fuel_rr.avg_coolant_int_temp)
         p_duct = np.ones(c_fuel_rr.subchannel.n_sc['duct']['total']) * rr_data.duct_temp_mf
         t_gap = np.zeros(c_fuel_rr.subchannel.n_sc['duct']['total'])
         c_fuel_rr._calc_duct_temp(p_duct, t_gap, np.ones(2), True)
@@ -1210,6 +1181,67 @@ class TestNonIsotropic():
         assert simple_ctrl_rr_non_iso.coolant_int_params['sc_htc'] == \
             pytest.approx(rr_data.non_isotropic['htc_ans'], rel = rr_data.non_isotropic['tol1'])
         
+    def test_zero_power_coolant_interior_adj_temp_non_iso(self, simple_ctrl_rr_non_iso):
+        """Test that if only one subchannel has nonzero dT, only the
+        adjacent channels are affected"""
+
+        unperturbed_temperature = simple_ctrl_rr_non_iso.temp['coolant_int']
+        simple_ctrl_rr_non_iso._update_subchannels_properties(simple_ctrl_rr_non_iso.temp['coolant_int'])
+        coolant_power = np.zeros(simple_ctrl_rr_non_iso.subchannel.n_sc['coolant']['total'])
+        pin_power = np.zeros(simple_ctrl_rr_non_iso.n_pin)
+        for sc in range(simple_ctrl_rr_non_iso.subchannel.n_sc['coolant']['interior'] - 1):
+            adj_sc = simple_ctrl_rr_non_iso.subchannel.sc_adj[sc]
+
+            # Perturb the temperature, calculate new temperatures, then
+            # unperturb the temperature
+            simple_ctrl_rr_non_iso.temp['coolant_int'][sc] += rr_data.zero_pow_adj['perturb_temp']
+            res = simple_ctrl_rr_non_iso._calc_coolant_int_temp(rr_data.zero_pow_adj['z'], pin_power, coolant_power)
+            simple_ctrl_rr_non_iso.temp['coolant_int'][sc] -= rr_data.zero_pow_adj['perturb_temp']
+            assert np.allclose(simple_ctrl_rr_non_iso.temp['coolant_int'],
+                               unperturbed_temperature)
+
+            dT = []
+            m = []
+            for s in range(len(res)):  # only does coolant channels
+                if s in adj_sc or s == sc:
+                    s_type = simple_ctrl_rr_non_iso.subchannel.type[s]
+                    print(s, s_type, rr_data.inlet_temp, res[s])
+                    dT.append(res[s])
+                    m.append(simple_ctrl_rr_non_iso.sc_mfr[s])
+                    assert res[s] != pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
+                else:
+                    assert res[s] == pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
+            # Assert the balance
+            mdT = [m[i] * dT[i] for i in range(len(dT))]
+            print('dT: ' + str(dT))
+            print('mdT: ' + str(mdT))
+            print('bal: ' + str(sum(mdT)))
+            print('\n')
+            print(simple_ctrl_rr_non_iso._calc_int_sc_power(pin_power, coolant_power))
+            assert np.abs(sum(mdT)) == pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
+          
+            
+    def test_coolant_temp_w_pin_power_indiv_non_iso(self, simple_ctrl_rr_non_iso):
+        """Test that the internal coolant temperature calculation
+        with no heat generation returns no temperature change"""
+        tmp_asm = simple_ctrl_rr_non_iso.clone()
+
+        power = mock_AssemblyPower(simple_ctrl_rr_non_iso)
+        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp, 
+                                                      rr_data.outlet_temp)
+        ans = dz * tmp_asm._calc_int_sc_power(power['pins'], power['cool'])
+        # Calculate new temperatures
+        dT = tmp_asm._calc_coolant_int_temp(dz, power['pins'], power['cool'])
+
+        # Calculate Q = mCdT in each channel
+        Q = tmp_asm.sc_properties['heat_capacity'] * tmp_asm.sc_mfr * dT        
+        
+        print('dz (m): ' + str(dz))
+        print('Power added (W): ' + str(ans))
+        print('Mdot (kg/s): ' + str(tmp_asm.int_flow_rate))
+        print('Cp (J/kgK): ' + str(tmp_asm.coolant.heat_capacity))
+        print('Power result (W): ' + str(Q))
+        assert np.allclose(ans, Q)
         
 # @pytest.mark.skip(reason='milos is playing with this')
 # def test_bypass_iterate(c_ctrl_rr):
