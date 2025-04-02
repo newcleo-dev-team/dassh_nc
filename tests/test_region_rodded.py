@@ -641,8 +641,6 @@ class TestDuctTemperature():
     def test_duct_temp_w_power_indiv(self, c_fuel_rr):
         """Test that duct temperature calculation gives reasonable result
         with power assignment and no temperature differential"""
-        # gap_temps = (np.ones(c_fuel_rr.subchannel.n_sc['duct']['total'])
-        #              * (c_fuel_rr.avg_coolant_int_temp - 5.0))
         gap_temps = (np.ones(c_fuel_rr.subchannel.n_sc['duct']['total'])
                     * c_fuel_rr.avg_coolant_int_temp)
         c_fuel_rr._update_coolant_int_params(rr_data.inlet_temp)
@@ -651,8 +649,8 @@ class TestDuctTemperature():
                           c_fuel_rr.subchannel.n_sc['coolant']['interior']:
                           c_fuel_rr.subchannel.n_sc['coolant']['total']] - 1]
         dz, _ = dassh.region_rodded.calculate_min_dz(c_fuel_rr,
-                                                    rr_data.inlet_temp,
-                                                    rr_data.outlet_temp)
+                                                     rr_data.inlet_temp,
+                                                     rr_data.outlet_temp)
 
         # Power added overall
         power = mock_AssemblyPower(c_fuel_rr)
@@ -673,7 +671,6 @@ class TestDuctTemperature():
         start = c_fuel_rr.subchannel.n_sc['coolant']['total']
         for i in range(c_fuel_rr.n_duct):
             for sc in range(c_fuel_rr.subchannel.n_sc['duct']['total']):
-                # sc_type = c_fuel_rr.subchannel.type[sc + start] - 4
                 sc_type = c_fuel_rr.subchannel.type[sc + start] - 3
                 htc = c_fuel_rr.coolant_int_params['htc'][1:][sc_type]
                 qtmp_in = htc * dT_s[0, 0, sc] * surface_area[sc_type, 0]
@@ -722,7 +719,7 @@ class TestBypassTemperature():
         """Test that perturbations in adjacent wall mesh cells affect
         only adjacent bypass coolant subchannels"""
         c_ctrl_rr._update_coolant_byp_params([rr_data.inlet_temp])
-        dz, sc = dassh.region_rodded.calculate_min_dz(c_ctrl_rr,
+        dz, _ = dassh.region_rodded.calculate_min_dz(c_ctrl_rr,
                                                     rr_data.inlet_temp,
                                                     rr_data.outlet_temp)
         htc = c_ctrl_rr.coolant_byp_params['htc'][0]
