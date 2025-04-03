@@ -1034,13 +1034,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 self.calculate_gravity_pressure_drop(dz)
         if self._acceleration:
             self._pressure_drop['acceleration'] += \
-                self.calculate_acceleration_pressure_drop(z, dz, old_density)
-        print('Friction pressure drop:', self._pressure_drop['friction'])
-        print('Gravity pressure drop:', self._pressure_drop['gravity'])
-        print('Acceleration pressure drop:', self._pressure_drop['acceleration'], 
-              old_density, self.coolant.density, z, self.coolant.temperature)
+                self.calculate_acceleration_pressure_drop(old_density)
             
-    def calculate_acceleration_pressure_drop(self, z, dz, old_density):
+    def calculate_acceleration_pressure_drop(self, old_density):
         """Calculate acceleration pressure drop across current step"""
         return self.int_flow_rate**2 \
                    / (self.bundle_params['area']**2) \
