@@ -903,7 +903,8 @@ class PressureDropTable(LoggedClass, DASSH_Table):
                 spacer = a.rodded._pressure_drop['spacer_grid']
                 gravity = sum(x._pressure_drop['gravity'] for x in a.region)
                 friction = sum(x._pressure_drop['friction'] for x in a.region)
-                assert a.pressure_drop - spacer - gravity - friction < 1e-6
+                acceleration = sum(x._pressure_drop['acceleration'] for x in a.region)
+                assert a.pressure_drop - spacer - gravity - friction - acceleration < 1e-6
                 params[-3] = self._ffmt4e.format(friction / 1e6)
                 if spacer > 0.0:
                     params[-2] = self._ffmt4e.format(spacer / 1e6)

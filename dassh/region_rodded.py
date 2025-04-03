@@ -45,7 +45,7 @@ q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
 module_logger = logging.getLogger('dassh.region_rodded')
 
 
-def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_isotropic=True):
+def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, acceleration=False, rad_isotropic=True):
     """Create RoddedRegion object within DASSH Assembly
 
     Parameters
@@ -100,6 +100,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       se2geo,
                       update_tol,
                       gravity, 
+                      acceleration,
                       rad_isotropic)
 
     # Add z lower/upper boundaries
@@ -238,7 +239,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, gravity=False, rad_isotropic=True):
+                 param_update_tol=0.0, gravity=False, acceleration=False,
+                 rad_isotropic=True):
         """Instantiate RoddedRegion object"""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
@@ -379,10 +381,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if spacer_grid is not None and any(spacer_grid.values()):
             self._setup_spacer_grid(spacer_grid)
         self._gravity = gravity
+        self._acceleration = acceleration
         self._pressure_drop = {
             'friction': 0.0,
             'spacer_grid': 0.0,
-            'gravity': 0.0}
+            'gravity': 0.0,
+            'acceleration': 0.0}
         # Set up subchannel properties
         if not self._rad_isotropic:
             self.sc_properties = {k: np.zeros(self.subchannel.n_sc['coolant']['total']) \
@@ -810,7 +814,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """Combination of friction, spacer grid, and gravity losses"""
         return self._pressure_drop['friction'] \
             + self._pressure_drop['spacer_grid'] \
-            + self._pressure_drop['gravity']
+            + self._pressure_drop['gravity'] \
+            + self._pressure_drop['acceleration']
 
     ####################################################################
     # UPDATE PROPERTIES
@@ -1017,7 +1022,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     # PRESSURE DROP
     ####################################################################
 
-    def calculate_pressure_drop(self, z, dz):
+    def calculate_pressure_drop(self, z, dz, old_density):
         """Update bundle pressure drop with current step"""
         self._pressure_drop['friction'] += \
             self.calculate_friction_pressure_drop(dz)
@@ -1027,7 +1032,20 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if self._gravity:
             self._pressure_drop['gravity'] += \
                 self.calculate_gravity_pressure_drop(dz)
-
+        if self._acceleration:
+            self._pressure_drop['acceleration'] += \
+                self.calculate_acceleration_pressure_drop(z, dz, old_density)
+        print('Friction pressure drop:', self._pressure_drop['friction'])
+        print('Gravity pressure drop:', self._pressure_drop['gravity'])
+        print('Acceleration pressure drop:', self._pressure_drop['acceleration'], 
+              old_density, self.coolant.density, z, self.coolant.temperature)
+            
+    def calculate_acceleration_pressure_drop(self, z, dz, old_density):
+        """Calculate acceleration pressure drop across current step"""
+        return self.int_flow_rate**2 \
+                   / (self.bundle_params['area']**2) \
+                   * (1/self.coolant.density - 1/old_density) 
+    
     def calculate_friction_pressure_drop(self, dz):
         """Calculate friction pressure drop across current step"""
         # Losses due to friction from flow through the bundle

@@ -205,6 +205,8 @@ class Reactor(LoggedClass):
             inp.data['Setup']['param_update_tol']
         self._options['include_gravity'] = \
             inp.data['Setup']['include_gravity_head_loss']
+        self._options['include_acceleration_pressure'] = \
+            inp.data['Setup']['include_acceleration_pressure']
         self._options['rad_isotropic'] = \
             inp.data['Setup']['radially_isotropic_properties']
         if 'AssemblyTables' in inp.data['Setup'].keys():
@@ -403,6 +405,7 @@ class Reactor(LoggedClass):
                 se2geo=self._options['se2geo'],
                 param_update_tol=self._options['param_update_tol'],
                 gravity=self._options['include_gravity'],
+                acceleration=self._options['include_acceleration_pressure'],
                 rad_isotropic=self._options['rad_isotropic'])
 
         # Store as attribute b/c used later to write summary output

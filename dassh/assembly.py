@@ -70,7 +70,8 @@ class Assembly(LoggedClass):
 
     def __init__(self, name, loc, asm_input, mat_dict, inlet_temp,
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
-                 param_update_tol=0.0, gravity=False, rad_isotropic=True):
+                 param_update_tol=0.0, gravity=False, acceleration=False, 
+                 rad_isotropic=True):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')
@@ -102,6 +103,7 @@ class Assembly(LoggedClass):
                                    se2geo,
                                    param_update_tol,
                                    gravity,
+                                   acceleration,
                                    rad_isotropic)
             ]
 
@@ -511,8 +513,11 @@ class Assembly(LoggedClass):
                 self._power_delivered[k] += dz * np.sum(pow_j[k])
 
         # Calculate coolant and duct temperatures, pressure drop
+        self.active_region._update_coolant(self.active_region.avg_coolant_int_temp)
+        old_density = self.active_region.coolant.density
         self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
-        self.active_region.calculate_pressure_drop(self.z, dz)
+        self.active_region._update_coolant(self.active_region.avg_coolant_int_temp)
+        self.active_region.calculate_pressure_drop(self.z, dz, old_density)
 
         # Update peak coolant and duct temperatures
         self._update_peak_coolant_temps()
@@ -732,13 +737,14 @@ class Assembly(LoggedClass):
         # Pressure drop update
         if 'pressure_drop' in dfiles.keys():
             write_step['pressure_drop'][0, 3] = self.pressure_drop
-            _dp = {'friction': 0.0, 'spacer_grid': 0.0, 'gravity': 0.0}
+            _dp = {'friction': 0.0, 'spacer_grid': 0.0, 'gravity': 0.0, 'acceleration': 0.0}
             for reg in self.region:
                 for k in reg._pressure_drop.keys():
                     _dp[k] += reg._pressure_drop[k]
             write_step['pressure_drop'][0, 4] = _dp['friction']
             write_step['pressure_drop'][0, 5] = _dp['spacer_grid']
             write_step['pressure_drop'][0, 6] = _dp['gravity']
+            write_step['pressure_drop'][0, 7] = _dp['acceleration']
             np.savetxt(dfiles['pressure_drop'],
                        write_step['pressure_drop'],
                        delimiter=',')
