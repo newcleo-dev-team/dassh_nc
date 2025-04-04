@@ -34,6 +34,7 @@ from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
 from dassh.material import _MatTracker, Material
 from typing import Union, Dict, List
+from lbh15 import Lead, Bismuth, LBE
 
 
 _sqrt3 = np.sqrt(3)
@@ -524,10 +525,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 self.subchannel.type[
                     :self.subchannel.n_sc['coolant']['total']]]
         self.ht['inv_q_denom'] = 1 / self.ht['inv_q_denom']
-        self.ht['swirl'] = (self.d['pin-wall']
-                            * self.bundle_params['area']
-                            / self.params['area']
-                            / self.int_flow_rate)
+        self.ht['swirl'] = self.d['pin-wall']
         self.ht['cond'] = _setup_conduction_constants(self, const)
         self.ht['conv'] = _setup_convection_constants(self, const)
 
@@ -1237,17 +1235,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # wise direction is 27; the preceding one is 25.
         # - clockwise: use 25 as the swirl adjacent sc
         # - counterclockwise: use 27 as the swirl adjacent sc
-        swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']]
+        swirl_consts = self.ht['swirl'] * self.coolant_int_params['swirl'][self.ht['conv']['type']] / self.sc_mfr[self.ht['conv']['ind']]
         if not self._rad_isotropic:
             swirl_exchange = swirl_consts* \
                 (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
-                 * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                 * self.temp['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                 * self.enthalpy['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
                  - self.sc_properties['density'][self.ht['conv']['ind']]
-                 * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
-                 * self.temp['coolant_int'][self.ht['conv']['ind']]) \
-                 / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]    
+                 * self.enthalpy['coolant_int'][self.ht['conv']['ind']])     
                  
         else:
             swirl_consts *= self.coolant.density 
@@ -1265,7 +1259,32 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             else:
                 mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT * dz
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
-        return dT * dz
+        if not self._rad_isotropic:
+            return self._temp_from_enthalpy(dT*dz)
+        else:
+            return dT * dz
+    
+    def _temp_from_enthalpy(self, dh):
+        """
+        Convert enthalpy difference to temperature difference
+        
+        Parameters
+        ----------
+        dh : float
+            Enthalpy difference (J/kg)
+        
+        Returns
+        -------
+        float
+            Temperature difference (K)
+        
+        """
+        T_in = self.temp['coolant_int']
+        dT = np.zeros(len(T_in))
+        for i in range(len(dT)):
+            h_in = Lead(T = T_in[i]).h
+            dT[i] = Lead(h = h_in + dh[i]).T - T_in[i]
+        return dT 
     
     def _get_cond_temp_difference(self) -> np.ndarray:
         """
@@ -1298,8 +1317,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         k_ij = self._calc_mass_flow_average_property('thermal_conductivity', i, j)
                         keff_ij = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij       
                         cond_temp_difference[i][k] = keff_ij / cp_ij * (self.ht['cond']['const'][i][k]
-                            * (self.temp['coolant_int'][j]
-                            - self.temp['coolant_int'][i]))
+                            * (self.enthalpy['coolant_int'][j]
+                            - self.enthalpy['coolant_int'][i]))
         else:
             keff = (self.coolant_int_params['eddy']
                     * self.coolant.density
