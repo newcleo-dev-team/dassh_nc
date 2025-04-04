@@ -36,6 +36,11 @@ from dassh.material import _MatTracker, Material
 from typing import Union, Dict, List
 from lbh15 import Lead, Bismuth, LBE
 
+MATERIAL_LBH = {
+            'lead': Lead,
+            'bismuth': Bismuth,
+            'lbe': LBE
+        } 
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -1219,10 +1224,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         dT[self.ht['conv']['ind']] += \
             self.ht['conv']['const'] * dT_conv_over_R 
 
-        if not self._rad_isotropic:
-            dT = dT / self.sc_mfr 
-        else:
-            dT = dT / self.sc_mfr / self.coolant.heat_capacity
+        if self._rad_isotropic:
+            dT = dT / self.coolant.heat_capacity
         
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
@@ -1235,7 +1238,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # wise direction is 27; the preceding one is 25.
         # - clockwise: use 25 as the swirl adjacent sc
         # - counterclockwise: use 27 as the swirl adjacent sc
-        swirl_consts = self.ht['swirl'] * self.coolant_int_params['swirl'][self.ht['conv']['type']] / self.sc_mfr[self.ht['conv']['ind']]
+        swirl_consts = self.ht['swirl'] * self.coolant_int_params['swirl'][self.ht['conv']['type']] 
         if not self._rad_isotropic:
             swirl_exchange = swirl_consts* \
                 (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
@@ -1251,7 +1254,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                   - self.temp['coolant_int'][self.ht['conv']['ind']]))
             
         dT[self.ht['conv']['ind']] += swirl_exchange
-
+        dT = dT / self.sc_mfr
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
             if not self._rad_isotropic:
@@ -1262,6 +1265,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if not self._rad_isotropic:
             return self._temp_from_enthalpy(dT*dz)
         else:
+            self.enthalpy['coolant_int'] += dT * dz
             return dT * dz
     
     def _temp_from_enthalpy(self, dh):
@@ -1279,11 +1283,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Temperature difference (K)
         
         """
+        
         T_in = self.temp['coolant_int']
         dT = np.zeros(len(T_in))
         for i in range(len(dT)):
-            h_in = Lead(T = T_in[i]).h
-            dT[i] = Lead(h = h_in + dh[i]).T - T_in[i]
+            h_in = MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
+            dT[i] = MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T - T_in[i]
         return dT 
     
     def _get_cond_temp_difference(self) -> np.ndarray:
