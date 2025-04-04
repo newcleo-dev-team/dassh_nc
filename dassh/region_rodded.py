@@ -1183,17 +1183,18 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Vector (length = # coolant subchannels) of temperatures
             (K) at the next axial level
 
-        """
+        """        
         # HEAT FROM ADJACENT FUEL PINS
         # denom puts q in the same units as the next dT steps
         q = self._calc_int_sc_power(q_pins, q_cool)
-        dT = q * self.ht['inv_q_denom']
+        dT = q 
+        
         # CONDUCTION BETWEEN COOLANT SUBCHANNELS
         # Effective thermal conductivity
         cond_temp_difference = self._get_cond_temp_difference()
         dT +=  (cond_temp_difference[:, 0] + \
             cond_temp_difference[:, 1] + cond_temp_difference[:, 2]) 
-            
+        
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
         if not self._rad_isotropic:
@@ -1218,18 +1219,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 htc_coeff * (self.temp['duct_surf'][0, 0, self.ht['conv']['adj']]
                        - self.temp['coolant_int'][self.ht['conv']['ind']])
         dT[self.ht['conv']['ind']] += \
-            self.ht['conv']['const'] * dT_conv_over_R
+            self.ht['conv']['const'] * dT_conv_over_R 
 
-        # DIVIDE THROUGH BY MCP
-        mCp = 1 / self.coolant_int_params['fs']
         if not self._rad_isotropic:
-            mCp = mCp[self.subchannel.type[
-            :self.subchannel.n_sc['coolant']['total']]]\
-            / (self.sc_properties['heat_capacity'])
+            dT = dT / self.sc_mfr 
         else:
-            mCp = mCp[self.subchannel.type[
-                :self.subchannel.n_sc['coolant']['total']]]/self.coolant.heat_capacity 
-        dT *= mCp
+            dT = dT / self.sc_mfr / self.coolant.heat_capacity
+        
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
         # Swirl flow from adjacent subchannel; =0 for interior sc
@@ -1301,14 +1297,15 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         cp_ij = self._calc_mass_flow_average_property('heat_capacity', i, j)
                         k_ij = self._calc_mass_flow_average_property('thermal_conductivity', i, j)
                         keff_ij = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij       
-                        cond_temp_difference[i][k] = keff_ij * (self.ht['cond']['const'][i][k]
+                        cond_temp_difference[i][k] = keff_ij / cp_ij * (self.ht['cond']['const'][i][k]
                             * (self.temp['coolant_int'][j]
                             - self.temp['coolant_int'][i]))
         else:
             keff = (self.coolant_int_params['eddy']
                     * self.coolant.density
                     * self.coolant.heat_capacity
-                    + self._sf * self.coolant.thermal_conductivity)
+                    + self._sf * self.coolant.thermal_conductivity) \
+                    
             cond_temp_difference = keff * (self.ht['cond']['const']
                 * (self.temp['coolant_int'][self.ht['cond']['adj']]
                 - self.temp['coolant_int'][:, np.newaxis]))
@@ -1996,30 +1993,20 @@ def calculate_ht_constants(rr):
                 if i == 0 or j == 0:
                     ht_consts[i][j] = \
                         (rr.d['pin-pin']
-                         * rr.bundle_params['area']
-                         / rr.L[i][j] / rr.int_flow_rate
-                         / rr.params['area'][i])
+                         / rr.L[i][j])
                 else:
                     ht_consts[i][j] = \
-                        (rr.d['pin-wall']
-                         * rr.bundle_params['area']
-                         / rr.L[i][j] / rr.int_flow_rate
-                         / rr.params['area'][i])
+                        (rr.d['pin-wall']     
+                         / rr.L[i][j])
 
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
     if rr.n_pin > 1:
-        ht_consts[1][3] = (rr.L[1][1]
-                           * rr.bundle_params['area']
-                           / rr.int_flow_rate
-                           / rr.params['area'][1])
+        ht_consts[1][3] = rr.L[1][1]
         ht_consts[3][1] = ht_consts[1][3]
 
     # Corner -> wall 1
-    ht_consts[2][4] = (2 * rr.d['wcorner'][0, 1]
-                       * rr.bundle_params['area']
-                       / rr.int_flow_rate
-                       / rr.params['area'][2])
+    ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
     # ht_consts[2][4] = (2 * self.d['wcorner_m'][0]
     #                         * self.bundle_params['area']
     #                         / self.int_flow_rate

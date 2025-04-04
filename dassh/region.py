@@ -29,12 +29,14 @@ class DASSH_Region(object):
                  node_area_duct, n_bypass=0, node_area_byp=None):
         """."""
         self.temp = {}
+        self.enthalpy = {}
         self.area = {}
         self.total_area = {}
         self._pressure_drop = {'friction': 0.0, 'gravity': 0.0}
 
         # Primary "interior" coolant; neglects bypass
         self.temp['coolant_int'] = np.ones(n_node_coolant)
+        self.enthalpy['coolant_int'] = np.ones(n_node_coolant)
         self.area['coolant_int'] = node_area_coolant
         self.total_area['coolant_int'] = np.sum(node_area_coolant)
 
