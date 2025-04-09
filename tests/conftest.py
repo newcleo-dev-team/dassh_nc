@@ -125,6 +125,35 @@ class MaterialData:
     conftest_temp_from_textbook: float
     three_asm_temperature: List[float]
 
+@dataclass
+class RRData:
+    mock_AP: Dict[str, Any]
+    corr_list: List[str]
+    inlet_temp: float
+    outlet_temp: float
+    fs_tol: float
+    geo_params_ans1: float
+    geo_params_ans2: float
+    geo_params_nrods: int
+    geo_params_abs_tol1: float
+    geo_params_abs_tol2: float
+    double_duct_tol: float
+    single_pin: Dict[str, Any]
+    duct_areas_tol: float
+    thesis_Dh: Dict[str, Any]
+    qmcdt_tol: float
+    rr_temp_decimal: int
+    avg_temp: Dict[str, float]
+    none_pow_value: float
+    zero_pow_adj: Dict[str, float]
+    perturb_temp: float
+    zero_pow_cool_val: float
+    duct_temp_mf: float
+    byp_val: float
+    acc_met: Dict[str, Any]
+    clone_data: Dict[str, Any]
+    non_isotropic: Dict[str, float]
+    
 def pytest_configure(config):
     """
     Setup test data for the DASSH test suite
@@ -181,7 +210,39 @@ def pytest_configure(config):
         conftest_temp_from_textbook=file_data["conftest_temp_from_textbook"],
         three_asm_temperature=file_data["three_asm_temperature"]
     )
-    
+    ###############################################
+    # Setup test data for RoddedRegion class tests
+    ###############################################
+    with open("tests/test_data/RoddedRegion_class_data.json", "r") as json_file:
+        file_data = json.load(json_file)
+    pytest.rr_data = RRData(
+        mock_AP = file_data["mock_AP"],
+        corr_list = file_data["corr_list"],
+        inlet_temp = file_data["inlet_temp"],
+        outlet_temp = file_data["outlet_temp"],
+        fs_tol = file_data["fs_tol"],
+        geo_params_ans1 = file_data["geo_params_ans1"],
+        geo_params_ans2 = file_data["geo_params_ans2"],
+        geo_params_nrods = file_data["geo_params_nrods"],
+        geo_params_abs_tol1 = file_data["geo_params_abs_tol1"],
+        geo_params_abs_tol2 = file_data["geo_params_abs_tol2"],
+        double_duct_tol = file_data["double_duct_tol"],
+        single_pin = file_data["single_pin"],
+        duct_areas_tol = file_data["duct_areas_tol"],
+        thesis_Dh = file_data["thesis_Dh"],
+        qmcdt_tol = file_data["qmcdt_tol"],
+        rr_temp_decimal = file_data["rr_temp_decimal"],
+        avg_temp = file_data["avg_temp"],
+        none_pow_value = file_data["none_pow_value"],
+        zero_pow_adj = file_data["zero_pow_adj"],
+        perturb_temp = file_data["perturb_temp"],
+        zero_pow_cool_val = file_data["zero_pow_cool_val"],
+        duct_temp_mf = file_data["duct_temp_mf"],
+        byp_val = file_data["byp_val"],
+        acc_met = file_data["acc_met"],
+        clone_data = file_data["clone_data"],
+        non_isotropic = file_data["non_isotropic"]
+    )
     
 # def pytest_configure(config):
 #     # register an additional marker
@@ -498,7 +559,7 @@ def activate_rodded_region(region_to_activate, avg_temp, base=True):
     return tmp
 
 
-def make_rodded_region_fixture(name, bundle_params, mat_params, fr):
+def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True):
     return dassh.RoddedRegion(name,
                               bundle_params['num_rings'],
                               bundle_params['pin_pitch'],
@@ -520,7 +581,8 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr):
                               bundle_params['bypass_gap_flow_fraction'],
                               bundle_params['bypass_gap_loss_coeff'],
                               bundle_params['wire_direction'],
-                              bundle_params['shape_factor'])
+                              bundle_params['shape_factor'],
+                              rad_isotropic=rad_iso)
 
 
 @pytest.fixture(scope='module')
@@ -781,11 +843,19 @@ def simple_ctrl_params(assembly_default_params):
 def simple_ctrl_rr(simple_ctrl_params):
     """DASSH RoddedRegion object: simple hexagonal bundle parameters
     for double-ducted assembly"""
-    flowrate = 1.0
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
                                     simple_ctrl_params[1], flowrate)
-    return activate_rodded_region(rr, 623.15)
+    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
+@pytest.fixture
+def simple_ctrl_rr_non_iso(simple_ctrl_params):
+    """DASSH RoddedRegion object: simple hexagonal bundle parameters
+    for double-ducted assembly"""
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
+    rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
+                                    simple_ctrl_params[1], flowrate, rad_iso=False)
+    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
 @pytest.fixture
 def simple_ctrl_asm(simple_ctrl_params, simple_ctrl_rr, small_core_power):
