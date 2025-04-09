@@ -471,7 +471,7 @@ class TestCoolantIntTemperature():
         unperturbed_temperature = c_fuel_rr.temp['coolant_int']
         coolant_power = np.zeros(c_fuel_rr.subchannel.n_sc['coolant']['total'])
         pin_power = np.zeros(c_fuel_rr.n_pin)
-        for sc in range(c_fuel_rr.subchannel.n_sc['coolant']['interior'] - 1):
+        for sc in range(c_fuel_rr.subchannel.n_sc['coolant']['interior']):
             adj_sc = c_fuel_rr.subchannel.sc_adj[sc]
 
             # Perturb the temperature, calculate new temperatures, then
@@ -724,16 +724,13 @@ class TestBypassTemperature():
                                                     rr_data.outlet_temp)
         htc = c_ctrl_rr.coolant_byp_params['htc'][0]
         cp = c_ctrl_rr.coolant.heat_capacity
-        fr = (c_ctrl_rr.byp_flow_rate[0]
+        mfr = (c_ctrl_rr.byp_flow_rate[0]
             * c_ctrl_rr.bypass_params['area'][0]
             / c_ctrl_rr.bypass_params['total area'][0])
-        OLD_HTCONSTS = dassh.region_rodded.calculate_ht_constants(c_ctrl_rr)
         A = np.zeros((2, 2))
         A[0, 0] = c_ctrl_rr.L[5][5][0] * dz
-        # A[0, 1] = c_ctrl_rr.d['wcorner_m'][0] * 2 * dz
         A[0, 1] = c_ctrl_rr.d['wcorner'][0, 1] * 2 * dz
         A[1, 0] = A[0, 0]
-        # A[1, 1] = c_ctrl_rr.d['wcorner_m'][1] * 2 * dz
         A[1, 1] = c_ctrl_rr.d['wcorner'][1, 1] * 2 * dz
 
         surf = {0: 1, 1: 0}
@@ -749,7 +746,6 @@ class TestBypassTemperature():
                     + i * c_ctrl_rr.subchannel.n_sc['bypass']['total'])
 
                 # find subchannels next to the wall
-                # adj_sc = c_ctrl_rr.subchannel.sc_adj[wsc_type_idx] - 1
                 adj_sc = c_ctrl_rr.subchannel.sc_adj[wsc_type_idx]
 
                 # Perturb the duct temperature, calculate new coolant
@@ -779,7 +775,7 @@ class TestBypassTemperature():
                         test = (A[i, s_type - 5]
                                 * htc[s_type - 5]
                                 * rr_data.perturb_temp
-                                / fr[s_type - 5] / cp)
+                                / mfr[s_type - 5] / cp)
                         if not res[0, s] == pytest.approx(test):
                             print('dz = ' + str(dz))
                             print('byp sc: ' + str(byp_idx + 1))
@@ -788,11 +784,9 @@ class TestBypassTemperature():
                                 + '; ' + str(byp_types[s_type + 1]))
                             print('perturbed wall sc: ' + str(wsc_type_idx + 1))
                             print('perturbed wall adj: ' + str(adj_sc + 1))
-                            print('htc const: ' +
-                                str(OLD_HTCONSTS[s_type][s_type - 2]))
-                            print('htc expected: ' + str(htc))
+                            print('htc expected: ' + str(htc[s]))
                             print('cp expected: ' + str(cp))
-                            print('fr expected: ' + str(fr))
+                            print('fr expected: ' + str(mfr[s]))
                             print('area: ' + str(A[i, s_type - 5]))
                             print('wall temp: '
                                 + str(c_ctrl_rr
@@ -800,10 +794,9 @@ class TestBypassTemperature():
                             print('byp in temp: '
                                 + str(c_ctrl_rr
                                         .temp['coolant_byp'][0, -1, s]))
-                            print('byp out temp: ' + str(res[0, 0, s]))
+                            print('byp out temp: ' + str(res[1, 0, s]))
                             print('test: ' + str(test))
                             assert res[0, s] == pytest.approx(test)
-                            # assert res[s] != inlet_temp
                     else:
                         assert res[0, s] == pytest.approx(0.0)
 
@@ -816,7 +809,7 @@ class TestAcceleratedMethod():
     Class to test that the accelerated method for calculating the coolant 
     temperature gives the same results as in the previous versions of DASSH
     """
-    def __calc_coolant_int_temp_old(self, rr_obj, consts, i, dz, pin_power, cool_power):
+    def __calc_coolant_int_temp_old(self, rr_obj, consts, dz, pin_power, cool_power):
             """Calculate assembly coolant temperatures at next axial mesh
 
             Parameters
@@ -824,9 +817,7 @@ class TestAcceleratedMethod():
             rr_obj : DASSH RoddedRegion object
                 Rodded region object
             consts : list
-                Heat transfer constants
-            i : int
-                Subchannel index
+                Multiplicative constants for heat transfer
             dz : float
                 Axial step size (m)
             pin_power : numpy.ndarray
@@ -841,8 +832,6 @@ class TestAcceleratedMethod():
                 (K) at the next axial level
 
             """
-            # Calculate avg coolant temperature; update coolant properties
-            # self._update_coolant_int_params(self.avg_coolant_int_temp)
 
             # Power from pins and neutron/gamma reactions with coolant
             q = rr_obj._calc_int_sc_power(pin_power, cool_power)
@@ -858,8 +847,9 @@ class TestAcceleratedMethod():
             # rate is already accounted for in constants defined earlier
             mCp = rr_obj.coolant.heat_capacity * rr_obj.coolant_int_params['fs']
 
-            # The mass flow rate denominator hasn't been calculated yet for
-            # the q term, so do that now (store this eventually)
+            # The mass flow rate term to be used as denominator for
+            # the q term hasn't been calculated yet, 
+            # so do that now (store this eventually)
             heat_added_denom = [rr_obj.int_flow_rate
                                 * rr_obj.params['area'][i]
                                 / rr_obj.bundle_params['area'] for i in range(3)]
@@ -955,13 +945,7 @@ class TestAcceleratedMethod():
             # Calculate the change in temperature in each subchannel
             dT = np.zeros((rr_obj.n_bypass,
                         rr_obj.subchannel.n_sc['bypass']['total']))
-            # self._update_coolant_byp_params(self.avg_coolant_byp_temp)
             for i in range(rr_obj.n_bypass):
-
-                # This factor is in many terms; technically, the mass flow
-                # rate is already accounted for in constants defined earlier
-                # mCp = self.coolant.heat_capacity
-
                 # starting index to lookup type is after all interior
                 # coolant channels and all preceding duct and bypass
                 # channels
@@ -970,23 +954,18 @@ class TestAcceleratedMethod():
                         + i * rr_obj.subchannel.n_sc['bypass']['total']
                         + i * rr_obj.subchannel.n_sc['duct']['total'])
 
-                # end = start + self.subchannel.n_sc['bypass']['total']
                 for sci in range(0, rr_obj.subchannel.n_sc['bypass']['total']):
 
                     # The value of sci is the PYTHON indexing
-                    # type_i = self.subchannel.type[sci + start] - 1
                     type_i = rr_obj.subchannel.type[sci + start]
 
                     # Heat transfer to/from adjacent subchannels
                     for adj in rr_obj.subchannel.sc_adj[sci + start]:
-                        # if adj == 0:
                         if adj == -1:
                             continue
-                        # type_a = self.subchannel.type[adj - 1] - 1
                         type_a = rr_obj.subchannel.type[adj]
 
                         # Convection to/from duct wall
-                        # if type_a in [3, 4]:
                         if 3 <= type_a <= 4:
                             if sci + start > adj:  # INTERIOR adjacent duct wall
                                 byp_conv_const = \
@@ -1008,7 +987,6 @@ class TestAcceleratedMethod():
 
                         # Conduction to/from adjacent coolant subchannels
                         else:
-                            # sc_adj = adj - start - 1
                             sc_adj = adj - start
                             dT[i, sci] += \
                                 (rr_obj.coolant.thermal_conductivity
@@ -1026,17 +1004,14 @@ class TestAcceleratedMethod():
         as the old one (this let's me preserve the old just in case)"""
         OLD_HTCONSTS = dassh.region_rodded.calculate_ht_constants(c_fuel_rr)
 
-        dT = np.zeros(len(c_fuel_rr.temp['coolant_int']))
-        dT_old = dT.copy()
-        for i in range(rr_data.acc_met['n_sc']):
-            pin_power = rr_data.acc_met['pin_pow'][0] \
-                        + rr_data.acc_met['pin_pow'][1] * np.random.random(c_fuel_rr.n_pin)
-            cool_power = rr_data.acc_met['cool_pow'][0] \
-                        + rr_data.acc_met['cool_pow'][1] * np.random.random(len(dT))
-            dT_old += self.__calc_coolant_int_temp_old(c_fuel_rr,
-                OLD_HTCONSTS, i, rr_data.acc_met['dz'], pin_power, cool_power)
-            dT += c_fuel_rr._calc_coolant_int_temp(
-                rr_data.acc_met['dz'], pin_power, cool_power)
+        pin_power = rr_data.acc_met['pin_pow'][0] \
+                    + rr_data.acc_met['pin_pow'][1] * np.random.random(c_fuel_rr.n_pin)
+        cool_power = rr_data.acc_met['cool_pow'][0] \
+                    + rr_data.acc_met['cool_pow'][1] * np.random.random(len(c_fuel_rr.temp['coolant_int']))
+        dT_old = self.__calc_coolant_int_temp_old(c_fuel_rr,
+            OLD_HTCONSTS, rr_data.acc_met['dz'], pin_power, cool_power)
+        dT = c_fuel_rr._calc_coolant_int_temp(
+            rr_data.acc_met['dz'], pin_power, cool_power)
 
         print(np.average(dT))
         print('max abs diff: ', np.max(np.abs(dT - dT_old)))
@@ -1048,16 +1023,14 @@ class TestAcceleratedMethod():
         result as the old method"""
         OLD_HTCONSTS = dassh.region_rodded.calculate_ht_constants(c_ctrl_rr)
 
-        dT = np.zeros(c_ctrl_rr.temp['coolant_byp'].shape)
-        dT_old = dT.copy()
-        for i in range(rr_data.acc_met['n_sc']):
+        for i in range((c_ctrl_rr.subchannel.n_sc['bypass']['total'])):
             duct_surf_temp = \
                 (np.random.random(c_ctrl_rr.temp['duct_surf'].shape)
                 + (rr_data.inlet_temp + i * 1.0))
 
-            c_ctrl_rr.temp['duct_surf'] = duct_surf_temp
-            dT_old += self.__calc_coolant_byp_temp_old(c_ctrl_rr, rr_data.acc_met['dz'], OLD_HTCONSTS)
-            dT += c_ctrl_rr._calc_coolant_byp_temp(rr_data.acc_met['dz'])
+        c_ctrl_rr.temp['duct_surf'] = duct_surf_temp
+        dT_old = self.__calc_coolant_byp_temp_old(c_ctrl_rr, rr_data.acc_met['dz'], OLD_HTCONSTS)
+        dT = c_ctrl_rr._calc_coolant_byp_temp(rr_data.acc_met['dz'])
 
         print(np.average(dT))
         print(np.average(dT_old))
@@ -1072,6 +1045,7 @@ class TestClone():
     def test_rr_clone_shallow(self, textbook_rr):
         """Test that assembly clone has correct shallow-copied attributes"""
         clone = textbook_rr.clone()
+        assert id(clone) != id(textbook_rr)
         non_matches = []
         # Note: These attributes are immutable and therefore won't be
         # "deepcopied" to a new position:
@@ -1094,16 +1068,16 @@ class TestClone():
         """Test that RoddedRegion clone has deep-copied attributes"""
         clone = textbook_rr.clone()
         assert id(clone) != id(textbook_rr)
-        non_matches = []
+        matches = []
         for attr in rr_data.clone_data['attr_list2']:
             id_clone = id(getattr(clone, attr))
             id_original = id(getattr(textbook_rr, attr))
             if id_clone != id_original:  # they should be different
                 continue
             else:
-                non_matches.append(attr)
+                matches.append(attr)
                 print(attr, id_clone, id_original)
-        assert len(non_matches) == 0
+        assert len(matches) == 0
 
 
     def test_assembly_clone_new_fr(self, textbook_rr):
@@ -1113,16 +1087,16 @@ class TestClone():
         assert clone.total_flow_rate == rr_data.clone_data['fr']
         print(clone.total_flow_rate)
         print(textbook_rr.total_flow_rate)
-        non_matches = []
+        matches = []
         for attr in rr_data.clone_data['attr_list3']:
             id_clone = id(getattr(clone, attr))
             id_original = id(getattr(textbook_rr, attr))
             if id_clone != id_original:  # They should be different
                 continue
             else:
-                non_matches.append(attr)
+                matches.append(attr)
                 print(attr, id_clone, id_original)
-        assert len(non_matches) == 0
+        assert len(matches) == 0
 
 
 class TestNonIsotropic():
@@ -1183,15 +1157,16 @@ class TestNonIsotropic():
         adjacent channels are affected"""
 
         unperturbed_temperature = simple_ctrl_rr_non_iso.temp['coolant_int']
-        simple_ctrl_rr_non_iso._update_subchannels_properties(simple_ctrl_rr_non_iso.temp['coolant_int'])
+       # simple_ctrl_rr_non_iso._update_subchannels_properties(simple_ctrl_rr_non_iso.temp['coolant_int'])
         coolant_power = np.zeros(simple_ctrl_rr_non_iso.subchannel.n_sc['coolant']['total'])
         pin_power = np.zeros(simple_ctrl_rr_non_iso.n_pin)
-        for sc in range(simple_ctrl_rr_non_iso.subchannel.n_sc['coolant']['interior'] - 1):
+        for sc in range(simple_ctrl_rr_non_iso.subchannel.n_sc['coolant']['interior']):
             adj_sc = simple_ctrl_rr_non_iso.subchannel.sc_adj[sc]
 
             # Perturb the temperature, calculate new temperatures, then
             # unperturb the temperature
             simple_ctrl_rr_non_iso.temp['coolant_int'][sc] += rr_data.zero_pow_adj['perturb_temp']
+            simple_ctrl_rr_non_iso._update_subchannels_properties(simple_ctrl_rr_non_iso.temp['coolant_int'])
             res = simple_ctrl_rr_non_iso._calc_coolant_int_temp(rr_data.zero_pow_adj['z'], pin_power, coolant_power)
             simple_ctrl_rr_non_iso.temp['coolant_int'][sc] -= rr_data.zero_pow_adj['perturb_temp']
             assert np.allclose(simple_ctrl_rr_non_iso.temp['coolant_int'],
@@ -1199,17 +1174,19 @@ class TestNonIsotropic():
 
             dT = []
             m = []
+            cp = []
             for s in range(len(res)):  # only does coolant channels
                 if s in adj_sc or s == sc:
                     s_type = simple_ctrl_rr_non_iso.subchannel.type[s]
                     print(s, s_type, rr_data.inlet_temp, res[s])
                     dT.append(res[s])
                     m.append(simple_ctrl_rr_non_iso.sc_mfr[s])
+                    cp.append(simple_ctrl_rr_non_iso.sc_properties['heat_capacity'][s])
                     assert res[s] != pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
                 else:
                     assert res[s] == pytest.approx(0.0, abs=rr_data.zero_pow_adj['tol'])
             # Assert the balance
-            mdT = [m[i] * dT[i] for i in range(len(dT))]
+            mdT = [cp[i]*m[i] * dT[i] for i in range(len(dT))]
             print('dT: ' + str(dT))
             print('mdT: ' + str(mdT))
             print('bal: ' + str(sum(mdT)))
@@ -1239,93 +1216,3 @@ class TestNonIsotropic():
         print('Cp (J/kgK): ' + str(tmp_asm.coolant.heat_capacity))
         print('Power result (W): ' + str(Q))
         assert np.allclose(ans, Q)
-        
-# @pytest.mark.skip(reason='milos is playing with this')
-# def test_bypass_iterate(c_ctrl_rr):
-#     """."""
-#     # i = 0
-#     # print(c_ctrl_rr.bundle_params['area'])
-#     # print(c_ctrl_rr.bypass_params['total area'])
-#     # c_ctrl_rr._update_coolant_int_params(623.15)
-#     # print(c_ctrl_rr.coolant_int_params['ff'])
-#     # c_ctrl_rr._update_coolant_byp_params([623.15])
-#     # print(c_ctrl_rr.coolant_byp_params['ff'])
-#
-#     k = 650.0
-#     c_ctrl_rr.__iterate_bypass_flowrate(1.281, 2.9095, [k])
-#     # c_ctrl_rr.iterate_bypass_flowrate(1.281, 2.9095, [k])
-#     # c_ctrl_rr.iterate_bypass_flowrate(1.281, 2.9095, [k])
-#     # c_ctrl_rr.iterate_bypass_flowrate(1.281, 2.9095, [k])
-#     # c_ctrl_rr.iterate_bypass_flowrate(1.281, 2.9095, [k])
-#     assert 0
-
-#
-# @pytest.mark.skip(reason='because')
-# def test_double_ducted_asm_dz(ctrl_asm):
-#     """Test the dz requirement for a double ducted asm"""
-#     ctrl_asm.update_coolant_int_params(623.15)
-#     pd = ctrl_asm.pin_pitch / ctrl_asm.pin_diameter
-#     d_p2p = ctrl_asm.d["pin-pin"]
-#
-#     sc_mfr = [ctrl_asm.int_flow_rate
-#               * ctrl_asm.coolant_int_params['fs'][i]
-#               * ctrl_asm.params['area'][i]
-#               / ctrl_asm.bundle_params['area']
-#               for i in range(len(ctrl_asm.coolant_int_params['fs']))]
-#     print(sc_mfr)
-#     print(ctrl_asm.coolant_int_params['fs'])
-#     print(ctrl_asm.bare_params['area'])
-#     # assert 0
-#     # Calculate "effective" thermal conductivity
-#     keff = (ctrl_asm.kappa * ctrl_asm.coolant.thermal_conductivity
-#             + (ctrl_asm.coolant.density * ctrl_asm.coolant.heat_capacity
-#                * ctrl_asm.coolant_int_params['eddy']))
-#     min_dz = []
-#     min_dz.append(dassh.assembly._cons1_111(sc_mfr[0],
-#                                             ctrl_asm.L[0][0],
-#                                             ctrl_asm.d['pin-pin'],
-#                                             keff,
-#                                             ctrl_asm.coolant.heat_capacity))
-#     min_dz.append(dassh.assembly._cons1_112(sc_mfr[0],
-#                                             ctrl_asm.L[0][0],
-#                                             ctrl_asm.L[0][1],
-#                                             ctrl_asm.d['pin-pin'],
-#                                             keff,
-#                                             ctrl_asm.coolant.heat_capacity))
-#     min_dz.append(dassh.assembly._cons3_22(sc_mfr[2],
-#                                            ctrl_asm.L[1][2],
-#                                            ctrl_asm.d['pin-wall'],
-#                                            ctrl_asm.d['wcorner'][0][0], keff,
-#                                            ctrl_asm.coolant.heat_capacity,
-#                                            ctrl_asm.coolant.density,
-#                                            ctrl_asm.coolant_int_params['htc'][2],
-#                                            ctrl_asm.coolant_int_params['swirl'][2]))
-#     min_dz.append(dassh.assembly._cons2_123(sc_mfr[1],
-#                                             ctrl_asm.L[1][0],
-#                                             ctrl_asm.L[1][1],
-#                                             ctrl_asm.L[1][2],
-#                                             ctrl_asm.d['pin-pin'],
-#                                             ctrl_asm.d['pin-wall'], keff,
-#                                             ctrl_asm.coolant.heat_capacity,
-#                                             ctrl_asm.coolant.density,
-#                                             ctrl_asm.coolant_int_params['htc'][1],
-#                                             ctrl_asm.coolant_int_params['swirl'][1]))
-#     min_dz.append(dassh.assembly._cons2_122(sc_mfr[1],
-#                                             ctrl_asm.L[1][0],
-#                                             ctrl_asm.L[1][1],
-#                                             ctrl_asm.d['pin-pin'],
-#                                             ctrl_asm.d['pin-wall'], keff,
-#                                             ctrl_asm.coolant.heat_capacity,
-#                                             ctrl_asm.coolant.density,
-#                                             ctrl_asm.coolant_int_params['htc'][1],
-#                                             ctrl_asm.coolant_int_params['swirl'][1]))
-#     c322 = min_dz[2]
-#     butt = [ctrl_asm.pin_diameter, ctrl_asm.pin_pitch, pd,
-#             d_p2p, ctrl_asm.coolant_int_params['fs'][2],
-#             ctrl_asm.params['area'][2] / ctrl_asm.bundle_params['area'],
-#             sc_mfr[2], c322]
-#     # butt += min_dz
-#     print(' '.join(['{:.10e}'.format(v) for v in butt]))
-#     # ctrl_asm.update_coolant_byp_params([623.15])
-#     # byp_dz = dassh.assembly._calculate_byp_dz(ctrl_asm)
-#     assert 0
