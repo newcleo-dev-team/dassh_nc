@@ -255,6 +255,11 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self._rad_isotropic = rad_isotropic
         # Flag for enthalpy calculation
         self._ent = solve_enthalpy
+        # Check that the energy equation is solved for enthalpy only in case of 
+        # radially non-uniform properties
+        if self._rad_isotropic and self._ent:
+            self.log('error', 'Enthalpy calculation is not supported for '
+                              'radially uniform properties')
         # Disable single-pin assemblies for now; maybe revisit later
         if n_ring == 1 or pin_pitch == 0.0:
             self.log('error', 'Single-pin assemblies not supported')
@@ -1283,7 +1288,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
         if not self._rad_isotropic and self._ent:
             self.enthalpy['coolant_int'] += dT * dz
-        #    print(self.enthalpy['coolant_int'])
             return self._temp_from_enthalpy(dT*dz)
         else:
             return dT * dz
