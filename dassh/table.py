@@ -885,7 +885,7 @@ class PressureDropTable(LoggedClass, DASSH_Table):
         """
         # Process units from input_obj: length
         n_reg = self.n_col - 5
-        header = ['Name', 'Loc.', 'Total', 'Friction', 'SpacerGrid', 'Gravity', 'AccPress']
+        header = ['Name', 'Loc.', 'Total', 'Friction', 'SpacerGrid', 'Gravity', 'Acceleration']
         header += [f'Region {i + 1}' for i in range(n_reg)]
         self.add_row('Asm.', header)
         self.add_horizontal_line()

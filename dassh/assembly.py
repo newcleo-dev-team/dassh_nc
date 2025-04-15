@@ -513,10 +513,10 @@ class Assembly(LoggedClass):
                 self._power_delivered[k] += dz * np.sum(pow_j[k])
 
         # Calculate coolant and duct temperatures, pressure drop
+        # save density of the previous axial step to compute acceleration pressure drop
         self.active_region._update_coolant(self.active_region.avg_coolant_int_temp)
         old_density = self.active_region.coolant.density
         self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
-        self.active_region._update_coolant(self.active_region.avg_coolant_int_temp)
         self.active_region.calculate_pressure_drop(self.z, dz, old_density)
 
         # Update peak coolant and duct temperatures
