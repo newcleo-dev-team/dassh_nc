@@ -36,7 +36,7 @@ class DASSH_Region(object):
 
         # Primary "interior" coolant; neglects bypass
         self.temp['coolant_int'] = np.ones(n_node_coolant)
-        self.enthalpy['coolant_int'] = np.ones(n_node_coolant)
+        self.enthalpy['coolant_int'] = np.zeros(n_node_coolant)
         self.area['coolant_int'] = node_area_coolant
         self.total_area['coolant_int'] = np.sum(node_area_coolant)
 
