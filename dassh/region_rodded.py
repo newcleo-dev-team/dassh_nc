@@ -1118,8 +1118,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Interior coolant temperatures: calculate using coolant
         # properties from previous axial step
-        self.temp['coolant_int'] += \
-            self._calc_coolant_int_temp(dz, q['pins'], q['cool'], ebal)
+        self._calc_coolant_int_temp(dz, q['pins'], q['cool'], ebal)
 
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
@@ -1192,9 +1191,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         Returns
         -------
-        numpy.ndarray
-            Vector (length = # coolant subchannels) of temperatures
-            (K) at the next axial level
+        None
 
         """        
         # HEAT FROM ADJACENT FUEL PINS
@@ -1288,9 +1285,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
         if not self._rad_isotropic and self._ent:
             self.enthalpy['coolant_int'] += dT * dz
-            return self._temp_from_enthalpy(dT*dz)
+            self.temp['coolant_int'] = self._temp_from_enthalpy(dT*dz)
         else:
-            return dT * dz
+            self.temp['coolant_int'] += dT * dz
         
     
     def _get_cond_temp_difference(self) -> np.ndarray:
@@ -1361,14 +1358,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 
         if self.coolant.name in MATERIAL_LBH.keys():
             T_in = self.temp['coolant_int']
-            dT = np.zeros(len(T_in))
-            for i in range(len(dT)):
+            TT = np.zeros(len(T_in))
+            for i in range(len(TT)):
                 h_in = MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
-                dT[i] = MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T - T_in[i]
+                TT[i] = MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T 
         else:
             tref = self.temp['coolant_int'].copy()
             TT = np.zeros(len(dh))
-            dT = np.zeros(len(dh))
             for i in range(len(dh)):
                 toll = 1e-2
                 err = 1
@@ -1380,8 +1376,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     err = np.abs((TT[i]-tref[i]))
                     tref[i] = TT[i] 
                     iter += 1
-                dT[i] = TT[i] - self.temp['coolant_int'][i]
-        return dT 
+        return TT 
     
     def _calc_cp_integral(self, T1, T2):
         if self.coolant.name == 'sodium':
