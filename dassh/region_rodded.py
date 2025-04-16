@@ -1366,18 +1366,19 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 h_in = MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
                 dT[i] = MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T - T_in[i]
         else:
-            tref = self.temp['coolant_int']
+            tref = self.temp['coolant_int'].copy()
             TT = np.zeros(len(dh))
             dT = np.zeros(len(dh))
             for i in range(len(dh)):
                 toll = 1e-2
                 err = 1
                 iter = 1
-                while (err >= toll) and (iter < 100):
+                while (err >= toll) and (iter < 10):
                     deltah = self._calc_cp_integral(self.temp['coolant_int'][i], tref[i])
                     self.coolant.update(tref[i])
-                    TT[i] = tref[i] + (dh[i] - deltah)/self.sc_properties['heat_capacity'][i]
+                    TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
                     err = np.abs((TT[i]-tref[i]))
+                    tref[i] = TT[i] 
                     iter += 1
                 dT[i] = TT[i] - self.temp['coolant_int'][i]
         return dT 
