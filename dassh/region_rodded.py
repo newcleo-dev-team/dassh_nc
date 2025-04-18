@@ -1197,8 +1197,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # HEAT FROM ADJACENT FUEL PINS
         # denom puts q in the same units as the next dT steps
         q = self._calc_int_sc_power(q_pins, q_cool)
-        dT = q 
-        
+        dT = q.copy()
         # CONDUCTION BETWEEN COOLANT SUBCHANNELS
         # Effective thermal conductivity
         cond_temp_difference = self._get_cond_temp_difference()
