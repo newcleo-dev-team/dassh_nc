@@ -536,11 +536,11 @@ Gr* >= 0.02, buoyancy effects should be important and the forced convection
 representation of the flow is not accurate.
 """
 
-    def __init__(self, col_width=9, col0_width=4, sep='  '):
+    def __init__(self, col_width=11, col0_width=4, sep='  '):
         """Initialize SummaryTable"""
         LoggedClass.__init__(self, 0, 'dassh.table.Positional')
         # Decimal places for rounding, where necessary
-        self.dp = col_width - 6
+        self.dp = col_width - 8
         # Float formatting option
         self._ffmt = '{' + f':.{self.dp}E' + '}'
         # Inherit from DASSH_Table
