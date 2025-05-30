@@ -698,6 +698,8 @@ representation of the flow is not accurate.
         beta = rr.coolant.beta
         Gr = g0 * beta * (t_out - t_in) * rr.params['de'][0]**3 / kvisc**2
         Gr_star = Gr * chi / ff / Re**2
+        # Re-update coolant properties at the inlet temperature
+        rr._update_coolant_int_params(t_in)
         return Gr_star
 
 
