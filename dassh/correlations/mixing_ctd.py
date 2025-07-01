@@ -127,6 +127,10 @@ def calc_sc_intermittency_factors(asm_obj, Re_bL, Re_bT):
                         / asm_obj.bundle_params['area'])
             Re = (asm_obj.coolant.density * v_bundle * fs
                   * asm_obj.params['de'] / asm_obj.coolant.viscosity)
+        elif np.any(Re == 0.0):
+            # If Re is zero, recalculate it
+            Re = (asm_obj.coolant.density * v_bundle * fs
+                  * asm_obj.params['de'] / asm_obj.coolant.viscosity)
     except(KeyError, AttributeError):
         v_bundle = (asm_obj.int_flow_rate / asm_obj.coolant.density
                     / asm_obj.bundle_params['area'])
