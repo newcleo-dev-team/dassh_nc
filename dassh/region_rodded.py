@@ -894,7 +894,18 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         or for each type of subchannel in case of isotropic properties, based on Reynolds number
 
         """
-        if not self._rad_isotropic:
+        if self._rad_isotropic:
+            self._calculate_sc_type_Re()
+            nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
+                                self.htc_params['duct'],
+                                coolant_obj = self.coolant)
+            
+            self.coolant_int_params['htc'] = \
+                self.coolant.thermal_conductivity * nu / self.params['de']
+        else: 
+            if self.corr_names['mix'] in ['uctd', 'ctd']:
+                self._calculate_sc_type_Re()
+                        
             self.coolant_int_params['sc_vel'] = \
                 self.sc_mfr \
                 / self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]] \
@@ -906,18 +917,17 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 * self.params['de'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
             self.coolant_int_params['sc_htc'] = \
                 self._calculate_htc_rad_non_isotropic(self.htc_params['duct'])
-        else:
-            Re_partial = self.coolant.density * self.coolant_int_params['vel'] \
-               / self.coolant.viscosity
-            for i in range(3):
-                self.coolant_int_params['Re_sc'][i] = \
-                    Re_partial * self.coolant_int_params['fs'][i] * self.params['de'][i]
-            nu = self.corr['nu'](self.coolant_int_params['Re_sc'],
-                                self.htc_params['duct'],
-                                coolant_obj = self.coolant)
-            self.coolant_int_params['htc'] = \
-                self.coolant.thermal_conductivity * nu / self.params['de']
             
+    def _calculate_sc_type_Re(self) -> None:
+        """
+        Calculate Reynolds number for each subchannel type
+        """
+        Re_partial = self.coolant.density * self.coolant_int_params['vel'] \
+               / self.coolant.viscosity
+        for i in range(3):
+            self.coolant_int_params['Re_sc'][i] = \
+                Re_partial * self.coolant_int_params['fs'][i] * self.params['de'][i]
+                    
     def _calculate_htc_rad_non_isotropic(self, htc_const: List) -> np.ndarray:
         """
         Calculate heat transfer coefficient for each subchannel in case of radially
