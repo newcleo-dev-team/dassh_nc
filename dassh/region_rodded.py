@@ -1388,27 +1388,19 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Temperature difference (K)
         
         """  
-                
-        if self.coolant.name in self.coolant.MATERIAL_LBH.keys():
-            T_in = self.temp['coolant_int']
-            TT = np.zeros(len(T_in))
-            for i in range(len(TT)):
-                h_in = self.coolant.MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
-                TT[i] = self.coolant.MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T 
-        else:
-            tref = self.temp['coolant_int'].copy()
-            TT = np.zeros(len(dh))
-            for i in range(len(dh)):
-                toll = 1e-2
-                err = 1
-                iter = 1
-                while (err >= toll) and (iter < 10):
-                    deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
-                    self.coolant.update(tref[i])
-                    TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
-                    err = np.abs((TT[i]-tref[i]))
-                    tref[i] = TT[i] 
-                    iter += 1
+        tref = self.temp['coolant_int'].copy()
+        TT = np.zeros(len(dh))
+        for i in range(len(dh)):
+            toll = 1e-2
+            err = 1
+            iter = 1
+            while (err >= toll) and (iter < 10):
+                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
+                self.coolant.update(tref[i])
+                TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
+                err = np.abs((TT[i]-tref[i]))
+                tref[i] = TT[i] 
+                iter += 1
         return TT 
     
     def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
