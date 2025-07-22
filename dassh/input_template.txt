@@ -100,6 +100,7 @@
         bypass_gap_loss_coeff = float(default=None)
         shape_factor = float(default=1.0)
         use_low_fidelity_model = boolean(default=False)
+        mixed_convection = boolean(default=False)
         low_fidelity_model = option(simple, 6node, default=simple)
         convection_factor = string(default="calculate")
         [[[AxialRegion]]]

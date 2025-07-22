@@ -83,6 +83,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       inp['wire_diameter'],
                       inp['clad_thickness'],
                       inp['duct_ftf'],
+                      inp['mixed_convection'],
                       fr,
                       mat['coolant'],
                       mat['duct'],
@@ -233,7 +234,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     """
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
-                 wire_diam, clad_thickness, duct_ftf, flow_rate,
+                 wire_diam, clad_thickness, duct_ftf, mc, flow_rate,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
@@ -512,7 +513,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     def _setup_ht_constants(self):
         """Setup heat transfer constants in numpy arrays"""
-        const = calculate_ht_constants(self)
+        const = calculate_ht_constants(self, mixed=False)
         # self.ht_consts = const
         self.ht = {}
         self.ht['old'] = const
@@ -1165,6 +1166,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         p_duct = np.zeros(self.temp['duct_mw'].size)
         self._update_coolant_int_params(self.avg_coolant_int_temp,
                                         use_mat_tracker=False)
+        print('quiiiii', self.sc_properties['density'])
         if self.n_bypass > 0:
             self._update_coolant_byp_params(self.avg_coolant_byp_temp)
         self._calc_duct_temp(p_duct, t_gap, h_gap, adiabatic)
@@ -1975,7 +1977,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
     return params
 
 
-def calculate_ht_constants(rr):
+def calculate_ht_constants(rr, mixed=False):
     """Setup method to define heat transfer constants
 
     Parameters
@@ -1996,26 +1998,44 @@ def calculate_ht_constants(rr):
     # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ]
     # [ 0               ,     Corner <- Edge,   Corner <- Corner ]
     # if self.n_pin > 1:
-    for i in range(3):
-        if rr.n_pin == 1:
-            continue
-        for j in range(3):
+    if mixed:
+        for i in range(3):
             if rr.n_pin == 1:
                 continue
-            if rr.L[i][j] != 0.0:  # excludes int <--> corner
-                if i == 0 or j == 0:
-                    ht_consts[i][j] = \
-                        (rr.d['pin-pin']
-                         * rr.bundle_params['area']
-                         / rr.L[i][j] / rr.int_flow_rate
-                         / rr.params['area'][i])
-                else:
-                    ht_consts[i][j] = \
-                        (rr.d['pin-wall']
-                         * rr.bundle_params['area']
-                         / rr.L[i][j] / rr.int_flow_rate
-                         / rr.params['area'][i])
+            for j in range(3):
+                if rr.n_pin == 1:
+                    continue
+                if rr.L[i][j] != 0.0:  # excludes int <--> corner
+                    if i == 0 or j == 0:
+                        ht_consts[i][j] = \
+                            (rr.d['pin-pin']
+                            / rr.L[i][j])
+                    else:
+                        ht_consts[i][j] = \
+                            (rr.d['pin-wall']
+                            / rr.L[i][j])
+    else:
+        for i in range(3):
+            if rr.n_pin == 1:
+                continue
+            for j in range(3):
+                if rr.n_pin == 1:
+                    continue
+                if rr.L[i][j] != 0.0:  # excludes int <--> corner
+                    if i == 0 or j == 0:
+                        ht_consts[i][j] = \
+                            (rr.d['pin-pin']
+                            * rr.bundle_params['area']
+                            / rr.L[i][j] / rr.int_flow_rate
+                            / rr.params['area'][i])
+                    else:
+                        ht_consts[i][j] = \
+                            (rr.d['pin-wall']
+                            * rr.bundle_params['area']
+                            / rr.L[i][j] / rr.int_flow_rate
+                            / rr.params['area'][i])
 
+    
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
     if rr.n_pin > 1:

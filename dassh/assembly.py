@@ -27,6 +27,7 @@ import logging
 from dassh.logged_class import LoggedClass
 from dassh import region_rodded
 from dassh import region_unrodded
+from dassh import region_mixed
 from dassh import mesh_functions
 
 
@@ -94,8 +95,9 @@ class Assembly(LoggedClass):
                 self.name, asm_input, mat_dict, flow_rate, se2geo, gravity)
             ]
         else:
-            self.region = [
-                region_rodded.make(asm_input,
+            if asm_input.get('mixed_convection'):
+                self.region = [
+                    region_mixed.make(asm_input,
                                    self.name,
                                    mat_dict,
                                    flow_rate,
@@ -104,6 +106,17 @@ class Assembly(LoggedClass):
                                    gravity,
                                    rad_isotropic)
             ]
+            else:
+                self.region = [
+                    region_rodded.make(asm_input,
+                                    self.name,
+                                    mat_dict,
+                                    flow_rate,
+                                    se2geo,
+                                    param_update_tol,
+                                    gravity,
+                                    rad_isotropic)
+                ]
 
         # Create other requested unrodded regions
         for reg in asm_input['AxialRegion']:
