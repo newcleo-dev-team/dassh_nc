@@ -36,11 +36,6 @@ from dassh.material import _MatTracker
 from typing import Union, Dict, List
 from lbh15 import Lead, Bismuth, LBE
 
-#MATERIAL_LBH = {
-#            'lead': Lead,
-#            'bismuth': Bismuth,
-#            'lbe': LBE
-#        } 
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -545,7 +540,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     :self.subchannel.n_sc['coolant']['total']]]
         self.ht['inv_q_denom'] = 1 / self.ht['inv_q_denom']
         self.ht['swirl'] = (self.d['pin-wall']
-                           * self.bundle_params['area']
+                            * self.bundle_params['area']
                             / self.params['area']
                             / self.int_flow_rate)
         self.ht['cond'] = _setup_conduction_constants(self, const)
@@ -1245,8 +1240,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 htc_coeff * (self.temp['duct_surf'][0, 0, self.ht['conv']['adj']]
                        - self.temp['coolant_int'][self.ht['conv']['ind']])
         dT[self.ht['conv']['ind']] += \
-            self.ht['conv']['const'] * dT_conv_over_R 
-            
+            self.ht['conv']['const'] * dT_conv_over_R
+
         # DIVIDE THROUGH BY MCP
         mCp = 1 / self.coolant_int_params['fs']
         if self._rad_isotropic:
