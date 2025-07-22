@@ -403,6 +403,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if not self._rad_isotropic:
             self.sc_properties = {k: np.zeros(self.subchannel.n_sc['coolant']['total']) \
                 for k in self.coolant.PROPS_NAME}
+            if self._ent:
+                self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total'])
+            
+            
     ####################################################################
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
         """
@@ -1264,9 +1268,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             if self._ent:
                 swirl_exchange = swirl_consts* \
                     (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
-                     * self.enthalpy['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                     * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
                      - self.sc_properties['density'][self.ht['conv']['ind']]
-                     * self.enthalpy['coolant_int'][self.ht['conv']['ind']])   
+                     * self._enthalpy[self.ht['conv']['ind']])   
             else:
                 swirl_exchange = swirl_consts* \
                     (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
@@ -1296,7 +1300,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT * dz
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
         if not self._rad_isotropic and self._ent:
-            self.enthalpy['coolant_int'] += dT * dz
+            self._enthalpy += dT * dz
             self.temp['coolant_int'] = self._temp_from_enthalpy(dT*dz)
         else:
             self.temp['coolant_int'] += dT * dz
@@ -1334,8 +1338,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         keff_ij = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij
                         if self._ent:
                             cond_temp_difference[i][k] = keff_ij / cp_ij * (self.ht['cond']['const'][i][k]
-                            * (self.enthalpy['coolant_int'][j]
-                            - self.enthalpy['coolant_int'][i]))
+                            * (self._enthalpy[j]
+                            - self._enthalpy[i]))
                         else:     
                             cond_temp_difference[i][k] = keff_ij * (self.ht['cond']['const'][i][k]
                                 * (self.temp['coolant_int'][j]
