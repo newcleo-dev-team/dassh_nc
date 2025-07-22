@@ -32,15 +32,15 @@ from dassh.logged_class import LoggedClass
 from dassh.correlations import check_correlation
 from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
-from dassh.material import _MatTracker, Material
+from dassh.material import _MatTracker
 from typing import Union, Dict, List
 from lbh15 import Lead, Bismuth, LBE
 
-MATERIAL_LBH = {
-            'lead': Lead,
-            'bismuth': Bismuth,
-            'lbe': LBE
-        } 
+#MATERIAL_LBH = {
+#            'lead': Lead,
+#            'bismuth': Bismuth,
+#            'lbe': LBE
+#        } 
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -1382,12 +1382,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         
         """  
                 
-        if self.coolant.name in MATERIAL_LBH.keys():
+        if self.coolant.name in self.coolant.MATERIAL_LBH.keys():
             T_in = self.temp['coolant_int']
             TT = np.zeros(len(T_in))
             for i in range(len(TT)):
-                h_in = MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
-                TT[i] = MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T 
+                h_in = self.coolant.MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
+                TT[i] = self.coolant.MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T 
         else:
             tref = self.temp['coolant_int'].copy()
             TT = np.zeros(len(dh))
