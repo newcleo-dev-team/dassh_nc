@@ -15,6 +15,16 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, _setup_con
 from dassh.pin_model import PinModel
 from lbh15 import Lead, Bismuth, LBE
 
+# Coefficients for the density of lead, bismuth and LBE
+# Density correlation is always in the form:
+# rho(T) = a - b*T 
+DENSITY_COEFF = {
+    'lead': [11441, 1.2795],
+    'bismuth': [10725, 1.22],
+    'lbe': [11065, 1.293]
+}
+SODIUM_DENS_COEFF =  [275.32/2503.7, 511.58/(2503.7)**0.5, 1005.9]
+
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 
 _gg = 9.81  # Gravity acceleration [m/s^2]
@@ -245,26 +255,12 @@ class MixedRegion(RoddedRegion):
         # Solve the system of equations for the SC
         # velocities and densities and bundle pressure drop.
         
-      #  RR = self._calc_RR(self._delta_rho)
-            
-       # print('R:',RR)
-        #print('dh', self._delta_h)
-        print('drho:', self._delta_rho)
-        print('########################################')
-      #  print('self._sc_vel:', self._sc_vel)
-      #  print('self._density:', self._density)
         RR = self._calc_RR(self._delta_rho)
-        self._solve_system(dz, q_pins, q_cool, RR)
-        
-        #RR = self._calc_RR(self._delta_rho)
-      #  self._delta_h = RR * self._delta_rho    # RR is computed with variations at the previous step
-                                                # delta_rho is the variation of density at this step
+        self._solve_system(dz, q_pins, q_cool, RR, ebal)
+
         self._enthalpy += self._delta_h
         self.temp['coolant_int'] = self._temp_from_enthalpy() 
         
-      # print('v:', self._sc_vel)
-      # print('rho:', self._density)
-      # print('p:', self._pressure_drop)
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
         # Bypass coolant temperatures
@@ -289,41 +285,36 @@ class MixedRegion(RoddedRegion):
     # COOLANT TEMPERATURE CALCULATION METHODS
     ####################################################################
 
-    def _solve_system(self, dz, q_pins, q_cool, RR):
+    def _solve_system(self, dz, q_pins, q_cool, RR, ebal):
         """
         Method to solve the system. 
         """
         delta_v0 = self._delta_v.copy()
         delta_rho0 = self._delta_rho.copy()
-      #  delta_h0 = self._delta_h.copy()
-      #  delta_P0 = copy.copy(self._delta_P)        forse non mi serve 
+
+       
+        qq = self._calc_int_sc_power(q_pins, q_cool)
+        
+        bb = self._build_vector(qq, dz)
         RR = self._calc_RR(delta_rho0)  
          
-        errors = np.array([1.0, 1.0, 1.0])  # Initialize error 
         residuals = np.ones(2*self.subchannel.n_sc['coolant']['total'] + 1)  # Initialize residuals
         
         while np.any(residuals > 1e-8):
             
-            AA, bb = self._build_matrix(dz, q_pins, q_cool, delta_v0, delta_rho0, RR)
+            AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
             xx = np.linalg.solve(AA, bb)
             
             delta_rho = xx[0:2*self.subchannel.n_sc['coolant']['total']:2]
             delta_v = xx[1:2*self.subchannel.n_sc['coolant']['total']:2]
             delta_P = xx[-1]
             
-            
-            
-           # errors[0] = np.max(np.abs(delta_v - delta_v0))
-           # errors[1] = np.max(np.abs(delta_rho - delta_rho0))
-           # errors[2] = np.max(np.abs(delta_P - delta_P0))
             residuals = np.abs(AA @ xx - bb)
             
             delta_v0 = delta_v #0.9*delta_v + 0.1*delta_v0
             delta_rho0 = delta_rho #0.9*delta_rho + 0.1 * delta_rho0
-         #   delta_P0 = delta_P #0.9*delta_P + 0.1*delta_P0
-            RR = self._calc_RR(delta_rho)
             
-            print('errors:', errors)
+            RR = self._calc_RR(delta_rho)
             
         self._delta_v = delta_v
         self._delta_rho = delta_rho
@@ -333,8 +324,31 @@ class MixedRegion(RoddedRegion):
         self._pressure_drop += delta_P
         self._delta_h = RR*delta_rho
         
+        if ebal:
+            mcpdT_i = self.sc_mfr*self._delta_h
+            self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
+
+    def _build_vector(self, qq, dz):
+        nn = self.subchannel.n_sc['coolant']['total']
         
-    def _build_matrix(self, dz, q_pins, q_cool, delta_v, delta_rho, RR):
+        
+        
+        MEX = self._calc_MEX(dz)
+        EEX = self._calc_EEX(dz)
+        GG = -self._density * \
+            (_gg*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
+            /self.params['de'][self.subchannel.type[:nn]])
+            
+        energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX    
+        momentum_b = GG + MEX 
+        
+        bb = np.zeros(2*nn + 1)
+        bb[1:2*nn:2] = energy_b
+        bb[0:2*nn:2] = momentum_b
+        bb[-1] = 0
+        return bb
+
+    def _build_matrix(self, dz, delta_v, delta_rho, RR):
         """
         Build the matrix and known vector.
         """
@@ -343,26 +357,12 @@ class MixedRegion(RoddedRegion):
 
         nn = self.subchannel.n_sc['coolant']['total']
         
-        EE, FF, GG = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
+        EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, hstar, RR)
         C_rho, C_v = self._calc_continuity_coefficients(nn, delta_v)
         
-        MEX = self._calc_MEX(dz)
-        EEX = self._calc_EEX(dz)
-        
-     #   print(self._sc_vel)
-     #   print('EE:', EE)
-     #   print('FF:', FF)
-     #   print('GG:', GG)
-     #   print('SS:', SS)
-     #   print('TT:', TT)
-     #   print('C_rho:', C_rho)
-     #   print('C_v:', C_v)
-     #   print('MEX:', MEX)
-     #   print('EEX:', EEX)
-        
         AA = np.zeros((2*nn + 1, 2*nn + 1))
-        bb = np.zeros(2*nn + 1)    
+            
         diag = np.zeros(2*nn + 1)
         sup_diag = np.zeros(2*nn)
         sub_diag = np.zeros(2*nn)
@@ -379,23 +379,7 @@ class MixedRegion(RoddedRegion):
         AA[-1, 0:2*nn:2] = C_rho  # 2*n, non 2*n+1 perché l'ultimo è 0 (corrsponde al deltaP)
         AA[-1, 1:2*nn:2] = C_v 
         
-      # cmap = plt.cm.viridis
-      # newcolors = cmap(np.linspace(0, 1, 256))
-      # newcolors[0] = [1, 1, 1, 1] 
-      # custom_cmap = ListedColormap(newcolors)
-      # plt.imshow(np.abs(AA), norm=LogNorm(vmin=1e-7), cmap=custom_cmap)
-      ## plt.colorbar()
-      # plt.savefig("matrice_mixed_convection.png", dpi=300, bbox_inches='tight')
-        
-        qq = self._calc_int_sc_power(q_pins, q_cool)
-        energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX
-        momentum_b = GG + MEX 
-        
-        bb[1:2*nn:2] = energy_b
-        bb[0:2*nn:2] = momentum_b
-        bb[-1] = 0
-        
-        return AA, bb
+        return AA
 
     def _calc_momentum_coefficients(self, nn, dz, delta_v, vstar=0.0):      
         """
@@ -412,12 +396,8 @@ class MixedRegion(RoddedRegion):
             /2/self.params['de'][self.subchannel.type[:nn]])*self._sc_vel + \
             (1 + self.coolant_int_params['ff']*dz/8/
             self.params['de'][self.subchannel.type[:nn]])* delta_v - vstar) 
-            
-        GG = -self._density * \
-            (_gg*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
-            /self.params['de'][self.subchannel.type[:nn]])
-        
-        return EE, FF, GG
+
+        return EE, FF
     
     def _calc_energy_coefficients(self, delta_v, delta_rho, hstar=0.0, RR=0.0):
         """
@@ -482,23 +462,13 @@ class MixedRegion(RoddedRegion):
         """
         Calculate the RR coefficient.
         """
-        if self.coolant.name in self.coolant.MATERIAL_LBH.keys():
-            dens = self._density.copy()
-            RR = np.zeros(len(dens))
-            for i in range(len(dens)):
-                RR[i] = (self.coolant.MATERIAL_LBH[self.coolant.name](rho = dens[i] + drho[i]).h - 
-                        self.coolant.MATERIAL_LBH[self.coolant.name](rho = dens[i]).h) / (drho[i])
-        elif self.coolant.name == 'sodium':
-            
-            T1 = self._T_from_rho(self._density)
-            T2 = self._T_from_rho(self._density + drho)
-            deltah = self._calc_cp_integral(T1, T2)
+        T1 = self._T_from_rho(self._density)
+        T2 = self._T_from_rho(self._density + drho)
+        deltah = self._calc_delta_h(T1, T2)
 
-            RR = deltah/drho
+        RR = deltah/drho
         return RR
         
-        
-    
     def _temp_from_enthalpy(self) -> np.ndarray:
         """
         Convert enthalpy difference to temperature difference
@@ -515,33 +485,21 @@ class MixedRegion(RoddedRegion):
         
         """  
         dh = self._delta_h
-        if self.coolant.name in self.coolant.MATERIAL_LBH.keys():
-            T_in = self.temp['coolant_int']
-            TT = np.zeros(len(T_in))
-            for i in range(len(TT)):
-                h_in = self.coolant.MATERIAL_LBH[self.coolant.name](T = T_in[i]).h
-                TT[i] = self.coolant.MATERIAL_LBH[self.coolant.name](h = h_in + dh[i]).T 
-        else:
-            tref = self.temp['coolant_int'].copy()
-            TT = np.zeros(len(dh))
-            for i in range(len(dh)):
-                toll = 1e-2
-                err = 1
-                iter = 1
-                while (err >= toll) and (iter < 10):
-                    deltah = self._calc_cp_integral(self.temp['coolant_int'][i], tref[i])
-                    self.coolant.update(tref[i])
-                    TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
-                    err = np.abs((TT[i]-tref[i]))
-                    tref[i] = TT[i] 
-                    iter += 1
+        tref = self.temp['coolant_int'].copy()
+        TT = np.zeros(len(dh))
+        for i in range(len(dh)):
+            toll = 1e-2
+            err = 1
+            iter = 1
+            while (err >= toll) and (iter < 10):
+                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
+                self.coolant.update(tref[i])
+                TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
+                err = np.abs((TT[i]-tref[i]))
+                tref[i] = TT[i] 
+                iter += 1
         return TT 
     
-    def _calc_cp_integral(self, T1, T2):
-        if self.coolant.name == 'sodium':
-            return 1.6582e3*(T2-T1) - 4.2395e-1*(T2**2-T1**2) + 4.4541e-4*(T2**3-T1**3)/3 + 3.001e6*(1/T2-1/T1)
-        elif self.coolant.name == 'nak':
-            return 4186.8*(0.232*(T2-T1) - 4.41E-5*(T2**2-T1**2) + 2.733333E-8*(T2**3-T1**3))
         
     
     def _init_static_correlated_params(self, t):
@@ -632,10 +590,12 @@ class MixedRegion(RoddedRegion):
         
     def _T_from_rho(self, rho):
         if self.coolant.name == 'sodium':
-            aa = 275.32/2503.7
-            bb = 511.58/(2503.7)**0.5
-            cc = 1005.9
+            aa, bb, cc = SODIUM_DENS_COEFF
             return ((-bb+np.sqrt(bb**2 - 4*aa*(rho-cc)))/(2*aa))**2
+        
+        elif self.coolant.name in DENSITY_COEFF.keys():
+            a, b = DENSITY_COEFF[self.coolant.name]
+            return (a - rho) / b
         
         else:
             path = os.path.join(_ROOT, 'data', self.coolant.name + '.csv')
@@ -654,3 +614,39 @@ class MixedRegion(RoddedRegion):
             print('x:', x)
             print('y:', y)
             return np.interp(rho, x, y)
+        
+        
+    ############################################################################
+    # Following methods and variables are here for the time being, to be removed
+    # when the branch on enthalpy will be merged !!!
+    
+    
+    def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
+        """
+        Calculate the enthalpy difference between two temperatures
+        using the enthalpy coefficients for the coolant
+        
+        Parameters
+        ----------
+        T1 : numpy.ndarray
+            Initial temperature (K)
+        T2 : numpy.ndarray
+            Final temperature (K)
+
+        Returns
+        -------
+        numpy.ndarray
+            Enthalpy difference (J/kg)
+        """
+        ENTHALPY_COEFF = {
+        'lead': [176.2, -2.4615e-2, 5.147e-6, 1.524e6],
+        'bismuth': [118.2, 2.967e-3, 0.0, -7.183e6],
+        'lbe': [164.8, -1.97e-2, 4.167e-6, 4.56e5],
+        'sodium': [1.6582e3, -4.2395e-1, 1.4847e-4, 2.9926e6],
+        'nak': [971.3376, -0.18465, 1.1443e-4, 0.0],
+        }
+        a, b, c, d = ENTHALPY_COEFF[self.coolant.name]
+        return (a * (T2 - T1) \
+                + b * (T2**2 - T1**2)
+                + c * (T2**3 - T1**3)
+                + d * (T2**(-1) - T1**(-1)))
