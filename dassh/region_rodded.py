@@ -43,6 +43,18 @@ _sqrt3over3 = np.sqrt(3) / 3
 # Surface of pins in contact with each type of subchannel
 q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
 
+# Dictionary to store coefficients of the enthalpy correlation. 
+# All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
+ENTHALPY_COEFF = {
+    'lead': [176.2, -2.4615e-2, 5.147e-6, 1.524e6],
+    'bismuth': [118.2, 2.967e-3, 0.0, -7.183e6],
+    'lbe': [164.8, -1.97e-2, 4.167e-6, 4.56e5],
+    'sodium': [1.6582e3, -4.2395e-1, 1.4847e-4, 2.9926e6],
+    'nak': [971.3376, -0.18465, 1.1443e-4, 0.0],
+}
+
+
+
 module_logger = logging.getLogger('dassh.region_rodded')
 
 
@@ -1391,7 +1403,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 err = 1
                 iter = 1
                 while (err >= toll) and (iter < 10):
-                    deltah = self._calc_cp_integral(self.temp['coolant_int'][i], tref[i])
+                    deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
                     self.coolant.update(tref[i])
                     TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
                     err = np.abs((TT[i]-tref[i]))
@@ -1399,12 +1411,30 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     iter += 1
         return TT 
     
-    def _calc_cp_integral(self, T1, T2):
-        if self.coolant.name == 'sodium':
-            return 1.6582e3*(T2-T1) - 4.2395e-1*(T2**2-T1**2) + 4.4541e-4*(T2**3-T1**3)/3 + 3.001e6*(1/T2-1/T1)
-        elif self.coolant.name == 'nak':
-            return 4186.8*(0.232*(T2-T1) - 4.41E-5*(T2**2-T1**2) + 2.733333E-8*(T2**3-T1**3))
+    def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
+        """
+        Calculate the enthalpy difference between two temperatures
+        using the enthalpy coefficients for the coolant
         
+        Parameters
+        ----------
+        T1 : numpy.ndarray
+            Initial temperature (K)
+        T2 : numpy.ndarray
+            Final temperature (K)
+
+        Returns
+        -------
+        numpy.ndarray
+            Enthalpy difference (J/kg)
+        """
+        a, b, c, d = ENTHALPY_COEFF[self.coolant.name]
+        return (a * (T2 - T1) \
+                + b * (T2**2 - T1**2)
+                + c * (T2**3 - T1**3)
+                + d * (T2**(-1) - T1**(-1)))
+
+
     def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) -> float:
         """
         Calculate the mass flow rate weighted average of a property between two subchannels
