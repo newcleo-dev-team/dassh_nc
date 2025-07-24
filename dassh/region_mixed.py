@@ -297,11 +297,11 @@ class MixedRegion(RoddedRegion):
         
         bb = self._build_vector(qq, dz)
         RR = self._calc_RR(delta_rho0)  
-         
-        residuals = np.ones(2*self.subchannel.n_sc['coolant']['total'] + 1)  # Initialize residuals
-        
-        while np.any(residuals > 1e-8):
-            
+
+        print('###########################')
+        res = np.array([1, 1, 1])  # Initialize residuals
+        while np.any(res > 1e-11):
+
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
             xx = np.linalg.solve(AA, bb)
             
@@ -310,10 +310,14 @@ class MixedRegion(RoddedRegion):
             delta_P = xx[-1]
             
             residuals = np.abs(AA @ xx - bb)
-            
-            delta_v0 = delta_v #0.9*delta_v + 0.1*delta_v0
-            delta_rho0 = delta_rho #0.9*delta_rho + 0.1 * delta_rho0
-            
+            res_rho = np.sum(residuals[0:2*self.subchannel.n_sc['coolant']['total']:2])
+            res_v = np.sum(residuals[1:2*self.subchannel.n_sc['coolant']['total']:2])
+            res_P = np.sum(residuals[-1])
+            res = np.array([res_rho, res_v, res_P])                       
+            print('Residuals:', res)
+            delta_v0 = 0.7*delta_v + 0.3*delta_v0
+            delta_rho0 = 0.7*delta_rho + 0.3 * delta_rho0
+
             RR = self._calc_RR(delta_rho)
             
         self._delta_v = delta_v
@@ -321,31 +325,30 @@ class MixedRegion(RoddedRegion):
         self._delta_P = delta_P
         self._sc_vel += delta_v
         self._density += delta_rho  
-        self._pressure_drop += delta_P
+        self._pressure_drop -= delta_P
         self._delta_h = RR*delta_rho
-        
+       # print(self._pressure_drop, 'Pa')
         if ebal:
-            mcpdT_i = self.sc_mfr*self._delta_h
+            mcpdT_i = self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]] * \
+                self._density * self._sc_vel *self._delta_h
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
 
     def _build_vector(self, qq, dz):
         nn = self.subchannel.n_sc['coolant']['total']
         
-        
-        
         MEX = self._calc_MEX(dz)
         EEX = self._calc_EEX(dz)
         GG = -self._density * \
-            (_gg*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
-            /self.params['de'][self.subchannel.type[:nn]])
-            
+             (_gg*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
+             /self.params['de'][self.subchannel.type[:nn]])
+        
         energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX    
         momentum_b = GG + MEX 
-        
+      #  print(np.sum(GG), ',')
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
         bb[0:2*nn:2] = momentum_b
-        bb[-1] = 0
+        #bb[-1] = 0
         return bb
 
     def _build_matrix(self, dz, delta_v, delta_rho, RR):
@@ -354,7 +357,9 @@ class MixedRegion(RoddedRegion):
         """
         hstar = self._enthalpy + RR*self._delta_rho/2 
         vstar = self._sc_vel + delta_v/2
-
+        #hstar = self._calc_hstar()
+        #vstar = self._calc_vstar()
+        
         nn = self.subchannel.n_sc['coolant']['total']
         
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
@@ -381,7 +386,47 @@ class MixedRegion(RoddedRegion):
         
         return AA
 
-    def _calc_momentum_coefficients(self, nn, dz, delta_v, vstar=0.0):      
+
+    def _calc_vstar(self):
+        numeratore = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+        denominatore = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+        for i in range(self.subchannel.n_sc['coolant']['total']):
+            for k in range(3):
+                j = self.ht['cond']['adj'][i][k]
+                if j == 0 and k == 2:
+                    continue
+                else:
+                    xij = (self.sc_mfr[i] - self.sc_mfr[j]) 
+                    numeratore[i][k] = np.abs(xij)*(self._sc_vel[j]+ self._sc_vel[i]) \
+                                        - xij * (- self._sc_vel[j]+ self._sc_vel[i])
+                        
+        vstar = (numeratore[:, 0] + \
+            numeratore[:, 1] + numeratore[:, 2]) / 2 / (denominatore[:, 0] + \
+            denominatore[:, 1] + denominatore[:, 2])
+        return np.abs(vstar)
+    
+    def _calc_hstar(self):
+        numeratore = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+        denominatore = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+        for i in range(self.subchannel.n_sc['coolant']['total']):
+            for k in range(3):
+                j = self.ht['cond']['adj'][i][k]
+                if j == 0 and k == 2:
+                    continue
+                else:
+                    xij = (self.sc_mfr[i] - self.sc_mfr[j]) 
+                    numeratore[i][k] = np.abs(xij)*(self._enthalpy[j]+ self._enthalpy[i]) \
+                                        - xij * (- self._enthalpy[j]+ self._enthalpy[i])
+                    denominatore[i][k] = np.abs(xij)
+
+        hstar = (numeratore[:, 0] + \
+            numeratore[:, 1] + numeratore[:, 2]) / 2 / (denominatore[:, 0] + \
+            denominatore[:, 1] + denominatore[:, 2])
+        return np.abs(hstar)
+    
+        
+
+    def _calc_momentum_coefficients(self, nn, dz, delta_v, vstar):      
         """
         Calculate coefficients for the system of equations.
         """
@@ -399,7 +444,7 @@ class MixedRegion(RoddedRegion):
 
         return EE, FF
     
-    def _calc_energy_coefficients(self, delta_v, delta_rho, hstar=0.0, RR=0.0):
+    def _calc_energy_coefficients(self, delta_v, delta_rho, hstar, RR):
         """
         Calculate coefficients for the system of equations.
         """
@@ -435,7 +480,16 @@ class MixedRegion(RoddedRegion):
                         
         EEX = (ene_exchange[:, 0] + \
             ene_exchange[:, 1] + ene_exchange[:, 2])
-        EEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
+        
+        swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']  
+        swirl_consts = swirl_consts[self.ht['conv']['type']]    
+        swirl_exchange = swirl_consts* \
+                    (self._density[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
+                     * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                     - self._density[self.ht['conv']['ind']]
+                     * self._enthalpy[self.ht['conv']['ind']])
+        EEX[self.ht['conv']['ind']] += swirl_exchange
+        EEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]] 
         return EEX
     
     def _calc_MEX(self, dz):
@@ -454,7 +508,15 @@ class MixedRegion(RoddedRegion):
                         
         MEX = (mom_exchange[:, 0] + \
             mom_exchange[:, 1] + mom_exchange[:, 2])
-        
+
+        swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']  
+        swirl_consts = swirl_consts[self.ht['conv']['type']]  
+        swirl_exchange = swirl_consts* \
+                    (self._density[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
+                     * self._sc_vel[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                     - self._density[self.ht['conv']['ind']]
+                     * self._sc_vel[self.ht['conv']['ind']])
+        MEX[self.ht['conv']['ind']] += swirl_exchange
         MEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
         return MEX
     
@@ -563,6 +625,28 @@ class MixedRegion(RoddedRegion):
         self._density = self.coolant.density * np.ones(
             self.subchannel.n_sc['coolant']['total'])
         
+    def _calculate_mixing_params(self) -> None:
+        """
+        Calculate mixing parameters for the coolant subchannels
+        """
+        if self.corr['mix'] is not None:
+            interior_idx = self.subchannel.n_sc['coolant']['interior']
+            central_sc_vel = np.sum(self.sc_mfr[:interior_idx] * 
+                                    self._sc_vel[:interior_idx]) / \
+                                    np.sum(self.sc_mfr[:interior_idx])
+
+            mix = self.corr['mix'](self)
+            self.coolant_int_params['eddy'] = mix[0] * central_sc_vel
+                
+            peripheral_sc_vel = np.sum(self.sc_mfr[self.ht['conv']['ind']] * 
+                                    self._sc_vel[[self.ht['conv']['ind']]]) / \
+                                    np.sum(self.sc_mfr[self.ht['conv']['ind']])
+                                    
+            swirl_vel = mix[1] * peripheral_sc_vel
+            
+            self.coolant_int_params['swirl'][1] = swirl_vel
+            self.coolant_int_params['swirl'][2] = swirl_vel
+                
     @property
     def pressure_drop(self):
         return self._pressure_drop
@@ -573,18 +657,6 @@ class MixedRegion(RoddedRegion):
         # self.ht_consts = const
         self.ht = {}
         self.ht['old'] = const
-        self.ht['inv_q_denom'] = (self.int_flow_rate
-                                  * self.params['area']
-                                  / self.bundle_params['area'])
-        self.ht['inv_q_denom'] = \
-            self.ht['inv_q_denom'][
-                self.subchannel.type[
-                    :self.subchannel.n_sc['coolant']['total']]]
-        self.ht['inv_q_denom'] = 1 / self.ht['inv_q_denom']
-        self.ht['swirl'] = (self.d['pin-wall']
-                            * self.bundle_params['area']
-                            / self.params['area']
-                            / self.int_flow_rate)
         self.ht['cond'] = _setup_conduction_constants(self, const)
         self.ht['conv'] = _setup_convection_constants(self, const)
         
@@ -650,3 +722,11 @@ class MixedRegion(RoddedRegion):
                 + b * (T2**2 - T1**2)
                 + c * (T2**3 - T1**3)
                 + d * (T2**(-1) - T1**(-1)))
+        
+    @property
+    def sc_mfr(self):
+        """Return mass flow rate in each subchannel"""
+        mfr = self._density * self._sc_vel * \
+            self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
+
+        return mfr

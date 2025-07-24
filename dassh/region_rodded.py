@@ -879,6 +879,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         #     self.coolant_int_params['ff'] = self.corr['ff'](self)
                     
         # Mixing params - these come dimensionless, need to adjust
+        self._calculate_mixing_params()
+        
+        
+    def _calculate_mixing_params(self) -> None:
+        """
+        Calculate mixing parameters for the coolant subchannels
+        """
         if self.corr['mix'] is not None:
             mix = self.corr['mix'](self)            
             self.coolant_int_params['eddy'] = \
