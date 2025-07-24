@@ -279,7 +279,7 @@ class MixedRegion(RoddedRegion):
         #### It is not necessary because we calculate the pressure drop
         #### in the _solve_system method. We keep it fttb because it is called
         #### in the assembly object.
-        return self._pressure_drop
+        return self._pressure_drop 
         
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION METHODS
@@ -342,14 +342,44 @@ class MixedRegion(RoddedRegion):
              (_gg*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
              /self.params['de'][self.subchannel.type[:nn]])
         
-        energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX    
+        energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX 
+        
+        qwi = self._wall_convection()
+        energy_b[self.ht['conv']['ind']] += \
+                qwi * dz / self.params['area'][self.subchannel.type[:nn]]
         momentum_b = GG + MEX 
-      #  print(np.sum(GG), ',')
+
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
         bb[0:2*nn:2] = momentum_b
-        #bb[-1] = 0
+
         return bb
+
+    def _wall_convection(self):
+        # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
+        # Heat transfer coefficient
+        htc_coeff = self.coolant_int_params['sc_htc'][self.ht['conv']['ind']]
+
+        # Low flow case: use SE2ANL model
+        if self._conv_approx:
+            # Resistance between coolant and duct MW
+            # self.duct.update(self.avg_duct_mw_temp[0])
+            self._update_duct(self.avg_duct_mw_temp[0])
+            # R1 = 1 / h; R2 = dw / 2 / k (half wall thickness over k)
+            # R units: m2K / W; heat transfer area included in const
+            R1 = 1 / htc_coeff  # R1 = 1 / h
+            R2 = 0.5 * self.d['wall'][0] / self.duct.thermal_conductivity
+            dT_conv_over_R = \
+                ((self.temp['duct_mw'][0, self.ht['conv']['adj']]
+                  - self.temp['coolant_int'][self.ht['conv']['ind']])
+                 / (R1 + R2))
+        else:
+            dT_conv_over_R = \
+                htc_coeff * (self.temp['duct_surf'][0, 0, self.ht['conv']['adj']]
+                       - self.temp['coolant_int'][self.ht['conv']['ind']])
+
+        return self.ht['conv']['const'] * dT_conv_over_R
+
 
     def _build_matrix(self, dz, delta_v, delta_rho, RR):
         """

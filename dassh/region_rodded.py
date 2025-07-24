@@ -2046,17 +2046,24 @@ def calculate_ht_constants(rr, mixed=False):
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
     if rr.n_pin > 1:
-        ht_consts[1][3] = (rr.L[1][1]
-                           * rr.bundle_params['area']
-                           / rr.int_flow_rate
-                           / rr.params['area'][1])
-        ht_consts[3][1] = ht_consts[1][3]
+        if mixed:
+            ht_consts[1][3] = rr.L[1][1]
+            ht_consts[3][1] = ht_consts[1][3]
+        else:
+            ht_consts[1][3] = (rr.L[1][1]
+                            * rr.bundle_params['area']
+                            / rr.int_flow_rate
+                            / rr.params['area'][1])
+            ht_consts[3][1] = ht_consts[1][3]
 
     # Corner -> wall 1
-    ht_consts[2][4] = (2 * rr.d['wcorner'][0, 1]
-                       * rr.bundle_params['area']
-                       / rr.int_flow_rate
-                       / rr.params['area'][2])
+    if mixed:
+        ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
+    else:
+        ht_consts[2][4] = (2 * rr.d['wcorner'][0, 1]
+                        * rr.bundle_params['area']
+                        / rr.int_flow_rate
+                        / rr.params['area'][2])
     # ht_consts[2][4] = (2 * self.d['wcorner_m'][0]
     #                         * self.bundle_params['area']
     #                         / self.int_flow_rate
