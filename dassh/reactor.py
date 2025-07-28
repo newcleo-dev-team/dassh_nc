@@ -203,6 +203,8 @@ class Reactor(LoggedClass):
         self._options['se2geo'] = inp.data['Setup']['se2geo']
         self._options['param_update_tol'] = \
             inp.data['Setup']['param_update_tol']
+        self._options['mixed_convection_tol'] = \
+            inp.data['Setup']['mixed_convection_tol']
         self._options['include_gravity'] = \
             inp.data['Setup']['include_gravity_head_loss']
         self._options['rad_isotropic'] = \
@@ -402,6 +404,7 @@ class Reactor(LoggedClass):
                 mfrx,
                 se2geo=self._options['se2geo'],
                 param_update_tol=self._options['param_update_tol'],
+                mixed_convection_tol=self._options['mixed_convection_tol'],
                 gravity=self._options['include_gravity'],
                 rad_isotropic=self._options['rad_isotropic'])
 

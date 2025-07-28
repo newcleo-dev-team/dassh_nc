@@ -36,7 +36,8 @@ q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
 module_logger = logging.getLogger('dassh.region_mixed')
 
 
-def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_isotropic=True):
+def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, mixed_convection_tol=1e-5, 
+         gravity=False, rad_isotropic=True):
     """Create RoddedRegion object within DASSH Assembly
 
     Parameters
@@ -92,6 +93,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       inp['shape_factor'],
                       se2geo,
                       update_tol,
+                      mixed_convection_tol,
                       gravity, 
                       rad_isotropic)
 
@@ -144,7 +146,8 @@ class MixedRegion(RoddedRegion):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, gravity=False, rad_isotropic=True):
+                 param_update_tol=0.0, mixed_convection_tol=1e-5, 
+                 gravity=False, rad_isotropic=True):
         """Instantiate MixedRegion object"""
         
         # Instantiate RoddedRegion object
@@ -177,6 +180,7 @@ class MixedRegion(RoddedRegion):
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose = verbose
         self._mixed_convection = mc
+        self._mixed_convection_tol = mixed_convection_tol
         
     def activate(self, previous_reg, t_gap, h_gap, adiabatic):
         """Activate region by averaging coolant temperatures from
@@ -313,7 +317,8 @@ class MixedRegion(RoddedRegion):
         if self._verbose:
             print('---------------------------------------------------------------')
             print('Iter.    Error density       Error velocity      Error pressure')
-        while np.any(np.array([err_rho, err_v, err_P]) > 1e-11) and iter < 10:
+        while (np.any(np.array([err_rho, err_v, err_P]) > self._mixed_convection_tol) 
+               and iter < 15):
 
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
             xx = np.linalg.solve(AA, bb)
