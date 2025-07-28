@@ -901,16 +901,16 @@ class PressureDropTable(LoggedClass, DASSH_Table):
             # Separate out pressure drop due to friction and losses
             # due to spacer grids, if applicable.
             params += ['---', '---', '---']
-            if a.has_rodded:
-                spacer = a.rodded._pressure_drop['spacer_grid']
-                gravity = sum(x._pressure_drop['gravity'] for x in a.region)
-                friction = sum(x._pressure_drop['friction'] for x in a.region)
-                assert a.pressure_drop - spacer - gravity - friction < 1e-6
-                params[-3] = self._ffmt4e.format(friction / 1e6)
-                if spacer > 0.0:
-                    params[-2] = self._ffmt4e.format(spacer / 1e6)
-                if reactor_obj._options['include_gravity']:
-                    params[-1] = self._ffmt4e.format(gravity / 1e6)
+           #if a.has_rodded:
+           #    spacer = a.rodded._pressure_drop['spacer_grid']
+           #    gravity = sum(x._pressure_drop['gravity'] for x in a.region)
+           #    friction = sum(x._pressure_drop['friction'] for x in a.region)
+           #    assert a.pressure_drop - spacer - gravity - friction < 1e-6
+           #    params[-3] = self._ffmt4e.format(friction / 1e6)
+           #    if spacer > 0.0:
+           #        params[-2] = self._ffmt4e.format(spacer / 1e6)
+           #    if reactor_obj._options['include_gravity']:
+           #        params[-1] = self._ffmt4e.format(gravity / 1e6)
 
             # Fill up the row with blanks; replace as applicable
             params += ['' for ri in range(n_reg)]
@@ -928,17 +928,6 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
     """Assembly energy-balance summary table"""
 
     title = "OVERALL ASSEMBLY ENERGY BALANCE" + "\n"
-    notes = """Column heading definitions
-    A - Heat added to coolant through pins or by direct heating (W)
-    B - Heat added to duct wall (W)
-    C - Heat transferred to assembly-interior coolant through duct wall (W)
-    D - Heat transferred to double-duct bypass coolant through duct walls (W)
-    E - Assembly coolant mass flow rate (kg/s)
-    F - Assembly axially averaged heat capacity (J/kg-K)
-    G - Assembly coolant temperature rise (K)
-    SUM - Assembly energy balance: A + C + D - E * F * G (W)
-    ERROR - SUM / (A + B)""" + "\n"
-    # G - Total assembly coolant heat gain through temp. rise: E * D * F (W)
 
     def __init__(self, col_width=11, col0_width=4, sep='  '):
         """Instantiate assembly energy balance summary output table"""
@@ -959,19 +948,46 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
             Contains the assembly data to print
 
         """
+        
+        if any(reg._mixed_convection for xx in r_obj.assemblies for reg in xx.region):
+            mixed_ebal = True
+        else:
+            mixed_ebal = False
+        self.notes = """Column heading definitions
+        A - Heat added to coolant through pins or by direct heating (W)
+        B - Heat added to duct wall (W)
+        C - Heat transferred to assembly-interior coolant through duct wall (W)
+        D - Heat transferred to double-duct bypass coolant through duct walls (W)
+        E - Assembly coolant mass flow rate (kg/s)"""
+        
+        if mixed_ebal:
+            self.notes += """
+        F - Assembly coolant enthalpy rise (W)
+        G - Assembly coolant temperature rise (K)
+        SUM - Assembly energy balance: A + C + D - F (W)
+        ERROR - SUM / (A + B)""" + "\n"
+        else:
+            self.notes += """
+        F - Assembly axially averaged heat capacity (J/kg-K)
+        G - Assembly coolant temperature rise (K)
+        SUM - Assembly energy balance: A + C + D - E * F * G (W)
+        ERROR - SUM / (A + B)""" + "\n"
+        
         self.add_row('Asm.', ['A', 'B', 'C', 'D', 'E', 'F', 'G',
                               'SUM', 'ERROR'])
         self.add_horizontal_line()
         ebal = np.zeros((len(r_obj.assemblies), 9))
         for i in range(len(r_obj.assemblies)):
             asm = r_obj.assemblies[i]
-            ebal[i, :7] = self._calc_asm_energy_balance(asm, r_obj)
+            ebal[i, :7] = self._calc_asm_energy_balance(asm, r_obj, mixed_ebal)
 
         # Use numpy for the calculations based on the preceding data;
         # calculated energy from temp rise and the sum (ebal[:, 7])
-        e_temp_rise = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
-        ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - e_temp_rise
-
+        if mixed_ebal:
+            enthalpy_rise = ebal[:, 5]
+        else:
+            enthalpy_rise = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
+        ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - enthalpy_rise
         # Error
         for i in range(len(ebal)):
             total_power = ebal[i, 0] + ebal[i, 1]
@@ -984,7 +1000,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         gap_ebal = self._calc_gap_energy_balance(r_obj)
 
         # Core energy balance
-        core_ebal = self._calc_core_energy_balance(ebal, gap_ebal, r_obj)
+        core_ebal = self._calc_core_energy_balance(ebal, gap_ebal, r_obj, mixed_ebal)
 
         # Now add rows to the table
         if r_obj._options['ebal']:
@@ -1009,7 +1025,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
             self.add_horizontal_line()
         self.add_row('CORE', core_ebal)
 
-    def _calc_asm_energy_balance(self, asm, r_obj):
+    def _calc_asm_energy_balance(self, asm, r_obj, mixed_ebal=False):
         """Get energy balance table entries for an assembly"""
         ebal_asm = np.zeros(7)
         # Energy from direct heating
@@ -1030,9 +1046,11 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                
-                ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
-                    (asm.avg_coolant_temp - r_obj.inlet_temp)
+                if mixed_ebal:
+                    ebal_asm[5] = reg.ebal['mcpdT_i']
+                else:
+                    ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
+                        (asm.avg_coolant_temp - r_obj.inlet_temp)
         # Assembly mass flow rate
         ebal_asm[4] = asm.flow_rate
         # Average Cp
@@ -1054,7 +1072,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
             gap_ebal[8] = gap_ebal[7] / gap_ebal[3]
         return gap_ebal
 
-    def _calc_core_energy_balance(self, asm_ebal, gap_ebal, r_obj):
+    def _calc_core_energy_balance(self, asm_ebal, gap_ebal, r_obj, mixed_ebal=False):
         """Calculate overall energy balance on core"""
         core_tot = np.zeros(9)
         core_tot[0] = np.sum(asm_ebal[:, 0])
@@ -1065,8 +1083,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         numerator = np.sum(asm_ebal[:, 4] * asm_ebal[:, 5])
         denominator = np.sum(asm_ebal[:, 4])
         if r_obj.core.model == 'flow':
-            numerator += gap_ebal[4] * gap_ebal[5]
-            denominator += gap_ebal[4]
+            numerator = gap_ebal[4] * gap_ebal[5]
+            denominator = gap_ebal[4]
         core_tot[5] = numerator / denominator
 
         # Flow rate- and axial-average temperature change
@@ -1078,15 +1096,16 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         core_tot[6] = numerator / denominator
 
         # Calculate total energy change due to temp rise
-        q_dt_tot = np.sum(asm_ebal[:, 4] * asm_ebal[:, 5] * asm_ebal[:, 6])
+        q_dt_tot = asm_ebal[:, 5]
         if r_obj.core.model == 'flow':
             q_dt_tot += gap_ebal[4] * gap_ebal[5] * gap_ebal[6]
-
-        sum1 = (core_tot[0] + core_tot[1]
-                - core_tot[4] * core_tot[5] * core_tot[6])
-        # sum2 = (core_tot[0] + core_tot[1] - q_dt_tot)
-        # print(sum1, sum2, sum1 - sum2)
-        core_tot[7] = sum1
+        if mixed_ebal:
+            sum2 = np.sum(core_tot[0] + core_tot[1] - q_dt_tot)
+            core_tot[7] = sum2
+        else:
+            sum1 = (core_tot[0] + core_tot[1]
+            - core_tot[4] * core_tot[5] * core_tot[6])
+            core_tot[7] = sum1
         total_power = core_tot[0] + core_tot[1]
         if total_power == 0.0:
             core_tot[8] = np.nan

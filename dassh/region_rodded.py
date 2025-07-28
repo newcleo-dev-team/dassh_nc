@@ -84,6 +84,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       inp['clad_thickness'],
                       inp['duct_ftf'],
                       inp['mixed_convection'],
+                      inp['verbose'],
                       fr,
                       mat['coolant'],
                       mat['duct'],
@@ -234,7 +235,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     """
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
-                 wire_diam, clad_thickness, duct_ftf, mc, flow_rate,
+                 wire_diam, clad_thickness, duct_ftf, mc, ver, flow_rate,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
@@ -245,6 +246,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
         # Flag for non-isotropic coolant properties (radially)
         self._rad_isotropic = rad_isotropic
+        # Flag for mixed convection (used in tables)
+        self._mixed_convection = mc
         # Disable single-pin assemblies for now; maybe revisit later
         if n_ring == 1 or pin_pitch == 0.0:
             self.log('error', 'Single-pin assemblies not supported')
@@ -1173,7 +1176,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         p_duct = np.zeros(self.temp['duct_mw'].size)
         self._update_coolant_int_params(self.avg_coolant_int_temp,
                                         use_mat_tracker=False)
-        print('quiiiii', self.sc_properties['density'])
         if self.n_bypass > 0:
             self._update_coolant_byp_params(self.avg_coolant_byp_temp)
         self._calc_duct_temp(p_duct, t_gap, h_gap, adiabatic)

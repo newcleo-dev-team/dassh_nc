@@ -75,6 +75,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       inp['clad_thickness'],
                       inp['duct_ftf'],
                       inp['mixed_convection'],
+                      inp['verbose'],
                       fr,
                       mat['coolant'],
                       mat['duct'],
@@ -138,24 +139,23 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
 
 class MixedRegion(RoddedRegion):
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
-                 wire_diam, clad_thickness, duct_ftf, flow_rate,
+                 wire_diam, clad_thickness, duct_ftf, mc, verbose, flow_rate,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, gravity=False, rad_isotropic=True,
-                 solve_enthalpy=False):
+                 param_update_tol=0.0, gravity=False, rad_isotropic=True):
         """Instantiate MixedRegion object"""
         
         # Instantiate RoddedRegion object
         RoddedRegion.__init__(self, name, n_ring, pin_pitch, pin_diam,
                               wire_pitch, wire_diam, clad_thickness,
-                              duct_ftf, flow_rate, coolant_mat, duct_mat,
+                              duct_ftf, flow_rate, mc, verbose, coolant_mat, duct_mat,
                               htc_params_duct, corr_friction,
                               corr_flowsplit, corr_mixing, corr_nusselt,
                               corr_shapefactor, spacer_grid, byp_ff,
                               byp_k, wwdir, sf, se2, param_update_tol,
-                              gravity, rad_isotropic, solve_enthalpy)
+                              gravity, rad_isotropic)
                  
 
         # Variables of interest are:
@@ -174,10 +174,9 @@ class MixedRegion(RoddedRegion):
         self._delta_P = 1e3
         self._delta_v = 1*np.ones(self.subchannel.n_sc['coolant']['total'])
         self._delta_rho = 100*np.ones(self.subchannel.n_sc['coolant']['total'])
-        #self._delta_h = 150*np.ones(self.subchannel.n_sc['coolant']['total'])
-       #self._delta_v = np.zeros(self.subchannel.n_sc['coolant']['total'])
-       #self._delta_rho = np.zeros(self.subchannel.n_sc['coolant']['total'])
-       #self._delta_h = np.zeros(self.subchannel.n_sc['coolant']['total'])
+        # Flag to indicate whether to track iteration convergence or not 
+        self._verbose = verbose
+        self._mixed_convection = mc
         
     def activate(self, previous_reg, t_gap, h_gap, adiabatic):
         """Activate region by averaging coolant temperatures from
@@ -260,7 +259,7 @@ class MixedRegion(RoddedRegion):
 
         self._enthalpy += self._delta_h
         self.temp['coolant_int'] = self._temp_from_enthalpy() 
-        print(np.sum(self.sc_mfr), 'kg/s')
+
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
         # Bypass coolant temperatures
@@ -310,9 +309,11 @@ class MixedRegion(RoddedRegion):
         RR = self._calc_RR(delta_rho0)  
         
         iter = 0
-        errors = np.array([1, 1, 1])  # Initialize residuals
-        print('###########################')
-        while np.any(errors > 1e-11) or iter < 10:
+        err_rho, err_v, err_P = 1, 1, 1  # Initialize residuals
+        if self._verbose:
+            print('---------------------------------------------------------------')
+            print('Iter.    Error density       Error velocity      Error pressure')
+        while np.any(np.array([err_rho, err_v, err_P]) > 1e-11) and iter < 10:
 
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
             xx = np.linalg.solve(AA, bb)
@@ -326,11 +327,12 @@ class MixedRegion(RoddedRegion):
            # res_v = np.sum(residuals[1:2*self.subchannel.n_sc['coolant']['total']:2])
            # res_P = np.sum(residuals[-1])
             
-            res_rho = np.max(np.abs(delta_rho - delta_rho0))
-            res_v = np.max(np.abs(delta_v - delta_v0))
-            res_P = np.max(np.abs(delta_P - delta_P0)) 
-            errors = np.array([res_rho, res_v, res_P])
-            print('Errors:', errors)
+            err_rho = np.max(np.abs(delta_rho - delta_rho0))
+            err_v = np.max(np.abs(delta_v - delta_v0))
+            err_P = np.max(np.abs(delta_P - delta_P0)) 
+            
+            if self._verbose:
+                print(f'{iter+1}        {err_rho:.6e}        {err_v:.6e}        {err_P:.6e}')
             delta_v0 =    delta_v        #0.7*delta_v + 0.3*delta_v0
             delta_rho0 =  delta_rho      #0.7*delta_rho + 0.3 * delta_rho0
             delta_P0 =    delta_P        #0.7*delta_P + 0.3 * delta_P0
