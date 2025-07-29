@@ -174,9 +174,9 @@ class MixedRegion(RoddedRegion):
         # In principle we already have self.sc_properties['density'] and 
         # self.coolant_int_params['sc_vel'] so this is not very smart... 
         # We should decide wether to use these or the old ones.
-        self._delta_P = 1e3
-        self._delta_v = 1*np.ones(self.subchannel.n_sc['coolant']['total'])
-        self._delta_rho = 100*np.ones(self.subchannel.n_sc['coolant']['total'])
+        self._delta_P = -1e3
+        self._delta_v = 0.01*np.ones(self.subchannel.n_sc['coolant']['total'])
+        self._delta_rho = -10*np.ones(self.subchannel.n_sc['coolant']['total'])
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose = verbose
         self._mixed_convection = mc
@@ -315,8 +315,8 @@ class MixedRegion(RoddedRegion):
         iter = 0
         err_rho, err_v, err_P = 1, 1, 1  # Initialize residuals
         if self._verbose:
-            print('---------------------------------------------------------------')
-            print('Iter.    Error density       Error velocity      Error pressure')
+            self.log('info', '---------------------------------------------------------------')
+            self.log('info', 'Iter.    Error density       Error velocity      Error pressure')
         while (np.any(np.array([err_rho, err_v, err_P]) > self._mixed_convection_tol) 
                and iter < 15):
 
@@ -337,7 +337,7 @@ class MixedRegion(RoddedRegion):
             err_P = np.max(np.abs(delta_P - delta_P0)) 
             
             if self._verbose:
-                print(f'{iter+1}        {err_rho:.6e}        {err_v:.6e}        {err_P:.6e}')
+                self.log('info', f'{iter+1}        {err_rho:.6e}        {err_v:.6e}        {err_P:.6e}')
             delta_v0 =    delta_v        #0.7*delta_v + 0.3*delta_v0
             delta_rho0 =  delta_rho      #0.7*delta_rho + 0.3 * delta_rho0
             delta_P0 =    delta_P        #0.7*delta_P + 0.3 * delta_P0
