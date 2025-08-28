@@ -153,6 +153,7 @@ class RRData:
     acc_met: Dict[str, Any]
     clone_data: Dict[str, Any]
     non_isotropic: Dict[str, float]
+    enthalpy: Dict[str, Any]
     
 def pytest_configure(config):
     """
@@ -241,7 +242,8 @@ def pytest_configure(config):
         byp_val = file_data["byp_val"],
         acc_met = file_data["acc_met"],
         clone_data = file_data["clone_data"],
-        non_isotropic = file_data["non_isotropic"]
+        non_isotropic = file_data["non_isotropic"],
+        enthalpy = file_data["enthalpy"]
     )
     
 # def pytest_configure(config):
@@ -586,6 +588,32 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True
                               bundle_params['shape_factor'],
                               rad_isotropic=rad_iso)
 
+def make_mixed_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True):
+    return dassh.MixedRegion(name,
+                              bundle_params['num_rings'],
+                              bundle_params['pin_pitch'],
+                              bundle_params['pin_diameter'],
+                              bundle_params['wire_pitch'],
+                              bundle_params['wire_diameter'],
+                              bundle_params['clad_thickness'],
+                              bundle_params['duct_ftf'],
+                              bundle_params['mixed_convection'],
+                              bundle_params['verbose'],
+                              fr,
+                              mat_params['coolant'],
+                              mat_params['duct'],
+                              bundle_params['htc_params_duct'],
+                              bundle_params['corr_friction'],
+                              bundle_params['corr_flowsplit'],
+                              bundle_params['corr_mixing'],
+                              bundle_params['corr_nusselt'],
+                              bundle_params['corr_shapefactor'],
+                              bundle_params['SpacerGrid'],
+                              bundle_params['bypass_gap_flow_fraction'],
+                              bundle_params['bypass_gap_loss_coeff'],
+                              bundle_params['wire_direction'],
+                              bundle_params['shape_factor'],
+                              rad_isotropic=rad_iso)
 
 @pytest.fixture(scope='module')
 def assembly_default_params():
@@ -859,6 +887,15 @@ def simple_ctrl_rr_non_iso(simple_ctrl_params):
     for double-ducted assembly"""
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
+                                    simple_ctrl_params[1], flowrate, rad_iso=False)
+    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
+
+@pytest.fixture
+def simple_ctrl_rr_mixconv(simple_ctrl_params):
+    """DASSH MixeddRegion object: simple hexagonal bundle parameters
+    for double-ducted assembly"""
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
+    rr = make_mixed_region_fixture('simple_ctrl', simple_ctrl_params[0],
                                     simple_ctrl_params[1], flowrate, rad_iso=False)
     return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 

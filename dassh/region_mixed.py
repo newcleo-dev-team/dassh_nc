@@ -255,11 +255,9 @@ class MixedRegion(RoddedRegion):
         """
         # Duct temperatures: calculate with new coolant properties
         self._calc_duct_temp(q['duct'], t_gap, h_gap, adiab) # This is the same as in RoddedRegion (fttb)
-        q_pins, q_cool = q['pins'], q['cool']
         # Solve the system of equations for the SC
         # velocities and densities and bundle pressure drop.
-        
-        self._solve_system(dz, q_pins, q_cool, ebal)
+        self._solve_system(dz, q['pins'], q['cool'], ebal)
 
         self._enthalpy += self._delta_h
         self.temp['coolant_int'] = self._temp_from_enthalpy() 
@@ -696,23 +694,20 @@ class MixedRegion(RoddedRegion):
             Temperature difference (K)
         
         """  
-        dh = self._delta_h
         tref = self.temp['coolant_int'].copy()
-        TT = np.zeros(len(dh))
-        for i in range(len(dh)):
-            toll = 1e-2
+        TT = np.zeros(len(self._delta_h))
+        for i in range(len(self._delta_h)):
+            toll = 1e-3
             err = 1
             iter = 1
-            while (err >= toll) and (iter < 10):
+            while (err >= toll) and (iter < 100):
                 deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
                 self.coolant.update(tref[i])
-                TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
+                TT[i] = tref[i] + (self._delta_h[i] - deltah)/self.coolant.heat_capacity
                 err = np.abs((TT[i]-tref[i]))
                 tref[i] = TT[i] 
                 iter += 1
         return TT 
-    
-        
     
     def _init_static_correlated_params(self, t):
         """Calculate bundle friction factor and flowsplit parameters
