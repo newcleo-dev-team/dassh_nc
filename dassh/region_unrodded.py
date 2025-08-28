@@ -875,6 +875,8 @@ class _RREquivalent(RoddedRegion):
             asm_input['wire_diameter'],
             asm_input['clad_thickness'],
             asm_input['duct_ftf'],
+            asm_input['mixed_convection'],
+            asm_input['verbose'],
             fr,
             mat_dict['coolant'],
             mat_dict['duct'],

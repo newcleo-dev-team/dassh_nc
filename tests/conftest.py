@@ -568,6 +568,8 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True
                               bundle_params['wire_diameter'],
                               bundle_params['clad_thickness'],
                               bundle_params['duct_ftf'],
+                              bundle_params['mixed_convection'],
+                              bundle_params['verbose'],
                               fr,
                               mat_params['coolant'],
                               mat_params['duct'],
@@ -600,7 +602,10 @@ def assembly_default_params():
             'bypass_gap_loss_coeff': None,
             'wire_direction': 'counterclockwise',
             'shape_factor': 1.0,
-            'SpacerGrid': None}
+            'SpacerGrid': None,
+            'mixed_convection': False,
+            'verbose': False
+}
 
 
 @pytest.fixture(scope='module')
@@ -943,6 +948,8 @@ def c_fuel_params(assembly_default_params):
     input['AxialRegion'] = {'rods': {'z_lo': 0.0, 'z_hi': 3.750}}
     input['htc_params_duct'] = [0.025, 0.8, 0.4, 7.0]
     input['wire_direction'] = 'clockwise'
+    input['mixed_convection'] = False
+    input['verbose'] = False
     mat = {'coolant': dassh.Material('sodium'),
            'duct': dassh.Material('ht9')}
     return input, mat

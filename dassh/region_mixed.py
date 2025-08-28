@@ -313,7 +313,7 @@ class MixedRegion(RoddedRegion):
         RR = self._calc_RR(delta_rho0)  
         
         iter = 0
-        err_rho, err_v, err_P = 1, 1, 1  # Initialize residuals
+        err_rho, err_v, err_P = 1, 1, 1  # Initialize errors
         if self._verbose:
             self.log('info', '---------------------------------------------------------------')
             self.log('info', 'Iter.    Error density       Error velocity      Error pressure')

@@ -885,6 +885,14 @@ class PressureDropTable(LoggedClass, DASSH_Table):
             Contains the assembly data to print
 
         """
+        if all(hasattr(reg, '_mixed_convection') for xx in reactor_obj.assemblies for reg in xx.region):
+            if any(reg._mixed_convection for xx in reactor_obj.assemblies for reg in xx.region):
+                mixed_ebal = True
+                
+            else: 
+                mixed_ebal = False
+        else:
+            mixed_ebal = False
         # Process units from input_obj: length
         n_reg = self.n_col - 5
         header = ['Name', 'Loc.', 'Total', 'Friction', 'SpacerGrid', 'Gravity']
@@ -901,16 +909,16 @@ class PressureDropTable(LoggedClass, DASSH_Table):
             # Separate out pressure drop due to friction and losses
             # due to spacer grids, if applicable.
             params += ['---', '---', '---']
-           #if a.has_rodded:
-           #    spacer = a.rodded._pressure_drop['spacer_grid']
-           #    gravity = sum(x._pressure_drop['gravity'] for x in a.region)
-           #    friction = sum(x._pressure_drop['friction'] for x in a.region)
-           #    assert a.pressure_drop - spacer - gravity - friction < 1e-6
-           #    params[-3] = self._ffmt4e.format(friction / 1e6)
-           #    if spacer > 0.0:
-           #        params[-2] = self._ffmt4e.format(spacer / 1e6)
-           #    if reactor_obj._options['include_gravity']:
-           #        params[-1] = self._ffmt4e.format(gravity / 1e6)
+            if a.has_rodded and not(mixed_ebal):
+                spacer = a.rodded._pressure_drop['spacer_grid']
+                gravity = sum(x._pressure_drop['gravity'] for x in a.region)
+                friction = sum(x._pressure_drop['friction'] for x in a.region)
+                assert a.pressure_drop - spacer - gravity - friction < 1e-6
+                params[-3] = self._ffmt4e.format(friction / 1e6)
+                if spacer > 0.0:
+                    params[-2] = self._ffmt4e.format(spacer / 1e6)
+                if reactor_obj._options['include_gravity']:
+                    params[-1] = self._ffmt4e.format(gravity / 1e6)
 
             # Fill up the row with blanks; replace as applicable
             params += ['' for ri in range(n_reg)]
@@ -948,11 +956,14 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
             Contains the assembly data to print
 
         """
-        
-        if any(reg._mixed_convection for xx in r_obj.assemblies for reg in xx.region):
-            mixed_ebal = True
+        if all(hasattr(reg, '_mixed_convection') for xx in r_obj.assemblies for reg in xx.region):
+            if any(reg._mixed_convection for xx in r_obj.assemblies for reg in xx.region):
+                mixed_ebal = True
+            else: 
+                mixed_ebal = False
         else:
             mixed_ebal = False
+            
         self.notes = """Column heading definitions
         A - Heat added to coolant through pins or by direct heating (W)
         B - Heat added to duct wall (W)
