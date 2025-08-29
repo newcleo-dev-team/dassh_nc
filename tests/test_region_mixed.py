@@ -9,9 +9,10 @@ import pytest
 import dassh
 from pytest import rr_data
 
-class TestEnthalpy2Temperature():
+class TestConversions2Temperature():
     """
-    Class to test the Enthalpy to Temperature conversion in the MixedRegion
+    Class to test the enthalpy to temperature  and the density to temperature
+    conversions in the MixedRegion class
     """
     
     def test_calc_delta_h(self, simple_ctrl_rr_mixconv):
@@ -43,6 +44,10 @@ class TestEnthalpy2Temperature():
             pytest.approx(simple_ctrl_rr_mixconv.temp['coolant_int'],
                           abs=rr_data.enthalpy['tol'])
             
-        
-        
-        
+    def test_temp_from_density(self, simple_ctrl_rr_mixconv):
+        """Test the _temp_from_density method of RoddedRegion"""
+        for mat in rr_data.enthalpy['density_values'].keys():
+            simple_ctrl_rr_mixconv.coolant.name = mat
+            print(mat)
+            assert simple_ctrl_rr_mixconv._T_from_rho(rr_data.enthalpy['density_values'][mat]) == \
+                pytest.approx(rr_data.enthalpy['T1'], abs=rr_data.enthalpy['tol'])

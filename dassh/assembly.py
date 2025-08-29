@@ -526,9 +526,17 @@ class Assembly(LoggedClass):
                 self._power_delivered[k] += dz * np.sum(pow_j[k])
 
         # Calculate coolant and duct temperatures, pressure drop
-        self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
-        self.active_region.calculate_pressure_drop(self.z, dz)
-
+        
+        if self.active_region.is_rodded:
+            if not self.active_region._mixed_convection:
+                self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
+                self.active_region.calculate_pressure_drop(self.z, dz)
+            else: 
+                self.active_region.calculate(dz, z, pow_j, t_gap, h_gap, adiabatic, ebal)
+        else:
+            self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
+            self.active_region.calculate_pressure_drop(self.z, dz)
+            
         # Update peak coolant and duct temperatures
         self._update_peak_coolant_temps()
         self._update_peak_duct_temps()

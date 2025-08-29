@@ -25,11 +25,11 @@ DENSITY_COEFF = {
     'bismuth': [10725, 1.22],
     'lbe': [11065, 1.293]
 }
-SODIUM_DENS_COEFF =  [275.32/2503.7, 511.58/(2503.7)**0.5, 1005.9]
+SODIUM_DENS_COEFF =  [275.32, 511.58, 219.0, 2503.7]
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 
-_gg = 9.81  # Gravity acceleration [m/s^2]
+GRAVITY_CONST = 9.81  # Gravity acceleration [m/s^2]
 # Surface of pins in contact with each type of subchannel
 q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
 
@@ -226,7 +226,7 @@ class MixedRegion(RoddedRegion):
     ####################################################################
 
 
-    def calculate(self, dz, q, t_gap, h_gap, adiab=False, ebal=False):
+    def calculate(self, dz, z, q, t_gap, h_gap, adiab=False, ebal=False):
         """Calculate new coolant and duct temperatures and pressure
         drop across axial step
 
@@ -257,7 +257,7 @@ class MixedRegion(RoddedRegion):
         self._calc_duct_temp(q['duct'], t_gap, h_gap, adiab) # This is the same as in RoddedRegion (fttb)
         # Solve the system of equations for the SC
         # velocities and densities and bundle pressure drop.
-        self._solve_system(dz, q['pins'], q['cool'], ebal)
+        self._solve_system(dz, z, q['pins'], q['cool'], ebal)
 
         self._enthalpy += self._delta_h
         self.temp['coolant_int'] = self._temp_from_enthalpy() 
@@ -274,19 +274,12 @@ class MixedRegion(RoddedRegion):
                     self._calc_coolant_byp_temp_stagnant(dz, ebal)
             # Update bypass coolant properties for the duct wall calc
             self._update_coolant_byp_params(self.avg_coolant_byp_temp)
-
-    def calculate_pressure_drop(self, z, dz):
-        #### This is here to override the method in RoddedRegion
-        #### It is not necessary because we calculate the pressure drop
-        #### in the _solve_system method. We keep it fttb because it is called
-        #### in the assembly object.
-        return self._pressure_drop
         
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION METHODS
     ####################################################################
 
-    def _solve_system(self, dz: float, q_pins: np.ndarray, q_cool: np.ndarray, ebal: bool) -> None:
+    def _solve_system(self, dz: float, z: float, q_pins: np.ndarray, q_cool: np.ndarray, ebal: bool) -> None:
         """
         Method to solve the system.
         
@@ -294,6 +287,8 @@ class MixedRegion(RoddedRegion):
         ----------
         dz : float
             Axial step size (m)
+        z : float
+            Axial position (m)
         q_pins : np.ndarray
             Power (W/m) generated in pins
         q_cool : np.ndarray
@@ -307,7 +302,7 @@ class MixedRegion(RoddedRegion):
         
         qq = self._calc_int_sc_power(q_pins, q_cool)
         
-        bb = self._build_vector(qq, dz)
+        bb = self._build_vector(qq, dz, z)
         RR = self._calc_RR(delta_rho0)  
         
         iter = 0
@@ -355,7 +350,7 @@ class MixedRegion(RoddedRegion):
             mcpdT_i = self.sc_mfr * self._delta_h 
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
 
-    def _build_vector(self, qq: np.ndarray, dz: float) -> np.ndarray:
+    def _build_vector(self, qq: np.ndarray, dz: float, z: float) -> np.ndarray:
         """
         Build the known vector for the system of equations.
         
@@ -365,7 +360,9 @@ class MixedRegion(RoddedRegion):
             Power (W/m) added to the coolant 
         dz : float
             Axial step size (m)
-            
+        z : float
+            Axial position (m)
+
         Returns
         -------
         bb : np.ndarray
@@ -377,7 +374,7 @@ class MixedRegion(RoddedRegion):
         MEX = self._calc_MEX(dz)
         EEX = self._calc_EEX(dz)
         GG = -self._density * \
-             (_gg*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
+             (GRAVITY_CONST*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
              /self.params['de'][self.subchannel.type[:nn]])
         
         energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX 
@@ -386,6 +383,10 @@ class MixedRegion(RoddedRegion):
         energy_b[self.ht['conv']['ind']] += \
                 qwi * dz / self.params['area'][self.subchannel.type[self.ht['conv']['ind']]]
         momentum_b = GG + MEX 
+        
+        if 'grid' in self.corr_constants.keys():
+            momentum_b += self.params['area'][self.subchannel.type[:nn]] * \
+                          self.calculate_spacergrid_pressure_drop(z, dz)
 
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
@@ -590,7 +591,7 @@ class MixedRegion(RoddedRegion):
         
         EE = (self._sc_vel + delta_v) * \
             (self._sc_vel + delta_v - vstar) + \
-                _gg*dz/2 + \
+                GRAVITY_CONST*dz/2 + \
             self.coolant_int_params['ff']*dz/16/self.params['de'][self.subchannel.type[:nn]] * \
                 (2*self._sc_vel + delta_v)**2 
                 
@@ -820,8 +821,8 @@ class MixedRegion(RoddedRegion):
             Temperature (K)
         """
         if self.coolant.name == 'sodium':
-            aa, bb, cc = SODIUM_DENS_COEFF
-            return ((-bb+np.sqrt(bb**2 - 4*aa*(rho-cc)))/(2*aa))**2
+            aa, bb, cc, dd = SODIUM_DENS_COEFF
+            return dd*(1 - ((-bb+np.sqrt(bb**2 - 4*aa*(cc-rho)))/(2*aa))**2)
         
         elif self.coolant.name in DENSITY_COEFF.keys():
             a, b = DENSITY_COEFF[self.coolant.name]
@@ -838,7 +839,6 @@ class MixedRegion(RoddedRegion):
             y = np.genfromtxt(path, delimiter=',', skip_header=1)[:,0] # temperatures always in the first column
             x = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx] 
         
-        
             y = y[~np.isnan(x)][::-1]
             x = x[~np.isnan(x)][::-1]
             return np.interp(rho, x, y)
@@ -854,7 +854,6 @@ class MixedRegion(RoddedRegion):
     ############################################################################
     # Following methods and variables are here for the time being, to be removed
     # when the branch on enthalpy will be merged !!!
-    
     
     def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
         """
@@ -873,13 +872,15 @@ class MixedRegion(RoddedRegion):
         numpy.ndarray
             Enthalpy difference (J/kg)
         """
+        # Dictionary to store coefficients of the enthalpy correlations. 
+        # All correlations are in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
         ENTHALPY_COEFF = {
-        'lead': [176.2, -2.4615e-2, 5.147e-6, 1.524e6],
-        'bismuth': [118.2, 2.967e-3, 0.0, -7.183e6],
-        'lbe': [164.8, -1.97e-2, 4.167e-6, 4.56e5],
-        'sodium': [1.6582e3, -4.2395e-1, 1.4847e-4, 2.9926e6],
-        'nak': [971.3376, -0.18465, 1.1443e-4, 0.0],
-        }
+            'lead': [176.2, -2.4615e-2, 5.147e-6, 1.524e6],
+            'bismuth': [118.2, 2.967e-3, 0.0, -7.183e6],
+            'lbe': [164.8, -1.97e-2, 4.167e-6, 4.56e5],
+            'sodium': [1.6582e3, -4.2395e-1, 1.4847e-4, 2.9926e6],
+            'nak': [971.3376, -0.18465, 1.1443e-4, 0.0],
+            }
         a, b, c, d = ENTHALPY_COEFF[self.coolant.name]
         return (a * (T2 - T1) \
                 + b * (T2**2 - T1**2)
