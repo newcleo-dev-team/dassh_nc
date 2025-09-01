@@ -1,6 +1,6 @@
 ########################################################################
 """
-date: 2025-07-09
+date: 2025-07-xx
 author: fpepe
 Methods for mixed convection axial regions; to be used within
 Assembly objects
@@ -298,7 +298,7 @@ class MixedRegion(RoddedRegion):
         """
         delta_v0 = self._delta_v.copy()
         delta_rho0 = self._delta_rho.copy()
-        delta_P0 = copy.copy(self._delta_P)
+        delta_P0 = self._delta_P
         
         qq = self._calc_int_sc_power(q_pins, q_cool)
         
@@ -469,8 +469,11 @@ class MixedRegion(RoddedRegion):
                      * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
                      - self._density[self.ht['conv']['ind']]
                      * self._enthalpy[self.ht['conv']['ind']])
+        print('conduction', np.sum(EEX))
         EEX[self.ht['conv']['ind']] += swirl_exchange
+        print('swirl', np.sum(swirl_exchange))
         EEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]] 
+        print(np.sum(EEX*self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]/dz))
         return EEX
     
     def _calc_MEX(self, dz: float) -> np.ndarray:
@@ -543,7 +546,7 @@ class MixedRegion(RoddedRegion):
         
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, hstar, RR)
-        C_rho, C_v = self._calc_continuity_coefficients(nn, delta_v)
+        C_rho, C_v = self._calc_continuity_coefficients(delta_v)
         
         AA = np.zeros((2*nn + 1, 2*nn + 1))
             
@@ -633,14 +636,12 @@ class MixedRegion(RoddedRegion):
         TT = self._density*(-hstar + self._enthalpy)
         return SS, TT
 
-    def _calc_continuity_coefficients(self, nn: int, delta_v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _calc_continuity_coefficients(self, delta_v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculate coefficients for the continuity equation.
         
         Parameters
         ----------
-        nn : int
-            Number of coolant subchannels
         delta_v : np.ndarray
             Variation of the SC velocities (m/s)
             
@@ -651,7 +652,7 @@ class MixedRegion(RoddedRegion):
         C_v : np.ndarray
             Coefficients for the continuity equation (velocity)
         """
-
+        nn = self.subchannel.n_sc['coolant']['total']
         C_rho = self.params['area'][self.subchannel.type[:nn]] \
                 * (self._sc_vel + delta_v)
         C_v = self.params['area'][self.subchannel.type[:nn]] \

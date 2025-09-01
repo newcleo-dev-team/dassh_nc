@@ -200,7 +200,7 @@
         "dz": 1e-4,
         "linear_cool_power": 683516.71,
         "ff": 0.14341,
-        "vel": 0.05,
+        "vel": [0.01, 0.05],
         "rho": 800.0,
         "density_values": {
             "sodium": 851.559,
@@ -208,7 +208,8 @@
             "lbe": 10159.9,
             "bismuth": 9871.0,
             "nak": 779.256
-        }
+        },
+        "tol_balance": 1e-10
     }
 
 
