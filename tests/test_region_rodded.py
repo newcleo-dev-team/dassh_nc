@@ -1240,16 +1240,30 @@ class TestEnthalpy():
     """
     Class to test the enthalpy calculation in the RoddedRegion
     """
-    
-    def test_calc_delta_h(self, simple_ctrl_rr_ent):
-        """Test the _calc_delta_h method of RoddedRegion"""
+
+    def test_calc_delta_h(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+        """
+        Test the _calc_delta_h method of RoddedRegion
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
         for mat in rr_data.enthalpy['delta_h'].keys():
             simple_ctrl_rr_ent.coolant.name = mat
             assert simple_ctrl_rr_ent._calc_delta_h(rr_data.enthalpy['T1'], rr_data.enthalpy['T2']) == \
                 pytest.approx(rr_data.enthalpy['delta_h'][mat], abs=rr_data.enthalpy['tol'])
 
-    def test_temp_from_enthalpy(self, simple_ctrl_rr_ent):
-        """Test the _temp_from_enthalpy method of RoddedRegion"""
+    def test_temp_from_enthalpy(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+        """
+        Test the _temp_from_enthalpy method of RoddedRegion
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
         simple_ctrl_rr_ent.temp['coolant_int'] = \
             np.array(rr_data.enthalpy['T1'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']))
 
@@ -1260,17 +1274,31 @@ class TestEnthalpy():
                 pytest.approx(rr_data.enthalpy['T2'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']),
                               abs=rr_data.enthalpy['tol'])
 
-    def test_temp_from_enthalpy_zero_deltah(self, simple_ctrl_rr_ent):
-        """Test that the _temp_from_enthalpy method of RoddedRegion with zero deltaH
-        returns zero deltaT"""
+    def test_temp_from_enthalpy_zero_deltah(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+        """
+        Test that the _temp_from_enthalpy method of RoddedRegion with zero deltaH
+        returns zero deltaT
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
         dh = np.zeros(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
         assert simple_ctrl_rr_ent._temp_from_enthalpy(dh) == \
             pytest.approx(simple_ctrl_rr_ent.temp['coolant_int'],
                           abs=rr_data.enthalpy['tol'])
             
-    def test_coolant_int_temp_no_power(self, simple_ctrl_rr_ent):        
-        """Test that the internal coolant temperature calculation
-        with enthalpy and zero power returns no temperature change"""
+    def test_coolant_int_temp_no_power(self, simple_ctrl_rr_ent: dassh.RoddedRegion):        
+        """
+        Test that the internal coolant temperature calculation
+        with enthalpy and zero power returns no temperature change
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
         tmp_asm = simple_ctrl_rr_ent.clone()
 
         qpins = np.zeros(tmp_asm.n_pin)
@@ -1285,9 +1313,16 @@ class TestEnthalpy():
                            rr_data.inlet_temp*np.ones(tmp_asm.subchannel.n_sc['coolant']['total']),
                            atol=rr_data.enthalpy['tol'])
 
-    def test_coolant_int_temp(self, simple_ctrl_rr_ent):
-        """Test that the internal coolant temperature calculation
-        with enthalpy satisfies the energy balance"""
+    def test_coolant_int_temp(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+        """
+        Test that the internal coolant temperature calculation
+        with enthalpy satisfies the energy balance
+
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
         tmp_asm = simple_ctrl_rr_ent.clone()
 
         power = mock_AssemblyPower(simple_ctrl_rr_ent)
@@ -1308,8 +1343,15 @@ class TestEnthalpy():
         print('Power result (W): ' + str(Q))
         assert np.allclose(ans, Q, atol=rr_data.enthalpy['tol'])
         
-    def test_avg_coolant_int_temp(self, simple_ctrl_rr_ent):
-        """Test that the average coolant temperature is calculated correctly"""
+    def test_avg_coolant_int_temp(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+        """
+        Test that the average coolant temperature is calculated correctly
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
         tmp_asm = simple_ctrl_rr_ent.clone()
 
         power = {
