@@ -1252,6 +1252,7 @@ class TestEnthalpy():
         """
         for mat in rr_data.enthalpy['delta_h'].keys():
             simple_ctrl_rr_ent.coolant.name = mat
+            simple_ctrl_rr_ent._enthalpy_coeffs = simple_ctrl_rr_ent._read_enthalpy_coefficients()
             assert simple_ctrl_rr_ent._calc_delta_h(rr_data.enthalpy['T1'], rr_data.enthalpy['T2']) == \
                 pytest.approx(rr_data.enthalpy['delta_h'][mat], abs=rr_data.enthalpy['tol'])
 
@@ -1269,6 +1270,7 @@ class TestEnthalpy():
 
         for mat in rr_data.enthalpy['delta_h'].keys():
             simple_ctrl_rr_ent.coolant.name = mat
+            simple_ctrl_rr_ent._enthalpy_coeffs = simple_ctrl_rr_ent._read_enthalpy_coefficients()
             dh = rr_data.enthalpy['delta_h'][mat] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
             assert simple_ctrl_rr_ent._temp_from_enthalpy(dh) == \
                 pytest.approx(rr_data.enthalpy['T2'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']),

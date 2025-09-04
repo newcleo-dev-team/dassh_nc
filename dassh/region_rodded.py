@@ -35,25 +35,15 @@ from dassh.pin_model import PinModel
 from dassh.material import _MatTracker
 from typing import Union, Dict, List
 from lbh15 import Lead, Bismuth, LBE
+import os
+import csv
 
-
+_ROOT = os.path.dirname(os.path.abspath(__file__))
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
 _sqrt3over3 = np.sqrt(3) / 3
 # Surface of pins in contact with each type of subchannel
 q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
-
-# Dictionary to store coefficients of the enthalpy correlation. 
-# All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
-ENTHALPY_COEFF = {
-    'lead': [176.2, -2.4615e-2, 5.147e-6, 1.524e6],
-    'bismuth': [118.2, 2.967e-3, 0.0, -7.183e6],
-    'lbe': [164.8, -1.97e-2, 4.167e-6, 4.56e5],
-    'sodium': [1.6582e3, -4.2395e-1, 1.4847e-4, 2.9926e6],
-    'nak': [971.3376, -0.18465, 1.1443e-4, 0.0],
-}
-
-
 
 module_logger = logging.getLogger('dassh.region_rodded')
 
@@ -412,7 +402,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 for k in self.coolant.PROPS_NAME}
             if self._ent:
                 self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total'])
-            
+                self._enthalpy_coeffs = self._read_enthalpy_coefficients()
             
     ####################################################################
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
@@ -1420,12 +1410,31 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         numpy.ndarray
             Enthalpy difference (J/kg)
         """
-        a, b, c, d = ENTHALPY_COEFF[self.coolant.name]
-        return (a * (T2 - T1) \
+        a, b, c, d = self._enthalpy_coeffs
+        return (a * (T2 - T1)
                 + b * (T2**2 - T1**2)
                 + c * (T2**3 - T1**3)
                 + d * (T2**(-1) - T1**(-1)))
 
+    def _read_enthalpy_coefficients(self) -> np.ndarray:
+        """
+        Method to read coefficients for the enthalpy rise calculation from a csv file.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of enthalpy coefficients [A, B, C, D] for the coolant
+            
+        Notes
+        -----
+        All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
+        """
+        path = os.path.join(_ROOT, 'data/enthalpy_coefficients.csv')
+        with open(path, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader) 
+        idx = header.index(self.coolant.name)
+        return np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
 
     def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) -> float:
         """
