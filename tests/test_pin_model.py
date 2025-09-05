@@ -517,9 +517,9 @@ def test_verify_general_pin_model(testdir):
     ri_clad = ro_clad - t_clad
     rm_clad = ro_clad - t_clad * 0.5
     a_pin = np.pi * ri_clad**2
-    ans[0] = Tc + pp[0] / htc / 2 / np.pi / ro_clad
-    ans[1] = ans[0] + pp[0] * np.log(ro_clad / rm_clad) / 2 / np.pi / k_clad
-    ans[2] = ans[0] + pp[0] * np.log(ro_clad / ri_clad) / 2 / np.pi / k_clad
+    ans[0] = Tc + pp.item() / htc / 2 / np.pi / ro_clad
+    ans[1] = ans[0] + pp.item() * np.log(ro_clad / rm_clad) / 2 / np.pi / k_clad
+    ans[2] = ans[0] + pp.item() * np.log(ro_clad / ri_clad) / 2 / np.pi / k_clad
     ans[3] = ans[2]
-    ans[4] = ans[3] + pp[0] * ri_clad**2 / a_pin / 4 / k_fuel
+    ans[4] = ans[3] + pp.item() * ri_clad**2 / a_pin / 4 / k_fuel
     assert np.allclose(ans, res[0, 1:])
