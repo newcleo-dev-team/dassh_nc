@@ -39,6 +39,9 @@ import os
 import csv
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
+_DATA_FOLDER = 'data'
+_ENT_COEFF_FOLDER = 'enthalpy_coefficients.csv'
+
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
 _sqrt3over3 = np.sqrt(3) / 3
@@ -217,6 +220,57 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Distances across and around assembly components
     L : list
         Distances between subchannel centroids
+    name : str
+        Assembly name
+    n_ring : int
+        Number of fuel pin rings in the bundle
+    pin_pitch : float
+        Fuel pin center-to-center pin_pitch distance (m)
+    pin_diam : float
+        Outer diameter of the fuel pin cladding (m)
+    wire_pitch : float
+        Wire wrap pitch (m)
+    wire_diam : float
+        Wire wrap diameter (m)
+    clad_thickness : float
+        Cladding thickness (m)
+    duct_ftf : list
+        List of tuples containing the inner and outer duct 
+        flat-to-flat distances for each duct surrounding the bundle
+    n_duct : int
+        Number of ducts surrounding the bundle
+    n_bypass : int
+        Number of bypass surrounding the bundle
+    coolant : DASSH Material object
+        Container for coolant material properties
+    duct : DASSH Material object
+        Container for duct material properties
+    htc_params : dict
+        Heat transfer parameters
+    pin_lattice : PinLattice object
+        Object containing pin lattice attributes
+    subchannel : Subchannel object
+        Object containing subchannel attributes
+    n_pin : int
+        Number of fuel pins in the bundle
+    wire_direction : str
+        Direction of wire wrap swirl ('clockwise' or 'counterclockwise')
+    sc_properties : dict
+        Dictionary of subchannel properties (if radially non-uniform)
+    int_flow_rate : float
+        Coolant flow rate through the bundle (kg/s)
+    coolant_int_params : dict
+        Dictionary of bundle coolant parameters
+    coolant_byp_params : dict
+        Dictionary of bypass coolant parameters
+    corr : dict
+        Dictionary of correlation methods
+    corr_names : dict
+        Dictionary of correlation names
+    corr_constants : dict
+        Dictionary of correlation constants
+    ht : dict
+        Dictionary of heat transfer constants
     bare_params : dict
         Parameters characterizing subchannels w/o wire wrap
     params : dict
@@ -1429,7 +1483,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         -----
         All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
         """
-        path = os.path.join(_ROOT, 'data/enthalpy_coefficients.csv')
+        path = os.path.join(_ROOT, _DATA_FOLDER, _ENT_COEFF_FOLDER)
         with open(path, 'r') as f:
             reader = csv.reader(f)
             header = next(reader) 
