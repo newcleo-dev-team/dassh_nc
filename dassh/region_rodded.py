@@ -32,9 +32,15 @@ from dassh.logged_class import LoggedClass
 from dassh.correlations import check_correlation
 from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
-from dassh.material import _MatTracker, Material
+from dassh.material import _MatTracker
 from typing import Union, Dict, List
+from lbh15 import Lead, Bismuth, LBE
+import os
+import csv
 
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+_DATA_FOLDER = 'data'
+_ENT_COEFF_FILE = 'enthalpy_coefficienthhs.csv'
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -45,7 +51,8 @@ q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
 module_logger = logging.getLogger('dassh.region_rodded')
 
 
-def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_isotropic=True):
+def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, 
+         rad_isotropic=True, solve_enthalpy=False):
     """Create RoddedRegion object within DASSH Assembly
 
     Parameters
@@ -100,7 +107,8 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       se2geo,
                       update_tol,
                       gravity, 
-                      rad_isotropic)
+                      rad_isotropic,
+                      solve_enthalpy)
 
     # Add z lower/upper boundaries
     rr.z = [inp['AxialRegion']['rods']['z_lo'],
@@ -212,6 +220,57 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Distances across and around assembly components
     L : list
         Distances between subchannel centroids
+    name : str
+        Assembly name
+    n_ring : int
+        Number of fuel pin rings in the bundle
+    pin_pitch : float
+        Fuel pin center-to-center pin_pitch distance (m)
+    pin_diam : float
+        Outer diameter of the fuel pin cladding (m)
+    wire_pitch : float
+        Wire wrap pitch (m)
+    wire_diam : float
+        Wire wrap diameter (m)
+    clad_thickness : float
+        Cladding thickness (m)
+    duct_ftf : list
+        List of tuples containing the inner and outer duct 
+        flat-to-flat distances for each duct surrounding the bundle
+    n_duct : int
+        Number of ducts surrounding the bundle
+    n_bypass : int
+        Number of bypass surrounding the bundle
+    coolant : DASSH Material object
+        Container for coolant material properties
+    duct : DASSH Material object
+        Container for duct material properties
+    htc_params : dict
+        Heat transfer parameters
+    pin_lattice : PinLattice object
+        Object containing pin lattice attributes
+    subchannel : Subchannel object
+        Object containing subchannel attributes
+    n_pin : int
+        Number of fuel pins in the bundle
+    wire_direction : str
+        Direction of wire wrap swirl ('clockwise' or 'counterclockwise')
+    sc_properties : dict
+        Dictionary of subchannel properties (if radially non-uniform)
+    int_flow_rate : float
+        Coolant flow rate through the bundle (kg/s)
+    coolant_int_params : dict
+        Dictionary of bundle coolant parameters
+    coolant_byp_params : dict
+        Dictionary of bypass coolant parameters
+    corr : dict
+        Dictionary of correlation methods
+    corr_names : dict
+        Dictionary of correlation names
+    corr_constants : dict
+        Dictionary of correlation constants
+    ht : dict
+        Dictionary of heat transfer constants
     bare_params : dict
         Parameters characterizing subchannels w/o wire wrap
     params : dict
@@ -238,12 +297,20 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, gravity=False, rad_isotropic=True):
+                 param_update_tol=0.0, gravity=False, rad_isotropic=True,
+                 solve_enthalpy=False):
         """Instantiate RoddedRegion object"""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
         # Flag for non-isotropic coolant properties (radially)
         self._rad_isotropic = rad_isotropic
+        # Flag for enthalpy calculation
+        self._ent = solve_enthalpy
+        # Check that the energy equation is solved for enthalpy only in case of 
+        # radially non-uniform properties
+        if self._rad_isotropic and self._ent:
+            self.log('error', 'Enthalpy calculation is not supported for '
+                              'radially uniform properties')
         # Disable single-pin assemblies for now; maybe revisit later
         if n_ring == 1 or pin_pitch == 0.0:
             self.log('error', 'Single-pin assemblies not supported')
@@ -387,6 +454,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if not self._rad_isotropic:
             self.sc_properties = {k: np.zeros(self.subchannel.n_sc['coolant']['total']) \
                 for k in self.coolant.PROPS_NAME}
+            if self._ent:
+                self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total'])
+                self._enthalpy_coeffs = self._read_enthalpy_coefficients()
+            
     ####################################################################
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
         """
@@ -1115,8 +1186,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # Interior coolant temperatures: calculate using coolant
         # properties from previous axial step
-        self.temp['coolant_int'] += \
-            self._calc_coolant_int_temp(dz, q['pins'], q['cool'], ebal)
+        self._calc_coolant_int_temp(dz, q['pins'], q['cool'], ebal)
 
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
@@ -1189,11 +1259,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         Returns
         -------
-        numpy.ndarray
-            Vector (length = # coolant subchannels) of temperatures
-            (K) at the next axial level
+        None
 
-        """
+        """        
         # HEAT FROM ADJACENT FUEL PINS
         # denom puts q in the same units as the next dT steps
         q = self._calc_int_sc_power(q_pins, q_cool)
@@ -1203,7 +1271,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         cond_temp_difference = self._get_cond_temp_difference()
         dT +=  (cond_temp_difference[:, 0] + \
             cond_temp_difference[:, 1] + cond_temp_difference[:, 2]) 
-            
+        
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
         if not self._rad_isotropic:
@@ -1232,14 +1300,18 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         # DIVIDE THROUGH BY MCP
         mCp = 1 / self.coolant_int_params['fs']
-        if not self._rad_isotropic:
+        if self._rad_isotropic:
+            mCp = mCp[self.subchannel.type[
+                :self.subchannel.n_sc['coolant']['total']]] / self.coolant.heat_capacity 
+        elif not self._ent:
             mCp = mCp[self.subchannel.type[
             :self.subchannel.n_sc['coolant']['total']]]\
             / (self.sc_properties['heat_capacity'])
-        else:
+        else: 
             mCp = mCp[self.subchannel.type[
-                :self.subchannel.n_sc['coolant']['total']]]/self.coolant.heat_capacity 
+                :self.subchannel.n_sc['coolant']['total']]]
         dT *= mCp
+        
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
         # Swirl flow from adjacent subchannel; =0 for interior sc
@@ -1252,34 +1324,48 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # - clockwise: use 25 as the swirl adjacent sc
         # - counterclockwise: use 27 as the swirl adjacent sc
         swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']]
+        swirl_consts = swirl_consts[self.ht['conv']['type']] 
         if not self._rad_isotropic:
-            swirl_exchange = swirl_consts* \
-                (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
-                 * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                 * self.temp['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                 - self.sc_properties['density'][self.ht['conv']['ind']]
-                 * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
-                 * self.temp['coolant_int'][self.ht['conv']['ind']]) \
-                 / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]    
+            if self._ent:
+                swirl_exchange = swirl_consts* \
+                    (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
+                     * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                     - self.sc_properties['density'][self.ht['conv']['ind']]
+                     * self._enthalpy[self.ht['conv']['ind']])   
+            else:
+                swirl_exchange = swirl_consts* \
+                    (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                    * self.temp['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                    * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                    - self.sc_properties['density'][self.ht['conv']['ind']]
+                    * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
+                    * self.temp['coolant_int'][self.ht['conv']['ind']]) \
+                    / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
                  
         else:
             swirl_consts *= self.coolant.density 
             swirl_exchange = (swirl_consts*
                 (self.temp['coolant_int'][self.subchannel.sc_adj[
-                  self.ht['conv']['ind'], self._adj_sw]]
-                  - self.temp['coolant_int'][self.ht['conv']['ind']]))
+                 self.ht['conv']['ind'], self._adj_sw]]
+                 - self.temp['coolant_int'][self.ht['conv']['ind']]))
             
         dT[self.ht['conv']['ind']] += swirl_exchange
 
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
-            if not self._rad_isotropic:
+            if not self._rad_isotropic and self._ent:
+                mcpdT_i = self.sc_mfr*dT*dz
+            elif not self._rad_isotropic and not self._ent:
                 mcpdT_i = self.sc_mfr*self.sc_properties['heat_capacity']*dT*dz
             else:
                 mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT * dz
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
-        return dT * dz
+        if not self._rad_isotropic and self._ent:
+            self._enthalpy += dT * dz
+            self.temp['coolant_int'] = self._temp_from_enthalpy(dT*dz)
+        else:
+            self.temp['coolant_int'] += dT * dz
+        
     
     def _get_cond_temp_difference(self) -> np.ndarray:
         """
@@ -1310,20 +1396,101 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         rho_ij = self._calc_mass_flow_average_property('density', i, j)
                         cp_ij = self._calc_mass_flow_average_property('heat_capacity', i, j)
                         k_ij = self._calc_mass_flow_average_property('thermal_conductivity', i, j)
-                        keff_ij = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij       
-                        cond_temp_difference[i][k] = keff_ij * (self.ht['cond']['const'][i][k]
-                            * (self.temp['coolant_int'][j]
-                            - self.temp['coolant_int'][i]))
+                        keff_ij = self.coolant_int_params['eddy'] * rho_ij * cp_ij + self._sf * k_ij
+                        if self._ent:
+                            cond_temp_difference[i][k] = keff_ij / cp_ij * (self.ht['cond']['const'][i][k]
+                            * (self._enthalpy[j]
+                            - self._enthalpy[i]))
+                        else:     
+                            cond_temp_difference[i][k] = keff_ij * (self.ht['cond']['const'][i][k]
+                                * (self.temp['coolant_int'][j]
+                                - self.temp['coolant_int'][i]))
+                        
         else:
             keff = (self.coolant_int_params['eddy']
                     * self.coolant.density
                     * self.coolant.heat_capacity
-                    + self._sf * self.coolant.thermal_conductivity)
+                    + self._sf * self.coolant.thermal_conductivity) 
+                    
             cond_temp_difference = keff * (self.ht['cond']['const']
                 * (self.temp['coolant_int'][self.ht['cond']['adj']]
                 - self.temp['coolant_int'][:, np.newaxis]))
         return cond_temp_difference
     
+    def _temp_from_enthalpy(self, dh: np.ndarray) -> np.ndarray:
+        """
+        Convert enthalpy difference to temperature difference
+        
+        Parameters
+        ----------
+        dh : float
+            Enthalpy difference (J/kg)
+        
+        Returns
+        -------
+        float
+            Temperature difference (K)
+        
+        """  
+        tref = self.temp['coolant_int'].copy()
+        TT = np.zeros(len(dh))
+        for i in range(len(dh)):
+            toll = 1e-4
+            err = 1
+            iter = 1
+            while (err >= toll) and (iter < 100):
+                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
+                self.coolant.update(tref[i])
+                TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
+                err = np.abs((TT[i]-tref[i]))
+                tref[i] = TT[i] 
+                iter += 1
+        return TT 
+    
+    def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
+        """
+        Calculate the enthalpy difference between two temperatures
+        using the enthalpy coefficients for the coolant
+        
+        Parameters
+        ----------
+        T1 : numpy.ndarray
+            Initial temperature (K)
+        T2 : numpy.ndarray
+            Final temperature (K)
+
+        Returns
+        -------
+        numpy.ndarray
+            Enthalpy difference (J/kg)
+        """
+        a, b, c, d = self._enthalpy_coeffs
+        return (a * (T2 - T1)
+                + b * (T2**2 - T1**2)
+                + c * (T2**3 - T1**3)
+                + d * (T2**(-1) - T1**(-1)))
+
+    def _read_enthalpy_coefficients(self) -> np.ndarray:
+        """
+        Method to read coefficients for the enthalpy variation calculation from a csv file.
+        All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
+        
+        Returns
+        -------
+        numpy.ndarray
+            Array of enthalpy coefficients [A, B, C, D] for the coolant
+        """
+        path = os.path.join(_ROOT, _DATA_FOLDER, _ENT_COEFF_FILE)
+        try:
+            with open(path, 'r') as f:
+                reader = csv.reader(f)
+                header = next(reader) 
+        except:
+            self.log('error', f"Could not find enthalpy coefficients file {path}.") 
+            
+        idx = header.index(self.coolant.name)
+        return np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
+
     def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) -> float:
         """
         Calculate the mass flow rate weighted average of a property between two subchannels
@@ -2015,7 +2182,7 @@ def calculate_ht_constants(rr):
                          * rr.bundle_params['area']
                          / rr.L[i][j] / rr.int_flow_rate
                          / rr.params['area'][i])
-
+                        
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
     if rr.n_pin > 1:
