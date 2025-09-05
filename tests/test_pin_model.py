@@ -109,7 +109,7 @@ def test_energy_conservation(pin):
 def test_energy_conservation_annular(pin_annular):
     """Test that energy is conserved when power is distributed
     radially in the pellet"""
-    q = np.array([1000.0])  # W
+    q = 1000.0  # W
     dz = 0.025  # m
     q_lin = q / dz  # W/m
     q_dens = q_lin / pin_annular.fuel['area']  # W/m3
@@ -517,9 +517,9 @@ def test_verify_general_pin_model(testdir):
     ri_clad = ro_clad - t_clad
     rm_clad = ro_clad - t_clad * 0.5
     a_pin = np.pi * ri_clad**2
-    ans[0] = Tc + pp / htc / 2 / np.pi / ro_clad
-    ans[1] = ans[0] + pp * np.log(ro_clad / rm_clad) / 2 / np.pi / k_clad
-    ans[2] = ans[0] + pp * np.log(ro_clad / ri_clad) / 2 / np.pi / k_clad
+    ans[0] = Tc + pp.item() / htc / 2 / np.pi / ro_clad
+    ans[1] = ans[0] + pp.item() * np.log(ro_clad / rm_clad) / 2 / np.pi / k_clad
+    ans[2] = ans[0] + pp.item() * np.log(ro_clad / ri_clad) / 2 / np.pi / k_clad
     ans[3] = ans[2]
-    ans[4] = ans[3] + pp * ri_clad**2 / a_pin / 4 / k_fuel
+    ans[4] = ans[3] + pp.item() * ri_clad**2 / a_pin / 4 / k_fuel
     assert np.allclose(ans, res[0, 1:])
