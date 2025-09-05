@@ -573,20 +573,20 @@ class Subchannel(object):
                 idx_missing += 1
             for idx in range(0, len(missing[0])):
                 if missing[0][idx] == 0:  # look upward for value
-                    sc_adj[i, idx + 3] = self._map[row - 1, col]
+                    sc_adj[i, idx + 3] = self._map[row - 1, col].item()
                     sc_adj[self._map[row - 1, col] - 1, idx] = i + 1
                 elif missing[0][idx] == 1:  # look down
-                    sc_adj[i, idx + 3] = self._map[row + 1, col]
+                    sc_adj[i, idx + 3] = self._map[row + 1, col].item()
                     sc_adj[self._map[row + 1, col] - 1, idx] = i + 1
                 else:  # look horizontallyf
                     # Because we're going clockwise, if we're on the
                     # first half of subchannels w/ missing connections
                     # we're on the RIGHT side of the asm
                     if idx_missing < n_missing_total / 2:
-                        sc_adj[i, idx + 3] = self._map[row, col + 1]
+                        sc_adj[i, idx + 3] = self._map[row, col + 1].item()
                         sc_adj[self._map[row, col + 1] - 1, idx] = i + 1
                     else:  # SC on the left side of asm (higher numbers)
-                        sc_adj[i, idx + 3] = self._map[row, col - 1]
+                        sc_adj[i, idx + 3] = self._map[row, col - 1].item()
                         sc_adj[self._map[row, col - 1] - 1, idx] = i + 1
         return sc_adj
 
