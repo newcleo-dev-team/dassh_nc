@@ -11,6 +11,7 @@
     parallel = boolean(default=False)
     n_cpu = integer(min=1, default=None)
     include_gravity_head_loss = boolean(default=False)
+    include_acceleration_pressure = boolean(default=False)
     radially_isotropic_properties = boolean(default=True)
     [[Dump]]
         all = boolean(default=False)
