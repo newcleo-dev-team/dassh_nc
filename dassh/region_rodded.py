@@ -40,7 +40,7 @@ import csv
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 _DATA_FOLDER = 'data'
-_ENT_COEFF_FOLDER = 'enthalpy_coefficients.csv'
+_ENT_COEFF_FILE = 'enthalpy_coefficienthhs.csv'
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -1472,21 +1472,22 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     def _read_enthalpy_coefficients(self) -> np.ndarray:
         """
-        Method to read coefficients for the enthalpy rise calculation from a csv file.
-
+        Method to read coefficients for the enthalpy variation calculation from a csv file.
+        All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
+        
         Returns
         -------
         numpy.ndarray
             Array of enthalpy coefficients [A, B, C, D] for the coolant
-            
-        Notes
-        -----
-        All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
         """
-        path = os.path.join(_ROOT, _DATA_FOLDER, _ENT_COEFF_FOLDER)
-        with open(path, 'r') as f:
-            reader = csv.reader(f)
-            header = next(reader) 
+        path = os.path.join(_ROOT, _DATA_FOLDER, _ENT_COEFF_FILE)
+        try:
+            with open(path, 'r') as f:
+                reader = csv.reader(f)
+                header = next(reader) 
+        except:
+            self.log('error', f"Could not find enthalpy coefficients file {path}.") 
+            
         idx = header.index(self.coolant.name)
         return np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
 
