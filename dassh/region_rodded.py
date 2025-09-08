@@ -1390,7 +1390,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             for i in range(self.subchannel.n_sc['coolant']['total']):
                 for k in range(3):
                     j = self.ht['cond']['adj'][i][k]
-                    if j == 0 and k == 2:
+                    if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] and k == 2:
                         continue
                     else:
                         rho_ij = self._calc_mass_flow_average_property('density', i, j)
