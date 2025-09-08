@@ -40,7 +40,7 @@ import csv
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 _DATA_FOLDER = 'data'
-_ENT_COEFF_FILE = 'enthalpy_coefficienthhs.csv'
+_ENT_COEFF_FILE = 'enthalpy_coefficients.csv'
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -1261,7 +1261,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         -------
         None
 
-        """        
+        """
         # HEAT FROM ADJACENT FUEL PINS
         # denom puts q in the same units as the next dT steps
         q = self._calc_int_sc_power(q_pins, q_cool)
@@ -1299,17 +1299,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.ht['conv']['const'] * dT_conv_over_R
 
         # DIVIDE THROUGH BY MCP
-        mCp = 1 / self.coolant_int_params['fs']
-        if self._rad_isotropic:
-            mCp = mCp[self.subchannel.type[
-                :self.subchannel.n_sc['coolant']['total']]] / self.coolant.heat_capacity 
-        elif not self._ent:
-            mCp = mCp[self.subchannel.type[
-            :self.subchannel.n_sc['coolant']['total']]]\
-            / (self.sc_properties['heat_capacity'])
-        else: 
-            mCp = mCp[self.subchannel.type[
+        mCp = 1 / self.coolant_int_params['fs'][self.subchannel.type[
                 :self.subchannel.n_sc['coolant']['total']]]
+        if self._rad_isotropic:
+            mCp = mCp / self.coolant.heat_capacity 
+        elif not self._ent:
+            mCp = mCp / (self.sc_properties['heat_capacity'])
+
         dT *= mCp
         
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
