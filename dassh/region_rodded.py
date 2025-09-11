@@ -1265,11 +1265,11 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # HEAT FROM ADJACENT FUEL PINS
         # denom puts q in the same units as the next dT steps
         q = self._calc_int_sc_power(q_pins, q_cool)
-        dT = q * self.ht['inv_q_denom']
+        dT_or_dh = q * self.ht['inv_q_denom']
         # CONDUCTION BETWEEN COOLANT SUBCHANNELS
         # Effective thermal conductivity
         cond_temp_difference = self._get_cond_temp_difference()
-        dT +=  (cond_temp_difference[:, 0] + \
+        dT_or_dh +=  (cond_temp_difference[:, 0] + \
             cond_temp_difference[:, 1] + cond_temp_difference[:, 2]) 
         
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
@@ -1295,7 +1295,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             dT_conv_over_R = \
                 htc_coeff * (self.temp['duct_surf'][0, 0, self.ht['conv']['adj']]
                        - self.temp['coolant_int'][self.ht['conv']['ind']])
-        dT[self.ht['conv']['ind']] += \
+        dT_or_dh[self.ht['conv']['ind']] += \
             self.ht['conv']['const'] * dT_conv_over_R
 
         # DIVIDE THROUGH BY MCP
@@ -1304,9 +1304,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if self._rad_isotropic:
             mCp = mCp / self.coolant.heat_capacity 
         elif not self._ent:
-            mCp = mCp / (self.sc_properties['heat_capacity'])
+            mCp = mCp / self.sc_properties['heat_capacity']
 
-        dT *= mCp
+        dT_or_dh *= mCp
         
         # SWIRL FLOW AROUND EDGES (no div by mCp so it comes after)
         # Can just use the convection indices again bc they're the same
@@ -1320,49 +1320,47 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # - clockwise: use 25 as the swirl adjacent sc
         # - counterclockwise: use 27 as the swirl adjacent sc
         swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']] 
-        if not self._rad_isotropic:
-            if self._ent:
-                swirl_exchange = swirl_consts* \
-                    (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
-                     * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                     - self.sc_properties['density'][self.ht['conv']['ind']]
-                     * self._enthalpy[self.ht['conv']['ind']])   
-            else:
-                swirl_exchange = swirl_consts* \
-                    (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                    * self.temp['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                    * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                    - self.sc_properties['density'][self.ht['conv']['ind']]
-                    * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
-                    * self.temp['coolant_int'][self.ht['conv']['ind']]) \
-                    / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
-                 
-        else:
+        swirl_consts = swirl_consts[self.ht['conv']['type']]
+        if self._rad_isotropic:
             swirl_consts *= self.coolant.density 
             swirl_exchange = (swirl_consts*
                 (self.temp['coolant_int'][self.subchannel.sc_adj[
                  self.ht['conv']['ind'], self._adj_sw]]
                  - self.temp['coolant_int'][self.ht['conv']['ind']]))
+        elif self._ent:
+            swirl_exchange = swirl_consts* \
+                (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
+                    * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                    - self.sc_properties['density'][self.ht['conv']['ind']]
+                    * self._enthalpy[self.ht['conv']['ind']])   
+        else:
+            swirl_exchange = swirl_consts* \
+                (self.sc_properties['density'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                * self.temp['coolant_int'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                - self.sc_properties['density'][self.ht['conv']['ind']]
+                * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
+                * self.temp['coolant_int'][self.ht['conv']['ind']]) \
+                / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]            
             
-        dT[self.ht['conv']['ind']] += swirl_exchange
+        dT_or_dh[self.ht['conv']['ind']] += swirl_exchange
 
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
-            if not self._rad_isotropic and self._ent:
-                mcpdT_i = self.sc_mfr*dT*dz
-            elif not self._rad_isotropic and not self._ent:
-                mcpdT_i = self.sc_mfr*self.sc_properties['heat_capacity']*dT*dz
+            if self._ent:
+                mcpdT_i = self.sc_mfr * dT_or_dh * dz
+            elif self._rad_isotropic:
+                mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT_or_dh * dz
             else:
-                mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT * dz
+                mcpdT_i = self.sc_mfr * self.sc_properties['heat_capacity'] * dT_or_dh * dz
+            
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
-        if not self._rad_isotropic and self._ent:
-            self._enthalpy += dT * dz
-            self.temp['coolant_int'] = self._temp_from_enthalpy(dT*dz)
+        if self._ent:
+            self._enthalpy += dT_or_dh * dz
+            self.temp['coolant_int'] = self._temp_from_enthalpy(dT_or_dh*dz)
         else:
-            self.temp['coolant_int'] += dT * dz
-        
-    
+            self.temp['coolant_int'] += dT_or_dh * dz
+
     def _get_cond_temp_difference(self) -> np.ndarray:
         """
         Calculate the effective conduction term
