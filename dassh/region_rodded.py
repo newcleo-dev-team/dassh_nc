@@ -1355,11 +1355,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 mcpdT_i = self.sc_mfr * self.sc_properties['heat_capacity'] * dT_or_dh * dz
             
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
+        
+        delta_T_or_h = dT_or_dh * dz
         if self._ent:
-            self._enthalpy += dT_or_dh * dz
-            self.temp['coolant_int'] = self._temp_from_enthalpy(dT_or_dh*dz)
+            self._enthalpy += delta_T_or_h
+            self.temp['coolant_int'] = self._temp_from_enthalpy(delta_T_or_h)
         else:
-            self.temp['coolant_int'] += dT_or_dh * dz
+            self.temp['coolant_int'] += delta_T_or_h
 
     def _get_cond_temp_difference(self) -> np.ndarray:
         """
@@ -1413,7 +1415,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     
     def _temp_from_enthalpy(self, dh: np.ndarray) -> np.ndarray:
         """
-        Convert enthalpy difference to temperature difference
+        Convert enthalpy difference to the temperature of the new 
+        thermodyamic state 
         
         Parameters
         ----------
@@ -1423,28 +1426,29 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Returns
         -------
         float
-            Temperature difference (K)
+            Temperature (K)
         
         """  
-        tref = self.temp['coolant_int'].copy()
+        tguess = self.temp['coolant_int'].copy()
         TT = np.zeros(len(dh))
         for i in range(len(dh)):
             toll = 1e-4
             err = 1
             iter = 1
             while (err >= toll) and (iter < 100):
-                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
-                self.coolant.update(tref[i])
-                TT[i] = tref[i] + (dh[i] - deltah)/self.coolant.heat_capacity
-                err = np.abs((TT[i]-tref[i]))
-                tref[i] = TT[i] 
+                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tguess[i])
+                self.coolant.update(tguess[i])
+                TT[i] = tguess[i] + (dh[i] - deltah) / self.coolant.heat_capacity
+                err = np.abs((TT[i] - tguess[i]))
+                tguess[i] = TT[i] 
                 iter += 1
         return TT 
     
     def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
         """
-        Calculate the enthalpy difference between two temperatures
-        using the enthalpy coefficients for the coolant
+        Calculate the enthalpy difference between two thermodynamic states
+        corresponding to two different temperatures using the enthalpy 
+        coefficients specific for the coolant
         
         Parameters
         ----------
