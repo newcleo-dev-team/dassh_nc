@@ -1078,8 +1078,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         numerator = np.sum(asm_ebal[:, 4] * asm_ebal[:, 5])
         denominator = np.sum(asm_ebal[:, 4])
         if r_obj.core.model == 'flow':
-            numerator = gap_ebal[4] * gap_ebal[5]
-            denominator = gap_ebal[4]
+            numerator += gap_ebal[4] * gap_ebal[5]
+            denominator += gap_ebal[4]
         core_tot[5] = numerator / denominator
 
         # Flow rate- and axial-average temperature change

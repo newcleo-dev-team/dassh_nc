@@ -579,7 +579,6 @@ class TestCoolantIntTemperature():
             res = c_fuel_rr.temp['coolant_int'] - T_in
             for s in range(len(res)):  # only does coolant channels
                 if s in adj_sc:
-                    print(s in adj_sc, s,  adj_sc, res[s])
                     s_type = c_fuel_rr.subchannel.type[s]
                     test = (A[s_type] * htc[s_type] * rr_data.perturb_temp
                             / mfr[s_type] / cp)
@@ -602,7 +601,6 @@ class TestCoolantIntTemperature():
                     print('test: ' + str(test))
                     assert res[s] == pytest.approx(test)
                 else:
-                    print(s in adj_sc, s,  adj_sc, res[s])
                     assert res[s] == pytest.approx(0.0)
 
             # Unperturb the temperature
@@ -1183,11 +1181,6 @@ class TestNonIsotropic():
             res = simple_ctrl_rr_non_iso.temp['coolant_int'] - T_in
             simple_ctrl_rr_non_iso.temp['coolant_int'] = T_in
             simple_ctrl_rr_non_iso.temp['coolant_int'][sc] -= rr_data.zero_pow_adj['perturb_temp']
-            
-            print('perturbed: ' + str(T_in))
-            print('unperturbed: ' + str(unperturbed_temperature))
-            print('result: ' + str(res))
-            print('temp: ' + str(simple_ctrl_rr_non_iso.temp['coolant_int']))
             assert np.allclose(simple_ctrl_rr_non_iso.temp['coolant_int'],
                                unperturbed_temperature)
 
