@@ -960,13 +960,16 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         F - Heat received by the assembly coolant (W)
         G - Assembly coolant temperature rise (K)
         SUM - Assembly energy balance: A + C + D - F (W)
-        ERROR - SUM / (A + B)""" + "\n"
+        """
+
         else:
             self.notes += """
         F - Assembly axially averaged heat capacity (J/kg-K)
         G - Assembly coolant temperature rise (K)
         SUM - Assembly energy balance: A + C + D - E * F * G (W)
-        ERROR - SUM / (A + B)""" + "\n"
+        """
+        
+        self.notes += """ERROR - SUM / (A + B)""" + "\n"
         
         self.add_row('Asm.', ['A', 'B', 'C', 'D', 'E', 'F', 'G',
                               'SUM', 'ERROR'])
@@ -979,10 +982,11 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         # Use numpy for the calculations based on the preceding data;
         # calculated energy from temp rise and the sum (ebal[:, 7])
         if r_obj._options['solve_enthalpy']:
-            enthalpy_rise = ebal[:, 5]
+            ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - ebal[:, 5]
         else:
-            enthalpy_rise = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
-        ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - enthalpy_rise
+            ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - \
+                ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
+
         # Error
         for i in range(len(ebal)):
             total_power = ebal[i, 0] + ebal[i, 1]
@@ -1091,16 +1095,15 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         core_tot[6] = numerator / denominator
 
         # Calculate total energy change due to temp rise
-        q_dt_tot = asm_ebal[:, 5]
-        if r_obj.core.model == 'flow':
-            q_dt_tot += gap_ebal[4] * gap_ebal[5] * gap_ebal[6]
         if r_obj._options['solve_enthalpy']:
-            sum2 = np.sum(core_tot[0] + core_tot[1] - q_dt_tot)
-            core_tot[7] = sum2
+            core_tot[7] = core_tot[0] + core_tot[1] - np.sum(asm_ebal[:, 5])
         else:
-            sum1 = (core_tot[0] + core_tot[1]
-            - core_tot[4] * core_tot[5] * core_tot[6])
-            core_tot[7] = sum1
+            core_tot[7] = (core_tot[0] + core_tot[1]
+                           - core_tot[4] * core_tot[5] * core_tot[6])
+        
+        if r_obj.core.model == 'flow':
+            core_tot[7] -= gap_ebal[4] * gap_ebal[5] * gap_ebal[6]
+           
         total_power = core_tot[0] + core_tot[1]
         if total_power == 0.0:
             core_tot[8] = np.nan
