@@ -1358,7 +1358,7 @@ class TestEnthalpy():
         tmp_asm._calc_coolant_int_temp(rr_data.enthalpy['dz'], power['pins'], power['cool'])
         print(tmp_asm.sc_mfr, tmp_asm.sc_properties['heat_capacity'])
         assert tmp_asm.avg_coolant_int_temp == \
-            pytest.approx(rr_data.inlet_temp + 1, 
+            pytest.approx(rr_data.inlet_temp + rr_data.enthalpy['dT'], 
                           abs=rr_data.enthalpy['tol'])
         
         

@@ -198,7 +198,8 @@
         },
         "tol": 1e-2,
         "dz": 1e-4,
-        "linear_cool_power": 683516.71
+        "linear_cool_power": 683516.71,
+        "dT": 1
     }
 
 }
