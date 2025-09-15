@@ -8,7 +8,7 @@
 | Author: | Francesco Pepe |
 | Contributor: | Gabriele Ottino |
 
-DASSH-nc is a <em>new</em>cleo fork of the ANL DASSH (Ducted Assembly Steady State Heat Transfer Software) repository (https://github.com/dassh-dev/dassh). 
+DASSH-nc is a <em>new</em>cleo fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh). 
 
 The Ducted Assembly Steady State Heat Transfer Software (DASSH) is an open-source tool for calculating temperature and flow distributions in hexagonal, ducted assemblies comprised of wire-wrapped pin bundles. DASSH is intended for use during the design process to provide a rapid assessment of the flow and temperature distribution, especially when assembly designs are in their early stages and not fully developed.
 
@@ -24,13 +24,13 @@ If you use DASSH in your research, please consider citing the following conferen
 * Milos Atz, Micheal A. Smith, Florent Heidet, "Ducted Assembly Steady State Heat Transfer Software (DASSH) - User Guide", ANL/NSE-21/34, Argonne National Laboratory, 2021.
 
 ## Troubleshooting and reporting bugs
-If you encounter issues installing or running DASSH or would like to report a bug, please reach out to the developer via _francesco.pepe@newcleo.com_. 
+If you encounter issues installing or running DASSH-nc or would like to report a bug, please reach out to the developer via _francesco.pepe@newcleo.com_. 
 
 ## Documentation
 * User guide: https://github.com/dassh-dev/documents/blob/master/user_guide.pdf
 * Theory manual: https://github.com/dassh-dev/documents/blob/master/theory_manual.pdf
 
-User and Theory manuals cover the original _dassh_. 
+User and Theory manuals cover the original DASSH. 
 Please refer to [#6](https://github.com/newcleo-dev-team/dassh_nc/issues/6) for documentation updates regarding the modifications implemented in this fork. 
 
 ## License
