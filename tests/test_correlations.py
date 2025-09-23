@@ -49,7 +49,7 @@ def make_assembly(n_ring, pin_pitch, pin_diameter, clad_thickness,
     m = {'coolant': coolant_obj, 'duct': duct_obj}
     rr = dassh.RoddedRegion('fuel', n_ring, pin_pitch, pin_diameter,
                             wire_pitch, wire_diameter, clad_thickness,
-                            duct_ftf, False, False, inlet_flow_rate,
+                            duct_ftf, inlet_flow_rate, False,
                             m['coolant'], m['duct'],
                             htc_params_duct=None,
                             corr_friction=corr_friction,

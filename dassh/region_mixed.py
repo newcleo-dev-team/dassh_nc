@@ -153,7 +153,7 @@ class MixedRegion(RoddedRegion):
         # Instantiate RoddedRegion object
         RoddedRegion.__init__(self, name, n_ring, pin_pitch, pin_diam,
                               wire_pitch, wire_diam, clad_thickness,
-                              duct_ftf, flow_rate, mc, verbose, coolant_mat, duct_mat,
+                              duct_ftf, flow_rate, mc, coolant_mat, duct_mat,
                               htc_params_duct, corr_friction,
                               corr_flowsplit, corr_mixing, corr_nusselt,
                               corr_shapefactor, spacer_grid, byp_ff,
@@ -259,7 +259,6 @@ class MixedRegion(RoddedRegion):
         # velocities and densities and bundle pressure drop.
         self._solve_system(dz, z, q['pins'], q['cool'], ebal)
 
-        self._enthalpy += self._delta_h
         self.temp['coolant_int'] = self._temp_from_enthalpy() 
 
         # Update coolant properties for the duct wall calculation
@@ -345,7 +344,8 @@ class MixedRegion(RoddedRegion):
         self._density += delta_rho  
         self._pressure_drop -= delta_P
         self._delta_h = RR*delta_rho
-        
+        self._enthalpy += self._delta_h
+
         if ebal:
             mcpdT_i = self.sc_mfr * self._delta_h 
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
@@ -468,12 +468,9 @@ class MixedRegion(RoddedRegion):
                     (self._density[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
                      * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
                      - self._density[self.ht['conv']['ind']]
-                     * self._enthalpy[self.ht['conv']['ind']])
-        print('conduction', np.sum(EEX))
+                     * self._enthalpy[self.ht['conv']['ind']])           
         EEX[self.ht['conv']['ind']] += swirl_exchange
-        print('swirl', np.sum(swirl_exchange))
         EEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]] 
-        print(np.sum(EEX*self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]/dz))
         return EEX
     
     def _calc_MEX(self, dz: float) -> np.ndarray:
@@ -769,6 +766,7 @@ class MixedRegion(RoddedRegion):
 
         # Reset inlet temperature
         self.coolant.temperature = t_inlet
+        self._update_coolant(t_inlet)
         self._density = self.coolant.density * np.ones(
             self.subchannel.n_sc['coolant']['total'])
         

@@ -570,9 +570,8 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True
                               bundle_params['wire_diameter'],
                               bundle_params['clad_thickness'],
                               bundle_params['duct_ftf'],
-                              bundle_params['mixed_convection'],
-                              bundle_params['verbose'],
                               fr,
+                              bundle_params['mixed_convection'],
                               mat_params['coolant'],
                               mat_params['duct'],
                               bundle_params['htc_params_duct'],
@@ -986,7 +985,6 @@ def c_fuel_params(assembly_default_params):
     input['htc_params_duct'] = [0.025, 0.8, 0.4, 7.0]
     input['wire_direction'] = 'clockwise'
     input['mixed_convection'] = False
-    input['verbose'] = False
     mat = {'coolant': dassh.Material('sodium'),
            'duct': dassh.Material('ht9')}
     return input, mat

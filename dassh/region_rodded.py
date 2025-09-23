@@ -83,9 +83,8 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, rad_is
                       inp['wire_diameter'],
                       inp['clad_thickness'],
                       inp['duct_ftf'],
-                      inp['mixed_convection'],
-                      inp['verbose'],
                       fr,
+                      inp['mixed_convection'],
                       mat['coolant'],
                       mat['duct'],
                       inp['htc_params_duct'],
@@ -235,7 +234,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     """
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
-                 wire_diam, clad_thickness, duct_ftf, mc, ver, flow_rate,
+                 wire_diam, clad_thickness, duct_ftf, flow_rate, mc,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
