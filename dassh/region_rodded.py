@@ -818,6 +818,22 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     ####################################################################
     # ATTRIBUTES
     ####################################################################
+    @property
+    def enthalpy_coeffs(self):
+        """Return enthalpy coefficients"""
+        return self._enthalpy_coeffs
+    
+    @enthalpy_coeffs.setter
+    def enthalpy_coeffs(self, coeffs: np.ndarray):
+        """
+        Set enthalpy coefficients
+        
+        Parameters
+        ----------
+        coeffs : np.ndarray
+            Array of enthalpy coefficients
+        """
+        self._enthalpy_coeffs = coeffs
 
     @property
     def sc_mfr(self):
