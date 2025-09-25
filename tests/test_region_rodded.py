@@ -1233,6 +1233,33 @@ class TestEnthalpy():
     """
     Class to test the enthalpy calculation in the RoddedRegion
     """
+    def _assign_enthalpy_coeffs(self, mat: str, rr_obj: dassh.RoddedRegion):
+        """
+        Assign enthalpy coefficients for all materials in rr_data.enthalpy
+        
+        Parameters
+        ----------
+        mat : str
+            The name of the coolant material
+        rr_obj : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
+        rr_obj.coolant.name = mat
+        rr_obj.enthalpy_coeffs = rr_obj._read_enthalpy_coefficients()
+            
+    def test_read_enthalpy_coefficients(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+        """
+        Test the _read_enthalpy_coefficients method of RoddedRegion
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
+        for mat in rr_data.enthalpy['delta_h'].keys():
+            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
+            assert simple_ctrl_rr_ent.enthalpy_coeffs == \
+                pytest.approx(rr_data.enthalpy['coeffs'][mat], abs=rr_data.enthalpy['tol'])
 
     def test_calc_delta_h(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
         """
@@ -1244,8 +1271,7 @@ class TestEnthalpy():
             The RoddedRegion object to test
         """
         for mat in rr_data.enthalpy['delta_h'].keys():
-            simple_ctrl_rr_ent.coolant.name = mat
-            simple_ctrl_rr_ent.enthalpy_coeffs = simple_ctrl_rr_ent._read_enthalpy_coefficients()
+            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
             assert simple_ctrl_rr_ent._calc_delta_h(rr_data.enthalpy['T1'], rr_data.enthalpy['T2']) == \
                 pytest.approx(rr_data.enthalpy['delta_h'][mat], abs=rr_data.enthalpy['tol'])
 
@@ -1262,8 +1288,7 @@ class TestEnthalpy():
             np.array(rr_data.enthalpy['T1'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']))
 
         for mat in rr_data.enthalpy['delta_h'].keys():
-            simple_ctrl_rr_ent.coolant.name = mat
-            simple_ctrl_rr_ent.enthalpy_coeffs = simple_ctrl_rr_ent._read_enthalpy_coefficients()
+            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
             dh = rr_data.enthalpy['delta_h'][mat] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
             assert simple_ctrl_rr_ent._temp_from_enthalpy(dh) == \
                 pytest.approx(rr_data.enthalpy['T2'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']),
