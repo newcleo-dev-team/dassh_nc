@@ -41,6 +41,14 @@ import csv
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 _DATA_FOLDER = 'data'
 _ENT_COEFF_FILE = 'enthalpy_coefficients.csv'
+COEFFS_T2H = np.array([5.17516822e-27, -5.25333909e-23, 2.40965184e-19, 
+                       -6.59191044e-16, 1.19487784e-12, -1.50675812e-09,  
+                       1.34869222e-06, -8.51700633e-04, 3.54018504e-01,  
+                       6.53712569e+01, -8.12601255e+04])
+COEFFS_H2T = np.array([-7.29806384e-51, 4.28463852e-45, -1.15971414e-39,
+                       1.96500224e-34, -2.40526941e-29, 2.39659345e-24, 
+                       -2.43426452e-19, 1.55965326e-14, 2.56380358e-09,  
+                       6.75778500e-03, 6.00600000e+02,])
 
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
@@ -1429,6 +1437,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 - self.temp['coolant_int'][:, np.newaxis]))
         return cond_temp_difference
     
+    
     def _temp_from_enthalpy(self, dh: np.ndarray) -> np.ndarray:
         """
         Convert enthalpy difference to the temperature of the new 
@@ -1438,28 +1447,81 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         ----------
         dh : float
             Enthalpy difference (J/kg)
+        method : str
+            Method to use for the conversion ('newton' or 'polynomial')
         
         Returns
         -------
         float
             Temperature (K)
-        
         """  
+        method = 'newton'
         tguess = self.temp['coolant_int'].copy()
+        if method == 'newton':
+            return self._newton_conversion_method(dh, tguess)
+        elif method == 'polynomial':
+            return self._poly_conversion_method(dh, tguess)
+    
+    
+    def _newton_conversion_method(self, dh: np.ndarray, T_coolant: np.ndarray
+                                  ) -> np.ndarray:
+        """
+        Method to calculate the temperature from enthalpy using a the Newton
+        method for root finding
+        
+        Parameters
+        ----------
+        dh : np.ndarray
+            Enthalpy difference array
+        T_coolant : np.ndarray
+            Coolant temperature array
+            
+        Returns
+        -------
+        np.ndarray
+            Temperature array
+        """
         TT = np.zeros(len(dh))
         for i in range(len(dh)):
             toll = 1e-4
             err = 1
             iter = 1
             while (err >= toll) and (iter < 100):
-                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tguess[i])
-                self.coolant.update(tguess[i])
-                TT[i] = tguess[i] + (dh[i] - deltah) / self.coolant.heat_capacity
-                err = np.abs((TT[i] - tguess[i]))
-                tguess[i] = TT[i] 
+                deltah = self._calc_delta_h(self.temp['coolant_int'][i], T_coolant[i])
+                self.coolant.update(T_coolant[i])
+                TT[i] = T_coolant[i] + (dh[i] - deltah) / self.coolant.heat_capacity
+                err = np.abs((TT[i] - T_coolant[i]))
+                T_coolant[i] = TT[i]
                 iter += 1
         return TT 
     
+    
+    def _poly_conversion_method(self, dh: np.ndarray, T_coolant: np.ndarray) -> np.ndarray:
+        """
+        Function to calculate the temperature from enthalpy using an interpolating 
+        polynomium
+        
+        Parameters
+        ----------
+        dh : np.ndarray
+            Enthalpy difference array
+        T_coolant : np.ndarray
+            Coolant temperature array
+        coeffs_T2h : np.ndarray
+            Coefficients of the polynomium for T to h conversion
+        coeffs_h2T : np.ndarray
+            Coefficients of the polynomium for h to T conversion
+            
+        Returns
+        -------
+        np.ndarray
+            Temperature array
+        """
+        h_coolant = np.polyval(COEFFS_T2H, T_coolant)
+        h = h_coolant + dh
+        return np.polyval(COEFFS_H2T, h)
+
+
     def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
         """
         Calculate the enthalpy difference between two thermodynamic states
