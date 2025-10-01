@@ -1,4 +1,4 @@
-from _commons import SIZES, DEG
+from _commons import DB_SIZES, DEG
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -18,26 +18,26 @@ def plot_table_evalutation(results_table: dict[dict[str, float]]):
         average, minimum error and computational time respectively.
     """    
     fig, axs = plt.subplots(1, 2, figsize=(11,5))
-    x = np.arange(len(SIZES))
+    x = np.arange(len(DB_SIZES))
     width = 0.25
-    axs[0].bar(x - width, [results_table[s]["emax"] for s in SIZES], width, 
+    axs[0].bar(x - width, [results_table[s]["emax"] for s in DB_SIZES], width, 
                label="Max. error")
-    axs[0].bar(x,         [results_table[s]["eave"] for s in SIZES], width, 
+    axs[0].bar(x,         [results_table[s]["eave"] for s in DB_SIZES], width, 
                label="Ave. error")
-    axs[0].bar(x + width, [results_table[s]["emin"] for s in SIZES], width, 
+    axs[0].bar(x + width, [results_table[s]["emin"] for s in DB_SIZES], width, 
                label="Min. error")
     axs[0].set_yscale('log')
     axs[0].set_xlabel('Dataset width')
     axs[0].set_xticks(x)
-    axs[0].set_xticklabels([str(s) for s in SIZES], rotation=90)
+    axs[0].set_xticklabels([str(s) for s in DB_SIZES], rotation=90)
     axs[0].set_ylabel('Error [-]')
     axs[0].set_title('Accuracy')
     axs[0].legend(fontsize='small')
-    axs[1].bar([str(s) for s in SIZES], [results_table[s]["time"] 
-                                         for s in SIZES])
+    axs[1].bar([str(s) for s in DB_SIZES], [results_table[s]["time"] 
+                                         for s in DB_SIZES])
     axs[1].set_xlabel('Dataset width')
     axs[1].set_xticks(x)
-    axs[1].set_xticklabels([str(s) for s in SIZES], rotation=90)
+    axs[1].set_xticklabels([str(s) for s in DB_SIZES], rotation=90)
     axs[1].set_ylabel('Computational time [s]')
     axs[1].set_title('Computational Time')
     axs[1].ticklabel_format(axis="y", style="sci", scilimits=(0,0))

@@ -1,6 +1,5 @@
 from temp_from_h import table_method, poly_method
-from temp_from_h import tab_method_from_hin
-from _commons import DELTA_H, SIZES, TEMP_COOLANT_INT, TOL, TIME_MAXITER, TIME_MINITER
+from _commons import DELTA_H, DB_SIZES, TEMP_COOLANT_INT, TOL, TIME_MAXITER, TIME_MINITER
 import time
 import numpy as np
 from typing import Callable, Any
@@ -74,7 +73,6 @@ def eval_time(method: Callable[[Any], np.ndarray], data_path: str = None,
     average_time = [0]
     i = 0
     err = [1.0]
-    toll = TOL
 
     while (i < num_iterations):                
         elapsed_time = calc_elapsed_time(method, data_path, coeffs_T2h, 
@@ -88,7 +86,7 @@ def eval_time(method: Callable[[Any], np.ndarray], data_path: str = None,
         else:
             err.append(1)
             
-        if i >= TIME_MINITER and all(e < toll for e in err[-TIME_MINITER:]):            
+        if i >= TIME_MINITER and all(e < TOL for e in err[-TIME_MINITER:]):            
             break
         
         i += 1
@@ -184,10 +182,6 @@ def prepare_args(method: Callable[[Any], np.ndarray], dh: np.ndarray,
     if method == table_method:
         xx, yy = get_data_from_file(data_path)
         args = (dh, temp_int, xx, yy)
-    elif method == tab_method_from_hin:
-        xx, yy = get_data_from_file(data_path)
-        h_in = np.interp(temp_int, xx, yy)
-        args = (dh, xx, yy, h_in)
     elif method == poly_method:
         args = (dh, temp_int, coeffs_T2h, coeffs_h2T)
     else:
