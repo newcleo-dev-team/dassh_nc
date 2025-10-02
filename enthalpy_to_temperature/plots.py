@@ -107,6 +107,7 @@ def plot_accuracy_comparison(reference: np.ndarray, err_newton: np.ndarray,
     """
     check_array_sizes(reference[:,0][1:], [err_newton, err_table, err_poly])
 
+    plt.figure(figsize=(7,5))
     plt.semilogy(reference[:,0][1:], err_newton, label='Newton', color='blue')
     plt.semilogy(reference[:,0][1:], err_table, label='Table', color='orange')
     plt.semilogy(reference[:,0][1:], err_poly, label='Polynomium (10 deg)', 
@@ -115,6 +116,7 @@ def plot_accuracy_comparison(reference: np.ndarray, err_newton: np.ndarray,
     plt.ylabel('Relative Error [-]')
     plt.legend(bbox_to_anchor=(1, 1.02))
     plt.grid()
+    plt.tight_layout()
     plt.savefig('accuracy_comparison.png') 
 
 
