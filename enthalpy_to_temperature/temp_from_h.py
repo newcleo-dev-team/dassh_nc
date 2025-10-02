@@ -1,7 +1,9 @@
+"""Module containing methods for enthalpy to temperature conversion."""
+
 import numpy as np
 from dassh import Material 
 from lbh15 import Lead
-from _commons import ENTHALPY_COEFF, T_IN, MATERIAL, NEWTON_MAXITER, TOL, N_SC
+from _commons import ENTHALPY_COEFF, T_IN, MATERIAL, NEWTON_MAXITER, TOL
 
 
 ##############################################################################
@@ -9,33 +11,34 @@ from _commons import ENTHALPY_COEFF, T_IN, MATERIAL, NEWTON_MAXITER, TOL, N_SC
 ##############################################################################
 coolant = Material(MATERIAL, T_IN)
 
-def newton_method(dh: np.ndarray, temp_coolant_int: np.ndarray) -> np.ndarray:
+def newton_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
     """
     Find the temperature corresponding to a given enthalpy change and initial 
-    temperature for the coolant using the Newton's method.
+    temperature for the coolant using the Newton's method
     
     Parameters
     ----------
     dh : numpy.ndarray
         Enthalpy change (J/kg)
-    temp_coolant_int : numpy.ndarray
-        Initial temperature of the coolant (K)
+    temp_state_1 : numpy.ndarray
+        Temperature of the state with respect to which the enthalpy change is
+        expressed (K)
         
     Returns
     -------
     numpy.ndarray
         Final temperature of the coolant (K)
     """
-    tref = temp_coolant_int.copy()
-    TT = np.empty(len(temp_coolant_int), dtype=float)
-    for i in range(len(temp_coolant_int)):
+    tref = temp_state_1.copy()
+    TT = np.empty(len(temp_state_1), dtype=float)
+    for i in range(len(temp_state_1)):
         err = 1
         iter = 1
         while (err >= TOL) and (iter < NEWTON_MAXITER):
-            deltah = _calc_delta_h(temp_coolant_int[i], tref[i])
+            deltah = _calc_delta_h(temp_state_1[i], tref[i])
             coolant.update(tref[i])
             TT[i] = tref[i] + (dh[i] - deltah) / coolant.heat_capacity
-            err = np.abs(_calc_delta_h(temp_coolant_int[i], TT[i]) - dh[i]) \
+            err = np.abs(_calc_delta_h(temp_state_1[i], TT[i]) - dh[i]) \
                 / dh[i]
             tref[i] = TT[i] 
             iter += 1
@@ -45,7 +48,7 @@ def newton_method(dh: np.ndarray, temp_coolant_int: np.ndarray) -> np.ndarray:
 def _calc_delta_h(T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
         """
         Calculate the enthalpy difference between the states corresponding to 
-        two temperatures `T1` and `T2`.
+        two temperatures `T1` and `T2`
         
         Parameters
         ----------
@@ -69,26 +72,27 @@ def _calc_delta_h(T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
 ##############################################################################
 #                               LBH15 METHOD
 ##############################################################################
-def lbh15_method(dh: np.ndarray, temp_coolant_int: np.ndarray) -> np.ndarray:
+def lbh15_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
     """
     Use the lbh15 library to find the temperature corresponding to a given
-    enthalpy change and initial temperature for the coolant.
+    enthalpy change and initial temperature for the coolant
 
     Parameters
     ----------
     dh : numpy.ndarray
         Enthalpy change (J/kg)
-    temp_coolant_int : numpy.ndarray
-        Initial temperature of the coolant (K)
+    temp_state_1 : numpy.ndarray
+        Temperature of the state with respect to which the enthalpy change is
+        expressed (K)
         
     Returns
     -------
     numpy.ndarray
         Final temperature of the coolant (K)
     """
-    TT = np.empty(len(temp_coolant_int), dtype=float)
-    for i in range(len(temp_coolant_int)):
-        h_in = Lead(T = temp_coolant_int[i]).h
+    TT = np.empty(len(temp_state_1), dtype=float)
+    for i in range(len(temp_state_1)):
+        h_in = Lead(T = temp_state_1[i]).h
         TT[i] = Lead(h = h_in + dh[i]).T
     return TT
 
@@ -96,19 +100,20 @@ def lbh15_method(dh: np.ndarray, temp_coolant_int: np.ndarray) -> np.ndarray:
 ##############################################################################
 #                               TABLE METHOD 
 ##############################################################################
-def table_method(dh: np.ndarray, temp_coolant_int: np.ndarray, 
+def table_method(dh: np.ndarray, temp_state_1: np.ndarray, 
                  xx: np.ndarray, yy: np.ndarray) -> np.ndarray:
     """
     Use interpolation of tabulated data to find the temperature 
     corresponding to a given enthalpy change and initial temperature
-    for the coolant.
+    for the coolant
     
     Parameters
     ----------
     dh : numpy.ndarray
         Enthalpy change (J/kg)
-    temp_coolant_int : numpy.ndarray
-        Initial temperature of the coolant (K)
+    temp_state_1 : numpy.ndarray
+        Temperature of the state with respect to which the enthalpy change is
+        expressed (K)
     xx : numpy.ndarray
         Temperature data (K)
     yy : numpy.ndarray
@@ -119,7 +124,7 @@ def table_method(dh: np.ndarray, temp_coolant_int: np.ndarray,
     numpy.ndarray
         Final temperature of the coolant (K)
     """
-    h_in = np.interp(temp_coolant_int, xx, yy)   
+    h_in = np.interp(temp_state_1, xx, yy)   
     h_out = h_in + dh                         
     return np.interp(h_out, yy, xx)
 
@@ -127,7 +132,7 @@ def table_method(dh: np.ndarray, temp_coolant_int: np.ndarray,
 ##############################################################################
 #                               POLYNOMIUM
 ##############################################################################
-def poly_method(dh: np.ndarray, temp_coolant_int: np.ndarray, 
+def poly_method(dh: np.ndarray, temp_state_1: np.ndarray, 
                 coeffs_T2h: np.ndarray, coeffs_h2T: np.ndarray) -> np.ndarray:
     """
     Function to calculate the temperature from enthalpy using an interpolating 
@@ -137,8 +142,9 @@ def poly_method(dh: np.ndarray, temp_coolant_int: np.ndarray,
     ----------
     dh : np.ndarray
         Enthalpy change (J/kg)
-    temp_coolant_int : np.ndarray
-        Initial temperature of the coolant (K)
+    temp_state_1 : numpy.ndarray
+        Temperature of the state with respect to which the enthalpy change is
+        expressed (K)
     coeffs_T2h : np.ndarray
         Coefficients of the polynomium for T to h conversion
     coeffs_h2T : np.ndarray
@@ -149,6 +155,6 @@ def poly_method(dh: np.ndarray, temp_coolant_int: np.ndarray,
     np.ndarray
         Final temperature of the coolant (K)
     """
-    h_in = np.polyval(coeffs_T2h, temp_coolant_int)
+    h_in = np.polyval(coeffs_T2h, temp_state_1)
     h = h_in + dh
     return np.polyval(coeffs_h2T, h)

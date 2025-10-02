@@ -1,6 +1,7 @@
-import numpy as np
 """Module with common imports and variables for the enthalpy to temperature 
    conversion methods."""
+import numpy as np
+
 
 N_SC: int = 18
 """Number of subchannels in the assembly"""
@@ -26,7 +27,11 @@ TOL: float = 1e-4
 """Tolerance for the Newton method"""
 NEWTON_MAXITER: int = 100
 """Maximum number of iterations for the Newton method"""
-TIME_MAXITER: int = 1e4
+TIME_MAXITER: int = 1e5
 """Maximum number of iterations for the time evaluation"""
 TIME_MINITER: int = 300
 """Minimum number of iterations for the time evaluation"""
+DB_PATH_PREFIX: str = "lead_"
+"""Prefix for the path to the data files"""
+DB_PATH_SUFFIX: str = ".csv"
+"""Suffix for the path to the data files"""
