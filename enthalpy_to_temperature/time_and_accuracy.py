@@ -85,18 +85,17 @@ def eval_time(method: Callable[[Any], np.ndarray], data_path: str = None,
         total_time += elapsed_time
         average_time.append((total_time / i))
         
-        if i > 1:     
-            err.append(np.abs(average_time[i-2] - average_time[i-1]) 
-                       / average_time[i-2])
-        else:
+        if i <= 1: 
             err.append(1)
+            continue
+    
+        err.append(np.abs(average_time[i-2] - average_time[i-1]) 
+                   / average_time[i-2])
         if i >= TIME_MINITER and all(e < TOL for e in err[-TIME_MINITER:]):         
             return average_time[-1]
         
-    raise RuntimeError("Maximum number of iterations reached without "
-                       "convergence")
+    raise RuntimeError("Maximum number of iterations reached.")
     
-
 
 ##############################################################################
 #                                 ACCURACY 
