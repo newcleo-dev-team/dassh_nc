@@ -2,16 +2,14 @@
 
 import numpy as np
 from dassh import Material 
-from lbh15 import Lead
-from _commons import ENTHALPY_COEFF, T_IN, MATERIAL, NEWTON_MAXITER, TOL
+from _commons import ENTHALPY_COEFF, NEWTON_MAXITER, TOL, MATERIAL_LBH
 
 
 ##############################################################################
 #                              NEWTON'S METHOD 
 ##############################################################################
-coolant = Material(MATERIAL, T_IN)
-
-def newton_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
+def newton_method(dh: np.ndarray, temp_state_1: np.ndarray, coolant: Material
+                  ) -> np.ndarray:
     """
     Find the temperature corresponding to a given enthalpy change and initial 
     temperature for the coolant using the Newton's method
@@ -35,17 +33,17 @@ def newton_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
         err = 1
         iter = 1
         while (err >= TOL) and (iter < NEWTON_MAXITER):
-            deltah = _calc_delta_h(temp_state_1[i], tref[i])
+            deltah = _calc_delta_h(temp_state_1[i], tref[i], coolant)
             coolant.update(tref[i])
             TT[i] = tref[i] + (dh[i] - deltah) / coolant.heat_capacity
-            err = np.abs(_calc_delta_h(temp_state_1[i], TT[i]) - dh[i]) \
+            err = np.abs(_calc_delta_h(temp_state_1[i], TT[i], coolant) - dh[i]) \
                 / dh[i]
             tref[i] = TT[i] 
             iter += 1
     return TT
 
 
-def _calc_delta_h(T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
+def _calc_delta_h(T1: np.ndarray, T2: np.ndarray, coolant: Material) -> np.ndarray:
         """
         Calculate the enthalpy difference between the states corresponding to 
         two temperatures `T1` and `T2`
@@ -56,6 +54,8 @@ def _calc_delta_h(T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
             Initial temperature (K)
         T2 : numpy.ndarray
             Final temperature (K)
+        coolant : Material
+            Material object
 
         Returns
         -------
@@ -72,7 +72,8 @@ def _calc_delta_h(T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
 ##############################################################################
 #                               LBH15 METHOD
 ##############################################################################
-def lbh15_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
+def lbh15_method(dh: np.ndarray, temp_state_1: np.ndarray, coolant: Material
+                 ) -> np.ndarray:
     """
     Use the lbh15 library to find the temperature corresponding to a given
     enthalpy change and initial temperature for the coolant
@@ -84,7 +85,9 @@ def lbh15_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
     temp_state_1 : numpy.ndarray
         Temperature of the state with respect to which the enthalpy change is
         expressed (K)
-        
+    coolant : Material
+        Material object
+
     Returns
     -------
     numpy.ndarray
@@ -92,8 +95,8 @@ def lbh15_method(dh: np.ndarray, temp_state_1: np.ndarray) -> np.ndarray:
     """
     TT = np.empty(len(temp_state_1), dtype=float)
     for i in range(len(temp_state_1)):
-        h_in = Lead(T = temp_state_1[i]).h
-        TT[i] = Lead(h = h_in + dh[i]).T
+        h_in = MATERIAL_LBH[coolant.name](T = temp_state_1[i]).h
+        TT[i] = MATERIAL_LBH[coolant.name](h = h_in + dh[i]).T
     return TT
 
 

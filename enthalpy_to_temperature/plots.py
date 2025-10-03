@@ -1,11 +1,13 @@
 """Module containing functions to plot the results of the evaluation of the 
 conversion methods"""
+import os
 from _commons import DB_SIZES, DEG
 from matplotlib import pyplot as plt
 import numpy as np
 
 
-def plot_table_evaluation(results_table: dict[ dict[str, float]]):
+def plot_table_evaluation(results_table: dict[ dict[str, float]], 
+                          material: str):
     """
     
     Plot the evaluation of the table method in terms of accuracy and
@@ -18,37 +20,41 @@ def plot_table_evaluation(results_table: dict[ dict[str, float]]):
         sizes. Each key is a dataset size and the value is another dictionary 
         with keys "emax", "eave", "emin", and "time" representing the maximum,
         average, minimum errors and computational time, respectively
+    material : str
+        Material name 
     """    
     fig, axs = plt.subplots(1, 2, figsize=(11,5))
-    x = np.arange(len(DB_SIZES))
+    x = np.arange(len(DB_SIZES[material]))
     width = 0.25
-    axs[0].bar(x - width, [results_table[s]["emax"] for s in DB_SIZES], width, 
+    axs[0].bar(x - width, [results_table[s]["emax"] for s in DB_SIZES[material]], width, 
                label="Max. error")
-    axs[0].bar(x,         [results_table[s]["eave"] for s in DB_SIZES], width, 
+    axs[0].bar(x,         [results_table[s]["eave"] for s in DB_SIZES[material]], width, 
                label="Ave. error")
-    axs[0].bar(x + width, [results_table[s]["emin"] for s in DB_SIZES], width, 
+    axs[0].bar(x + width, [results_table[s]["emin"] for s in DB_SIZES[material]], width, 
                label="Min. error")
     axs[0].set_yscale('log')
     axs[0].set_xlabel('Dataset width')
     axs[0].set_xticks(x)
-    axs[0].set_xticklabels([str(s) for s in DB_SIZES], rotation=90)
+    axs[0].set_xticklabels([str(s) for s in DB_SIZES[material]], rotation=90)
     axs[0].set_ylabel('Error [-]')
     axs[0].set_title('Accuracy')
     axs[0].legend(fontsize='small')
-    
-    axs[1].bar(x, [results_table[s]["time"] for s in DB_SIZES])
+
+    axs[1].bar(x, [results_table[s]["time"] for s in DB_SIZES[material]])
     axs[1].set_xlabel('Dataset width')
     axs[1].set_xticks(x)
-    axs[1].set_xticklabels([str(s) for s in DB_SIZES], rotation=90)
+    axs[1].set_xticklabels([str(s) for s in DB_SIZES[material]], rotation=90)
     axs[1].set_ylabel('Computational time [s]')
     axs[1].set_title('Computational Time')
     axs[1].ticklabel_format(axis="y", style="sci", scilimits=(0,0))
     axs[1].yaxis.get_offset_text().set_fontsize(10)
+    plt.tight_layout()
     plt.subplots_adjust(wspace=0.4)
-    plt.savefig('accuracy_time_tradeoff.png')
+    plt.savefig(os.path.join('results', material, 'accuracy_time_tradeoff.png'))
 
 
-def plot_polynomium_results(poly_results: dict[str, np.ndarray]):
+def plot_polynomium_results(poly_results: dict[str, np.ndarray], 
+                            material: str):
     """
     Plot the evaluation of the polynomial method in terms of accuracy and
     computational time for different polynomial degrees
@@ -60,6 +66,8 @@ def plot_polynomium_results(poly_results: dict[str, np.ndarray]):
         degrees. The keys are "eave_poly" and "time_poly", representing the 
         average error and computational time, respectively, for polynomial 
         degrees from 1 to DEG-1
+    material : str
+        Material name
     """
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
     axs[0].plot(range(1, DEG), poly_results['eave_poly'], '--o', 
@@ -84,13 +92,14 @@ def plot_polynomium_results(poly_results: dict[str, np.ndarray]):
     axs[1].ticklabel_format(axis="y", style="sci", scilimits=(0,0))
     axs[1].yaxis.get_offset_text().set_fontsize(10)
     axs[1].grid()
-
+    plt.tight_layout()
     plt.subplots_adjust(wspace=0.4)
-    plt.savefig('polynomial_degree.png')
+    plt.savefig(os.path.join('results', material, 'polynomial_degree.png'))
     
     
 def plot_accuracy_comparison(reference: np.ndarray, err_newton: np.ndarray,
-                             err_table: np.ndarray, err_poly: np.ndarray):
+                             err_table: np.ndarray, err_poly: np.ndarray,
+                             material: str):
     """
     Plot the accuracy comparison between different methods
     
@@ -104,20 +113,22 @@ def plot_accuracy_comparison(reference: np.ndarray, err_newton: np.ndarray,
         Relative error of the table method
     err_poly : np.ndarray
         Relative error of the polynomial method
+    material : str
+        Material name
     """
     check_array_sizes(reference[:,0][1:], [err_newton, err_table, err_poly])
 
     plt.figure(figsize=(7,5))
     plt.semilogy(reference[:,0][1:], err_newton, label='Newton', color='blue')
     plt.semilogy(reference[:,0][1:], err_table, label='Table', color='orange')
-    plt.semilogy(reference[:,0][1:], err_poly, label='Polynomium (10 deg)', 
+    plt.semilogy(reference[:,0][1:], err_poly, label='Polynomium', 
                  color='green')
     plt.xlabel('Temperature [K]')
     plt.ylabel('Relative Error [-]')
     plt.legend(bbox_to_anchor=(1, 1.02))
     plt.grid()
     plt.tight_layout()
-    plt.savefig('accuracy_comparison.png') 
+    plt.savefig(os.path.join('results', material, 'accuracy_comparison.png'))
 
 
 def check_array_sizes(reference: np.ndarray, arrays: list[np.ndarray]) -> bool:
