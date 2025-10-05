@@ -19,7 +19,7 @@ def plot_table_evaluation(results_table: dict[ dict[str, float]],
         Dictionary containing the evaluation results for different dataset 
         sizes. Each key is a dataset size and the value is another dictionary 
         with keys "emax", "eave", "emin", and "time" representing the maximum,
-        average, minimum errors and computational time, respectively
+        average, minimum errors and time effort, respectively
     material : str
         Material name 
     """    
@@ -44,8 +44,8 @@ def plot_table_evaluation(results_table: dict[ dict[str, float]],
     axs[1].set_xlabel('Dataset width')
     axs[1].set_xticks(x)
     axs[1].set_xticklabels([str(s) for s in DB_SIZES[material]], rotation=90)
-    axs[1].set_ylabel('Computational time [s]')
-    axs[1].set_title('Computational Time')
+    axs[1].set_ylabel('Time [s]')
+    axs[1].set_title('Time Effort')
     axs[1].ticklabel_format(axis="y", style="sci", scilimits=(0,0))
     axs[1].yaxis.get_offset_text().set_fontsize(10)
     plt.tight_layout()
@@ -57,14 +57,14 @@ def plot_polynomium_results(poly_results: dict[str, np.ndarray],
                             material: str):
     """
     Plot the evaluation of the polynomial method in terms of accuracy and
-    computational time for different polynomial degrees
+    time effort for different polynomial degrees
     
     Parameters
     ----------
     poly_results : dict[str, np.ndarray]
         Dictionary containing the evaluation results for different polynomial 
         degrees. The keys are "eave_poly" and "time_poly", representing the 
-        average error and computational time, respectively, for polynomial 
+        average error and time effort, respectively, for polynomial 
         degrees from 1 to DEG-1
     material : str
         Material name
@@ -86,8 +86,8 @@ def plot_polynomium_results(poly_results: dict[str, np.ndarray],
     axs[1].set_xlabel('Polynomium Degree')
     axs[1].set_xticks(range(1, DEG))
     axs[1].set_xlim(1, DEG-1)
-    axs[1].set_ylabel('Computational time [s]')
-    axs[1].set_title('Computational Time')
+    axs[1].set_ylabel('Time [s]')
+    axs[1].set_title('Time Effort')
     axs[1].legend()
     axs[1].ticklabel_format(axis="y", style="sci", scilimits=(0,0))
     axs[1].yaxis.get_offset_text().set_fontsize(10)

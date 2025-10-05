@@ -43,3 +43,5 @@ MATERIAL_LBH = {
             'lbe': LBE
         }
 """Dictionary mapping the material name to the corresponding lbh15 class"""
+DB_PATH_SUFFIX: str = ".csv"
+"""Suffix for the path to the data files"""

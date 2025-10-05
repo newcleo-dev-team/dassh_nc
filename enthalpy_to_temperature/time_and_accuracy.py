@@ -42,7 +42,7 @@ def calc_elapsed_time(method: Callable[[Any], np.ndarray],
     Returns
     -------
     float
-        Computational time
+        Time effort in seconds
     """
     args = prepare_args(method, DELTA_H, TEMP_COOLANT_INT, data_path, 
                         coeffs_T2h, coeffs_h2T, coolant)
