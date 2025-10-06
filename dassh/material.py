@@ -541,7 +541,7 @@ class Material(LoggedClass):
         Returns
         -------
         numpy.ndarray
-
+            Coefficients 
         """
         path = os.path.join(_ROOT, _DATA_FOLDER, file_name)
         try:
