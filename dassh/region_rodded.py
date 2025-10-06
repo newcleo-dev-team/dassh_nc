@@ -451,10 +451,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.sc_properties = {k: np.zeros(
                 self.subchannel.n_sc['coolant']['total']) \
                 for k in self.coolant.PROPS_NAME}
-            if self._ent:
-                self._enthalpy = np.zeros(
-                    self.subchannel.n_sc['coolant']['total'])
-                self.coolant.assign_ent_coefficients()
+        if self._ent:
+            self._enthalpy = \
+                    self.coolant.init_enthalpy(self.coolant.temperature) * \
+                        np.ones(self.subchannel.n_sc['coolant']['total'])
             
     ####################################################################
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
@@ -1358,8 +1358,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         delta_T_or_h = dT_or_dh * dz
         if self._ent:
             self._enthalpy += delta_T_or_h
-            self.temp['coolant_int'] = self.coolant.temp_from_enthalpy(
-                delta_T_or_h, self.temp['coolant_int'])
+            self.temp['coolant_int'] = \
+                self.coolant.temp_from_enthalpy(self._enthalpy)
         else:
             self.temp['coolant_int'] += delta_T_or_h
 

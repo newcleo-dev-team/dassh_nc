@@ -1246,7 +1246,7 @@ class TestEnthalpy():
         """
         dh = np.zeros(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
         assert simple_ctrl_rr_ent.coolant.temp_from_enthalpy(
-            dh, simple_ctrl_rr_ent.temp['coolant_int']) == \
+            simple_ctrl_rr_ent._enthalpy + dh) == \
             pytest.approx(simple_ctrl_rr_ent.temp['coolant_int'],
                           abs=rr_data.enthalpy['tol'])
             
@@ -1267,13 +1267,14 @@ class TestEnthalpy():
         qcool = np.zeros(tmp_asm.subchannel.n_sc['coolant']['total'])
         power = {'pins': qpins, 'cool': qcool}
         dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, 
-                                                     rr_data.inlet_temp,
-                                                     rr_data.outlet_temp)
-        
+                                                     rr_data.enthalpy['T1'],
+                                                     rr_data.enthalpy['T2'])
+
         # Calculate new temperatures and deltaT
+        print('temp before (K): ' + str(tmp_asm.temp['coolant_int']))
         tmp_asm._calc_coolant_int_temp(dz, power['pins'], power['cool'])
         assert np.allclose(tmp_asm.temp['coolant_int'], 
-                           rr_data.inlet_temp*np.ones(
+                           rr_data.enthalpy['T1']*np.ones(
                                tmp_asm.subchannel.n_sc['coolant']['total']),
                            atol=rr_data.enthalpy['tol'])
 
@@ -1291,15 +1292,15 @@ class TestEnthalpy():
 
         power = mock_AssemblyPower(simple_ctrl_rr_ent)
         dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, 
-                                                     rr_data.inlet_temp,
-                                                     rr_data.outlet_temp)
+                                                     rr_data.enthalpy['T1'],
+                                                     rr_data.enthalpy['T2'])
         ans = dz * tmp_asm._calc_int_sc_power(power['pins'], power['cool'])
         # Calculate new temperatures
         tmp_asm._update_subchannels_properties(tmp_asm.temp['coolant_int'])
         tmp_asm._calc_coolant_int_temp(dz, power['pins'], power['cool'])
-        dT = tmp_asm.temp['coolant_int'] - rr_data.inlet_temp
+        dT = tmp_asm.temp['coolant_int'] - rr_data.enthalpy['T1']
         # Calculate Q = mCdT in each channel
-        Q = tmp_asm.sc_properties['heat_capacity'] * tmp_asm.sc_mfr * dT        
+        Q = tmp_asm.sc_properties['heat_capacity'] * tmp_asm.sc_mfr * dT
         
         print('dz (m): ' + str(dz))
         print('Power added (W): ' + str(ans))
@@ -1324,13 +1325,14 @@ class TestEnthalpy():
             'cool': rr_data.enthalpy['linear_cool_power'] * np.ones(
                 tmp_asm.subchannel.n_sc['coolant']['total'])
         }
-        
+        print(tmp_asm.temp['coolant_int'])
         tmp_asm._update_subchannels_properties(tmp_asm.temp['coolant_int'])
         tmp_asm._calc_coolant_int_temp(rr_data.enthalpy['dz'], power['pins'], 
                                        power['cool'])
+        print(tmp_asm.temp['coolant_int'])
         print(tmp_asm.sc_mfr, tmp_asm.sc_properties['heat_capacity'])
         assert tmp_asm.avg_coolant_int_temp == \
-            pytest.approx(rr_data.inlet_temp + rr_data.enthalpy['dT'], 
+            pytest.approx(rr_data.enthalpy['T1'] + rr_data.enthalpy['dT'], 
                           abs=rr_data.enthalpy['tol'])
         
         

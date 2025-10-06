@@ -901,10 +901,15 @@ def simple_ctrl_rr_ent(simple_ctrl_params: tuple[dict, dict]):
         Activated RoddedRegion object to be used in enthalpy solver tests.
     """
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
+    mat = {'coolant': dassh.Material('sodium', 
+                                     temperature = \
+                                         pytest.rr_data.enthalpy['T1'],
+                                         solve_enthalpy=True),
+           'duct': dassh.Material('ss316')}
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
-                                    simple_ctrl_params[1], flowrate, rad_iso=False,
+                                    mat, flowrate, rad_iso=False,
                                     solve_enthalpy=True)
-    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
+    return activate_rodded_region(rr, pytest.rr_data.enthalpy['T1'])
 
 @pytest.fixture
 def simple_ctrl_asm(simple_ctrl_params, simple_ctrl_rr, small_core_power):

@@ -123,13 +123,28 @@ class Material(LoggedClass):
                   'lbe': lbe_properties}
     
     LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
-    PROPS_NAME = ['density', 'heat_capacity', 'viscosity', 'thermal_conductivity']
-    PROPS_NAME_FULL = dict(zip(PROPS_NAME, LBH15_PROPERTIES)) 
-    MATERIAL_NAMES = ['lead', 'bismuth', 'lbe', 'sodium', 'nak', 'potassium', 'water', 'ss304', 'ss316']
+    """Property names as used in lbh15"""
+    PROPS_NAME = ['density', 'heat_capacity', 'viscosity', 
+                  'thermal_conductivity']
+    """Property names as used in dassh"""
+    PROPS_NAME_FULL = dict(zip(PROPS_NAME, LBH15_PROPERTIES))
+    """Mapping between property names as used in dassh and in lbh15"""
+    BUILTIN_COOLANTS = ['sodium', 'nak', 'lead', 'lbe', 'bismuth']
+    """Builtin coolant materials"""
+    MATERIAL_NAMES = BUILTIN_COOLANTS + ['potassium', 'water', 'ss304', 'ss316']
+    """Material names built-in in dassh"""
     AMBIENT_TEMPERATURE = 298.15
+    """Default temperature (K)"""
+    
+    _coeffs_hT2: np.ndarray | None = None
+    """Polynomial coefficients for enthalpy to temperature conversion"""
+    _coeffs_T2h: np.ndarray | None = None
+    """Polynomial coefficients for temperature to enthalpy conversion"""
+    
+     
     def __init__(self, name, temperature=None, from_file=None,
                  corr_dict=None, lbh15_correlations = None,
-                 use_correlation = False):
+                 use_correlation = False, solve_enthalpy = False):
         LoggedClass.__init__(self, 0, f'dassh.Material.{name}')
         self.name = name
         self.validity_ranges = {}
@@ -161,6 +176,10 @@ class Material(LoggedClass):
             self.temperature = temperature
         # Update properties based on input temperature
         self.update(self.temperature)
+        
+        if solve_enthalpy and self.name in self.BUILTIN_COOLANTS:
+            self._assign_ent_coefficients()
+        
         
     def __get_mid_temp(self, val_range: Union[Dict[str, tuple], None] = None, use_corr: Union[bool, None] = False) -> float:
         """
@@ -505,27 +524,37 @@ class Material(LoggedClass):
     ##########################################################################
     #          ENTHALPY-TEMPERATURE CONVERSION METHODS AND PROPERTIES
     ##########################################################################
-    def temp_from_enthalpy(self, dh: np.ndarray, temps_state1: np.ndarray
-                           ) -> np.ndarray:
+    def temp_from_enthalpy(self, enthalpy: np.ndarray) -> np.ndarray:
         """
-        Convert enthalpy difference to the temperature of the new 
-        thermodyamic state 
+        Convert enthalpy to the temperature 
         
         Parameters
         ----------
-        dh : float
-            Enthalpy difference (J/kg)
-        temps_state1 : np.ndarray
-            Array of temperatures at the initial thermodynamic state (K)
+        enthalpy : np.ndarray
+            Array of enthalpy values (J/kg)
+
+        Returns
+        -------
+        np.ndarray
+            Temperature corresponding to `enthalpy` (K)
+        """  
+        return np.polyval(self._coeffs_h2T, enthalpy)
+    
+    def init_enthalpy(self, temperature: float) -> float:
+        """
+        Calculate the enthalpy at a given temperature
         
+        Parameters
+        ----------
+        temperature : float
+            Temperature (K) at which to calculate the enthalpy
+            
         Returns
         -------
         float
-            Temperature (K)
-        """  
-        tguess = temps_state1.copy()
-        h_coolant = np.polyval(self._coeffs_T2h, tguess)
-        return np.polyval(self._coeffs_h2T, h_coolant + dh)
+            Enthalpy (J/kg) at the given `temperature`
+        """
+        return np.polyval(self._coeffs_T2h, temperature)
 
 
     def _read_coefficients(self, file_name) -> np.ndarray:
@@ -551,13 +580,16 @@ class Material(LoggedClass):
         except:
             self.log('error', f"Could not find enthalpy-temperature"
                      f" coefficients file {path}.") 
-
-        idx = header.index(self.name)
+        try: 
+            idx = header.index(self.name)
+        except ValueError:
+            self.log('error', f"Could not find enthalpy-temperature"
+                     f" coefficients for material {self.name}.")
         coeffs = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
         return coeffs[~np.isnan(coeffs)]
     
 
-    def assign_ent_coefficients(self):
+    def _assign_ent_coefficients(self):
         """
         Assign coefficients for enthalpy-temperature conversion polynomials
         to the coolant object        
@@ -576,6 +608,9 @@ class Material(LoggedClass):
         numpy.ndarray
             Coefficients for polynomial converting enthalpy to temperature
         """
+        if not np.all(self._coeffs_T2h):
+            self.log("error", "Temperature-enthalpy coefficients not yet"
+                     "assigned")
         return self._coeffs_h2T
     
     @property
@@ -588,6 +623,9 @@ class Material(LoggedClass):
         numpy.ndarray
             Coefficients for polynomial converting temperature to enthalpy
         """
+        if not np.all(self._coeffs_T2h):
+            self.log("error", "Enthalpy-temperature coefficients not yet"
+                     "assigned")
         return self._coeffs_T2h
 
 class _MatInterp(object):
