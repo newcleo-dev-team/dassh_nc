@@ -1232,69 +1232,9 @@ class TestNonIsotropic():
 class TestEnthalpy():
     """
     Class to test the enthalpy calculation in the RoddedRegion
-    """
-    def _assign_enthalpy_coeffs(self, mat: str, rr_obj: dassh.RoddedRegion):
-        """
-        Assign enthalpy coefficients for all materials in rr_data.enthalpy
-        
-        Parameters
-        ----------
-        mat : str
-            The name of the coolant material
-        rr_obj : dassh.RoddedRegion
-            The RoddedRegion object to test
-        """
-        rr_obj.coolant.name = mat
-        rr_obj.enthalpy_coeffs = rr_obj._read_enthalpy_coefficients()
-            
-    def test_read_enthalpy_coefficients(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
-        """
-        Test the _read_enthalpy_coefficients method of RoddedRegion
-        
-        Parameters
-        ----------
-        simple_ctrl_rr_ent : dassh.RoddedRegion
-            The RoddedRegion object to test
-        """
-        for mat in rr_data.enthalpy['delta_h'].keys():
-            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
-            assert simple_ctrl_rr_ent.enthalpy_coeffs == \
-                pytest.approx(rr_data.enthalpy['coeffs'][mat], abs=rr_data.enthalpy['tol'])
-
-    def test_calc_delta_h(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
-        """
-        Test the _calc_delta_h method of RoddedRegion
-        
-        Parameters
-        ----------
-        simple_ctrl_rr_ent : dassh.RoddedRegion
-            The RoddedRegion object to test
-        """
-        for mat in rr_data.enthalpy['delta_h'].keys():
-            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
-            assert simple_ctrl_rr_ent._calc_delta_h(rr_data.enthalpy['T1'], rr_data.enthalpy['T2']) == \
-                pytest.approx(rr_data.enthalpy['delta_h'][mat], abs=rr_data.enthalpy['tol'])
-
-    def test_temp_from_enthalpy(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
-        """
-        Test the _temp_from_enthalpy method of RoddedRegion
-        
-        Parameters
-        ----------
-        simple_ctrl_rr_ent : dassh.RoddedRegion
-            The RoddedRegion object to test
-        """
-        simple_ctrl_rr_ent.temp['coolant_int'] = \
-            np.array(rr_data.enthalpy['T1'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']))
-
-        for mat in rr_data.enthalpy['delta_h'].keys():
-            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
-            dh = rr_data.enthalpy['delta_h'][mat] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
-            assert simple_ctrl_rr_ent._temp_from_enthalpy(dh) == \
-                pytest.approx(rr_data.enthalpy['T2'] * np.ones(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']),
-                              abs=rr_data.enthalpy['tol'])
-
-    def test_temp_from_enthalpy_zero_deltah(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
+    """          
+    def test_temp_from_enthalpy_zero_deltah(
+        self, simple_ctrl_rr_ent: dassh.RoddedRegion):
         """
         Test that the _temp_from_enthalpy method of RoddedRegion with zero deltaH
         returns zero deltaT
@@ -1305,11 +1245,13 @@ class TestEnthalpy():
             The RoddedRegion object to test
         """
         dh = np.zeros(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
-        assert simple_ctrl_rr_ent._temp_from_enthalpy(dh) == \
+        assert simple_ctrl_rr_ent.coolant.temp_from_enthalpy(
+            dh, simple_ctrl_rr_ent.temp['coolant_int']) == \
             pytest.approx(simple_ctrl_rr_ent.temp['coolant_int'],
                           abs=rr_data.enthalpy['tol'])
             
-    def test_coolant_int_temp_no_power(self, simple_ctrl_rr_ent: dassh.RoddedRegion):        
+    def test_coolant_int_temp_no_power(self, 
+                                       simple_ctrl_rr_ent: dassh.RoddedRegion):        
         """
         Test that the internal coolant temperature calculation
         with enthalpy and zero power returns no temperature change
@@ -1324,13 +1266,15 @@ class TestEnthalpy():
         qpins = np.zeros(tmp_asm.n_pin)
         qcool = np.zeros(tmp_asm.subchannel.n_sc['coolant']['total'])
         power = {'pins': qpins, 'cool': qcool}
-        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp,
-                                                      rr_data.outlet_temp)
+        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, 
+                                                     rr_data.inlet_temp,
+                                                     rr_data.outlet_temp)
         
         # Calculate new temperatures and deltaT
         tmp_asm._calc_coolant_int_temp(dz, power['pins'], power['cool'])
         assert np.allclose(tmp_asm.temp['coolant_int'], 
-                           rr_data.inlet_temp*np.ones(tmp_asm.subchannel.n_sc['coolant']['total']),
+                           rr_data.inlet_temp*np.ones(
+                               tmp_asm.subchannel.n_sc['coolant']['total']),
                            atol=rr_data.enthalpy['tol'])
 
     def test_coolant_int_temp(self, simple_ctrl_rr_ent: dassh.RoddedRegion):
@@ -1346,8 +1290,9 @@ class TestEnthalpy():
         tmp_asm = simple_ctrl_rr_ent.clone()
 
         power = mock_AssemblyPower(simple_ctrl_rr_ent)
-        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, rr_data.inlet_temp,
-                                                      rr_data.outlet_temp)
+        dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, 
+                                                     rr_data.inlet_temp,
+                                                     rr_data.outlet_temp)
         ans = dz * tmp_asm._calc_int_sc_power(power['pins'], power['cool'])
         # Calculate new temperatures
         tmp_asm._update_subchannels_properties(tmp_asm.temp['coolant_int'])
@@ -1376,11 +1321,13 @@ class TestEnthalpy():
 
         power = {
             'pins': np.zeros(tmp_asm.n_pin),
-            'cool': rr_data.enthalpy['linear_cool_power'] * np.ones(tmp_asm.subchannel.n_sc['coolant']['total'])
+            'cool': rr_data.enthalpy['linear_cool_power'] * np.ones(
+                tmp_asm.subchannel.n_sc['coolant']['total'])
         }
         
         tmp_asm._update_subchannels_properties(tmp_asm.temp['coolant_int'])
-        tmp_asm._calc_coolant_int_temp(rr_data.enthalpy['dz'], power['pins'], power['cool'])
+        tmp_asm._calc_coolant_int_temp(rr_data.enthalpy['dz'], power['pins'], 
+                                       power['cool'])
         print(tmp_asm.sc_mfr, tmp_asm.sc_properties['heat_capacity'])
         assert tmp_asm.avg_coolant_int_temp == \
             pytest.approx(rr_data.inlet_temp + rr_data.enthalpy['dT'], 

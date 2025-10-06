@@ -32,7 +32,9 @@ from typing import Union, Callable, Any, Dict, Tuple, List
 
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
-
+_DATA_FOLDER = 'data'
+_h2T_COEFF_FILE = 'coeffs_h2T.csv'
+_T2h_COEFF_FILE = 'coeffs_T2h.csv'
 
 _BUILTINS = ['ht9', 'ss316', 'ss304', 'd9', 'bismuth', 'lbe', 'lead',
              'nak', 'potassium', 'sodium', 'water' 'ht9_se2anl',
@@ -499,7 +501,94 @@ class Material(LoggedClass):
         if new_temperature is not None:
             clone.update(new_temperature)
         return clone
+    
+    ##########################################################################
+    #          ENTHALPY-TEMPERATURE CONVERSION METHODS AND PROPERTIES
+    ##########################################################################
+    def temp_from_enthalpy(self, dh: np.ndarray, temps_state1: np.ndarray
+                           ) -> np.ndarray:
+        """
+        Convert enthalpy difference to the temperature of the new 
+        thermodyamic state 
+        
+        Parameters
+        ----------
+        dh : float
+            Enthalpy difference (J/kg)
+        temps_state1 : np.ndarray
+            Array of temperatures at the initial thermodynamic state (K)
+        
+        Returns
+        -------
+        float
+            Temperature (K)
+        """  
+        tguess = temps_state1.copy()
+        h_coolant = np.polyval(self._coeffs_T2h, tguess)
+        return np.polyval(self._coeffs_h2T, h_coolant + dh)
 
+
+    def _read_coefficients(self, file_name) -> np.ndarray:
+        """
+        Method to read coefficients for enthalpy-temperature conversion 
+        polynomials from file
+        
+        Parameters
+        ----------
+        file_name : str
+            Name of the file containing the coefficients
+            
+        Returns
+        -------
+        numpy.ndarray
+
+        """
+        path = os.path.join(_ROOT, _DATA_FOLDER, file_name)
+        try:
+            with open(path, 'r') as f:
+                reader = csv.reader(f)
+                header = next(reader) 
+        except:
+            self.log('error', f"Could not find enthalpy-temperature"
+                     f" coefficients file {path}.") 
+
+        idx = header.index(self.name)
+        coeffs = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
+        return coeffs[~np.isnan(coeffs)]
+    
+
+    def assign_ent_coefficients(self):
+        """
+        Assign coefficients for enthalpy-temperature conversion polynomials
+        to the coolant object        
+        """
+        self._coeffs_h2T = self._read_coefficients(_h2T_COEFF_FILE)
+        self._coeffs_T2h = self._read_coefficients(_T2h_COEFF_FILE)
+
+
+    @property
+    def coeffs_h2T(self) -> np.ndarray:
+        """
+        Coefficients for polynomial converting enthalpy to temperature
+        
+        Returns
+        -------
+        numpy.ndarray
+            Coefficients for polynomial converting enthalpy to temperature
+        """
+        return self._coeffs_h2T
+    
+    @property
+    def coeffs_T2h(self) -> np.ndarray:
+        """
+        Coefficients for polynomial converting temperature to enthalpy
+        
+        Returns
+        -------
+        numpy.ndarray
+            Coefficients for polynomial converting temperature to enthalpy
+        """
+        return self._coeffs_T2h
 
 class _MatInterp(object):
     """Interpolation object for material properties"""

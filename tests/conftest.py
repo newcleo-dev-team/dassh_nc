@@ -124,6 +124,7 @@ class MaterialData:
     water_temperature: float
     conftest_temp_from_textbook: float
     three_asm_temperature: List[float]
+    enthalpy: dict[str, Union[float, Dict[str, List[float]]]]
 
 @dataclass
 class RRData:
@@ -209,7 +210,8 @@ def pytest_configure(config):
         corr_mid_range=file_data["corr_mid_range"],
         water_temperature=file_data["water_temperature"],
         conftest_temp_from_textbook=file_data["conftest_temp_from_textbook"],
-        three_asm_temperature=file_data["three_asm_temperature"]
+        three_asm_temperature=file_data["three_asm_temperature"],
+        enthalpy=file_data["enthalpy"]
     )
     ###############################################
     # Setup test data for RoddedRegion class tests

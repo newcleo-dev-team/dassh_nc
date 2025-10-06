@@ -38,55 +38,6 @@ import os
 import csv
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
-_DATA_FOLDER = 'data'
-_ENT_COEFF_FILE = 'enthalpy_coefficients.csv'
-
-COEFFS_T2H = {
-    'lead': np.array([2.5946401e-28, -3.6153137e-24, 2.2587328e-20, 
-                      -8.3478080e-17, 2.0267351e-13, -3.3924161e-10,
-                      3.9928200e-07, -3.2516713e-04, 1.6354302e-01,
-                      1.0593242e+02, -8.5118758e+04]),
-    'lbe': np.array([4.3471434e-28, -5.4384938e-24, 3.0281962e-20,
-                     -9.8929883e-17, 2.1041961e-13, -3.0553896e-10,
-                     3.0865458e-07, -2.1248769e-04, 8.3742690e-02,
-                     1.3283430e+02, -5.8128110e+04]),
-    'bismuth': np.array([-3.0531219e-27, 3.9186070e-23, -2.2547463e-19,
-                         7.6731726e-16, -1.7150861e-12, 2.6423801e-09,
-                         -2.8619914e-06, 2.1783018e-03, -1.1383630e+00,
-                         5.1015175e+02, -1.3144698e+05]),
-    'sodium': np.array([2.5188397e-27, -3.2437672e-23, 1.8547106e-19,
-                        -6.2050719e-16, 1.3473571e-12, -1.9903088e-09,
-                        2.0374381e-06, -1.2944937e-03, 2.6788960e-01,
-                        1.4446020e+03, -3.2758664e+05]),
-    'nak': np.array([1.7314708e-35, -1.5442078e-31, 6.0933087e-28,
-                     -1.3990040e-24, 2.0666207e-21, -2.0489965e-18,
-                     1.3785544e-15, 1.1443000e-04, -1.8465000e-01,
-                     9.7133760e+02, 2.1489954e-06])
-    }
-
-COEFFS_H2T = {
-    'lead': np.array([-3.6997874e-52, 4.1372231e-46, -2.0741938e-40,
-                      6.1535403e-35, -1.1981210e-29, 1.6967101e-24,
-                      -2.1747325e-19, 1.5012356e-14, 2.5709724e-09,
-                      6.7577464e-03, 6.0060005e+02]),
-    'lbe': np.array([-7.5964828e-52, 8.9735563e-46, -4.6736634e-40,
-                     1.4165794e-34, -2.7756991e-29, 3.7520692e-24,
-                     -3.9187301e-19, 2.6429561e-14, 2.3521748e-09,
-                     6.7464209e-03, 3.9800045e+02]),
-    'bismuth': np.array([-1.8272071e-51, 1.5833900e-45, -5.5227499e-40,
-                         8.5704055e-35, 1.3451211e-30, -3.5076973e-24,
-                         8.5961648e-19, -1.3072354e-13, 1.3453237e-08,
-                         6.8656484e-03, 5.4460017e+02]),
-    'sodium': np.array([-2.6954710e-61, 3.5604057e-54, -1.9620306e-47,
-                        5.8023905e-41, -1.0091042e-34, 1.1864337e-28,
-                        -1.2670157e-22, 8.0882476e-17, 5.0681059e-11,
-                        6.9517755e-04, 2.2460921e+02]),
-    'nak': np.array([-4.0551915e-60, 1.3646328e-53, 4.4623013e-47,
-                     -3.2802131e-40, 7.3913734e-34, -7.7982694e-28,
-                     3.8381842e-22, -2.3830509e-16, 2.4838795e-10,
-                     1.0228907e-03, 4.0485948e-01])
-    }
-
 _sqrt3 = np.sqrt(3)
 _inv_sqrt3 = 1 / _sqrt3
 _sqrt3over3 = np.sqrt(3) / 3
@@ -497,11 +448,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             'gravity': 0.0}
         # Set up subchannel properties
         if not self._rad_isotropic:
-            self.sc_properties = {k: np.zeros(self.subchannel.n_sc['coolant']['total']) \
+            self.sc_properties = {k: np.zeros(
+                self.subchannel.n_sc['coolant']['total']) \
                 for k in self.coolant.PROPS_NAME}
             if self._ent:
-                self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total'])
-                self._enthalpy_coeffs = self._read_enthalpy_coefficients()
+                self._enthalpy = np.zeros(
+                    self.subchannel.n_sc['coolant']['total'])
+                self.coolant.assign_ent_coefficients()
             
     ####################################################################
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
@@ -863,23 +816,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     ####################################################################
     # ATTRIBUTES
     ####################################################################
-    @property
-    def enthalpy_coeffs(self):
-        """Return enthalpy coefficients"""
-        return self._enthalpy_coeffs
-    
-    @enthalpy_coeffs.setter
-    def enthalpy_coeffs(self, coeffs: np.ndarray):
-        """
-        Set enthalpy coefficients
-        
-        Parameters
-        ----------
-        coeffs : np.ndarray
-            Array of enthalpy coefficients
-        """
-        self._enthalpy_coeffs = coeffs
-
     @property
     def sc_mfr(self):
         """Return mass flow rate in each subchannel"""
@@ -1409,18 +1345,21 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
             if self._ent:
-                mcpdT_i = self.sc_mfr * dT_or_dh * dz
+                mcpdT_i = self.sc_mfr 
             elif self._rad_isotropic:
-                mcpdT_i = self.sc_mfr * self.coolant.heat_capacity * dT_or_dh * dz
+                mcpdT_i = self.sc_mfr * self.coolant.heat_capacity 
             else:
-                mcpdT_i = self.sc_mfr * self.sc_properties['heat_capacity'] * dT_or_dh * dz
+                mcpdT_i = self.sc_mfr * self.sc_properties['heat_capacity']
+                    
+            mcpdT_i *= dT_or_dh * dz
             
             self.update_ebal(dz * np.sum(q), dz * qduct, mcpdT_i)
         
         delta_T_or_h = dT_or_dh * dz
         if self._ent:
             self._enthalpy += delta_T_or_h
-            self.temp['coolant_int'] = self._temp_from_enthalpy(delta_T_or_h)
+            self.temp['coolant_int'] = self.coolant.temp_from_enthalpy(
+                delta_T_or_h, self.temp['coolant_int'])
         else:
             self.temp['coolant_int'] += delta_T_or_h
 
@@ -1474,71 +1413,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 - self.temp['coolant_int'][:, np.newaxis]))
         return cond_temp_difference
     
-    
-    def _temp_from_enthalpy(self, dh: np.ndarray) -> np.ndarray:
-        """
-        Convert enthalpy difference to the temperature of the new 
-        thermodyamic state 
-        
-        Parameters
-        ----------
-        dh : float
-            Enthalpy difference (J/kg)
-        
-        Returns
-        -------
-        float
-            Temperature (K)
-        """  
-        tguess = self.temp['coolant_int'].copy()
-        h_coolant = np.polyval(COEFFS_T2H[self.coolant.name], tguess)
-        return np.polyval(COEFFS_H2T[self.coolant.name], h_coolant + dh)
-
-
-    def _calc_delta_h(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
-        """
-        Calculate the enthalpy difference between two thermodynamic states
-        corresponding to two different temperatures using the enthalpy 
-        coefficients specific for the coolant
-        
-        Parameters
-        ----------
-        T1 : numpy.ndarray
-            Initial temperature (K)
-        T2 : numpy.ndarray
-            Final temperature (K)
-
-        Returns
-        -------
-        numpy.ndarray
-            Enthalpy difference (J/kg)
-        """
-        a, b, c, d = self._enthalpy_coeffs
-        return (a * (T2 - T1)
-                + b * (T2**2 - T1**2)
-                + c * (T2**3 - T1**3)
-                + d * (T2**(-1) - T1**(-1)))
-
-    def _read_enthalpy_coefficients(self) -> np.ndarray:
-        """
-        Method to read coefficients for the enthalpy variation calculation from a csv file.
-        All correlations in the form: A*(T2-T1) + B*(T2**2-T1**2) + C*(T2**3-T1**3) + D*(1/T2-1/T1)
-        
-        Returns
-        -------
-        numpy.ndarray
-            Array of enthalpy coefficients [A, B, C, D] for the coolant
-        """
-        path = os.path.join(_ROOT, _DATA_FOLDER, _ENT_COEFF_FILE)
-        try:
-            with open(path, 'r') as f:
-                reader = csv.reader(f)
-                header = next(reader) 
-        except:
-            self.log('error', f"Could not find enthalpy coefficients file {path}.") 
-            
-        idx = header.index(self.coolant.name)
-        return np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
 
     def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) -> float:
         """

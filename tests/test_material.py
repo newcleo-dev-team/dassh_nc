@@ -22,7 +22,7 @@ Test DASSH material class
 import os
 import pytest
 import numpy as np
-from dassh import Material
+from dassh import Material, RoddedRegion
 import copy
 from typing import Dict, List, Union
 from pytest import mat_data
@@ -410,4 +410,63 @@ class TestBuiltInDefinition():
         with pytest.raises(SystemExit):
             mat.update(mat_data.negative_temperature)
             
+class TestEnthalpyTemperatureConversion():
+    """
+    Class to test enthalpy-temperature conversion methods
+    """
+    def _assign_enthalpy_coeffs(self, mat: str, rr_obj: RoddedRegion):
+        """
+        Assign enthalpy coefficients for all materials in rr_data.enthalpy
+        
+        Parameters
+        ----------
+        mat : str
+            The name of the coolant material
+        rr_obj : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
+        rr_obj.coolant.name = mat
+        rr_obj.coolant.assign_ent_coefficients()
+        
+    def test_read_enthalpy_coefficients(self, simple_ctrl_rr_ent: RoddedRegion):
+        """
+        Test the _read_enthalpy_coefficients method of the Material class
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
+        for mat in mat_data.enthalpy['coeffs_T2h'].keys():
+            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
+            assert simple_ctrl_rr_ent.coolant.coeffs_T2h == \
+                pytest.approx(mat_data.enthalpy['coeffs_T2h'][mat], 
+                              abs=mat_data.enthalpy['tol'])
+            assert simple_ctrl_rr_ent.coolant.coeffs_h2T == \
+                pytest.approx(mat_data.enthalpy['coeffs_h2T'][mat], 
+                              abs=mat_data.enthalpy['tol'])
 
+
+    def test_temp_from_enthalpy(self, simple_ctrl_rr_ent: RoddedRegion):
+        """
+        Test the _temp_from_enthalpy method of the Material class
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
+        simple_ctrl_rr_ent.temp['coolant_int'] = \
+            np.array(mat_data.enthalpy['T1'] * np.ones(
+                simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']))
+
+        for mat in mat_data.enthalpy['delta_h'].keys():
+            self._assign_enthalpy_coeffs(mat, simple_ctrl_rr_ent)
+            dh = mat_data.enthalpy['delta_h'][mat] * np.ones(
+                simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
+            print('material:', mat)
+            assert simple_ctrl_rr_ent.coolant.temp_from_enthalpy(
+                dh, simple_ctrl_rr_ent.temp['coolant_int']) == \
+                pytest.approx(mat_data.enthalpy['T2'] * np.ones(
+                    simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total']),
+                              abs=mat_data.enthalpy['tol'])
