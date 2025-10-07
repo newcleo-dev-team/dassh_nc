@@ -24,13 +24,17 @@ import os
 import copy
 import numpy as np
 from dassh.logged_class import LoggedClass
-from lbh15 import Lead, Bismuth, LBE, lead_properties, bismuth_properties, lbe_properties
+from lbh15 import Lead, Bismuth, LBE
 import sympy as sp
 import csv
 import warnings
-from typing import Union, Callable, Any, Dict, Tuple, List
-from ._commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE, T2h_COEFF_FILE
-
+from typing import Union, Callable, Any, Dict, Tuple, List, Type
+from types import ModuleType
+from ._commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE
+from ._commons import MATERIAL_LBH, PROP_LBH15, PROPS_NAME, \
+    AMBIENT_TEMPERATURE, PROPS_NAME_FULL, BUILTIN_COOLANTS, MATERIAL_NAMES, \
+    LBH15_PROPERTIES 
+    
 def update_lbh15_material(logger: Callable[[str, str], None], temp: float, 
                           cool: Union[Lead, LBE, Bismuth] = None,
                           prop: Union[str, None] = None, 
@@ -63,7 +67,7 @@ def update_lbh15_material(logger: Callable[[str, str], None], temp: float,
                 setattr(cool, 'T', temp)
                 res = getattr(cool, prop)
             elif name is not None and temp is not None:
-                res = Material.MATERIAL_LBH[name](T=temp)
+                res = MATERIAL_LBH[name](T=temp)
         except ValueError as e:
             logger('error', str(e))
         if w:
@@ -104,38 +108,9 @@ class Material(LoggedClass):
         - Heat capacity (Cp): J/kg-K
         - Thermal conductivity (k): W/m-K
 
-    """
-    MATERIAL_LBH: dict[str, Any] = {
-            'lead': Lead,
-            'bismuth': Bismuth,
-            'lbe': LBE
-        }
-
-    PROP_LBH15: dict[str, Any] = {'lead': lead_properties,
-                  'bismuth': bismuth_properties,
-                  'lbe': lbe_properties}
-
-    LBH15_PROPERTIES: list[str] = ['rho', 'cp', 'mu', 'k']
-    """Property names as used in lbh15"""
-    PROPS_NAME: list[str] = ['density', 'heat_capacity', 'viscosity', 
-                  'thermal_conductivity']
-    """Property names as used in dassh"""
-    PROPS_NAME_FULL: dict[str, str] = dict(zip(PROPS_NAME, LBH15_PROPERTIES))
-    """Mapping between property names as used in dassh and in lbh15"""
-    BUILTIN_COOLANTS: list[str] = ['sodium', 'nak', 'lead', 'lbe', 'bismuth']
-    """Builtin coolant materials"""
-    MATERIAL_NAMES: list[str] = BUILTIN_COOLANTS + ['potassium', 'water', 
-                                                    'ss304', 'ss316']
-    """Material names built-in in dassh"""
-    AMBIENT_TEMPERATURE: float = 298.15
-    """Default temperature (K)"""
-    
-    _coeffs_hT2: np.ndarray | None = None
+    """  
+    _coeffs_hT2: Union[np.ndarray, None] = None
     """Polynomial coefficients for enthalpy to temperature conversion"""
-    _coeffs_T2h: np.ndarray | None = None
-    """Polynomial coefficients for temperature to enthalpy conversion"""
-    
-     
     def __init__(self, name, temperature=None, from_file=None,
                  corr_dict=None, lbh15_correlations = None,
                  use_correlation = False, solve_enthalpy = False):
@@ -147,7 +122,7 @@ class Material(LoggedClass):
             self.read_from_file(from_file)
         elif corr_dict:
             self._define_from_user_corr(corr_dict)
-        elif use_correlation and self.name in Material.MATERIAL_LBH.keys():
+        elif use_correlation and self.name in MATERIAL_LBH.keys():
             if temperature is None:
                 temperature = self.__get_mid_temp(self.validity_ranges,
                                                   use_correlation)
@@ -173,8 +148,8 @@ class Material(LoggedClass):
         # Update properties based on input temperature
         self.update(self.temperature)
         
-        if solve_enthalpy and self.name in self.BUILTIN_COOLANTS:
-            self._assign_ent_coefficients()
+        if solve_enthalpy and self.name in BUILTIN_COOLANTS:
+           self._coeffs_h2T = self._read_coefficients(h2T_COEFF_FILE)
         
         
     def __get_mid_temp(self, val_range: Union[Dict[str, tuple], None] = None,
@@ -192,15 +167,15 @@ class Material(LoggedClass):
         mid_temp: float
             Middle temperature of the validity range of the properties
         """
-        if self.name in self.MATERIAL_LBH.keys() and use_corr: # lbh15
-            return (self.PROP_LBH15[self.name].T_m0 + \
-                self.PROP_LBH15[self.name].T_b0) / 2
+        if self.name in MATERIAL_LBH.keys() and use_corr: # lbh15
+            return (PROP_LBH15[self.name].T_m0 + \
+                PROP_LBH15[self.name].T_b0) / 2
         elif val_range: # table or Na/Nak correlations
             val_range_values = val_range.values()
             return (min(value[0] for value in val_range_values)) \
                 + max(value[1] for value in val_range_values) / 2
         else: # user-defined correlations or built-in materials (ex. ht9, d9)
-            return self.AMBIENT_TEMPERATURE
+            return AMBIENT_TEMPERATURE
         
     def read_from_file(self, path):
         """Determine whether a user-provided CSV file is providing
@@ -228,7 +203,7 @@ class Material(LoggedClass):
             self._define_from_user_corr(cdict)
             
     def __get_validity_ranges(self, data: Union[np.ndarray, None] = None, 
-                              header: Union[List[str], None] = None, corr: Union[mat_from_corr, None] = None) -> None:
+                              header: Union[List[str], None] = None, corr: Union[Mat_from_corr, None] = None) -> None:
         """
         Get the validity ranges for all the properties of the material
         
@@ -238,20 +213,20 @@ class Material(LoggedClass):
             Numpy array that contains temperatures (first column) and properties taken from a file
         header: list[str]
             Header of the file containing the properties names and the temperature
-        corr: mat_from_corr
+        corr: Mat_from_corr
             Object for sodium or NaK correlations, returns property values 
             or validity range for a property
         """
         if corr:  
             correlation_obj = corr()
-            for prop_name in self.PROPS_NAME:
+            for prop_name in PROPS_NAME:
                 self.validity_ranges[f"{prop_name}_range"] = \
                     getattr(correlation_obj, f"{prop_name}_range")
         elif data is not None and header is not None: 
             temperature = data[:, 0]
             properties = data[:, 1:]
             for i, prop_name in enumerate(header[1:]):
-                if prop_name in self.PROPS_NAME:
+                if prop_name in PROPS_NAME:
                     valid_temps = temperature[~np.isnan(properties[:, i])]
                     self.validity_ranges[f"{prop_name}_range"] = (valid_temps[0], valid_temps[-1])
                 else:
@@ -301,22 +276,22 @@ class Material(LoggedClass):
         self._data = {}
         cool_lbh15 = update_lbh15_material(self.log, temp = temperature, 
                                            name = self.name)
-        for property in Material.PROPS_NAME:
+        for property in PROPS_NAME:
             correlations = \
-                cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
-            corr_name = lbh15_correlations[Material.PROPS_NAME_FULL[property]]
+                cool_lbh15.available_correlations(LBH15_PROPERTIES)
+            corr_name = lbh15_correlations[PROPS_NAME_FULL[property]]
             if corr_name and corr_name not in correlations[
-                Material.PROPS_NAME_FULL[property]]:
+                PROPS_NAME_FULL[property]]:
                 msg = f'Correlation {corr_name} for '
-                msg += f'{Material.PROPS_NAME_FULL[property]} ' 
+                msg += f'{PROPS_NAME_FULL[property]} ' 
                 msg += f'not available for {self.name}'
                 self.log('error', msg)
-            if corr_name in correlations[Material.PROPS_NAME_FULL[property]]:
+            if corr_name in correlations[PROPS_NAME_FULL[property]]:
                 cool_lbh15.change_correlation_to_use(
-                    Material.PROPS_NAME_FULL[property], corr_name)        
-        for property in Material.PROPS_NAME:
+                    PROPS_NAME_FULL[property], corr_name)        
+        for property in PROPS_NAME:
             self._data[property] = _Matlbh15(
-                Material.PROPS_NAME_FULL[property], cool_lbh15)           
+                PROPS_NAME_FULL[property], cool_lbh15)           
                                                                     
     @staticmethod
     def _coeff_from_table(path):
@@ -366,15 +341,19 @@ class Material(LoggedClass):
                 
     def _define_from_correlation(self):
         """Define Na or NaK properties from correlation"""
+        corr = self._import_mat_correlation()     
+        self.__get_validity_ranges(corr=corr.Mat_from_corr)
+        self._data = {}
+        for property in PROPS_NAME:
+            self._data[property] = corr.Mat_from_corr(property)
+            
+    def _import_mat_correlation(self) -> ModuleType:
+        """Import correlation module for Na or NaK properties"""
         if self.name == 'sodium':
             import dassh.correlations.properties_Na as corr  
         elif self.name == 'nak':
             import dassh.correlations.properties_NaK as corr
-            
-        self.__get_validity_ranges(corr=corr.mat_from_corr)
-        self._data = {}
-        for property in self.PROPS_NAME:
-            self._data[property] = corr.mat_from_corr(property)
+        return corr
     
     @property
     def name(self):
@@ -519,7 +498,7 @@ class Material(LoggedClass):
         """Update material properties based on new bulk temperature"""
         self.temperature = temperature
         for property in self._data.keys():
-            if self.name in self.MATERIAL_NAMES:
+            if self.name in MATERIAL_NAMES:
                 self.__check_limits(property)
             setattr(self, property, self._data[property](temperature))
                 
@@ -545,7 +524,7 @@ class Material(LoggedClass):
         Parameters
         ----------
         enthalpy : np.ndarray
-            Array of enthalpy values (J/kg)
+            Enthalpy values of the state for which temperature is seeked (J/kg)
 
         Returns
         -------
@@ -554,7 +533,7 @@ class Material(LoggedClass):
         """  
         return np.polyval(self._coeffs_h2T, enthalpy)
     
-    def init_enthalpy(self, temperature: float) -> float:
+    def enthalpy_from_temp(self, temperature: float) -> float:
         """
         Calculate the enthalpy at a given temperature
         
@@ -567,8 +546,12 @@ class Material(LoggedClass):
         -------
         float
             Enthalpy (J/kg) at the given `temperature`
-        """
-        return np.polyval(self._coeffs_T2h, temperature)
+        """ 
+        if self.name in MATERIAL_LBH.keys():
+            return MATERIAL_LBH[self.name](T=temperature).h
+        corr = self._import_mat_correlation()
+        ent = corr.Mat_from_corr('enthalpy')
+        return ent(temperature)
 
 
     def _read_coefficients(self, file_name) -> np.ndarray:
@@ -601,15 +584,6 @@ class Material(LoggedClass):
                      f" coefficients for material {self.name}.")
         coeffs = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
         return coeffs[~np.isnan(coeffs)]
-    
-
-    def _assign_ent_coefficients(self):
-        """
-        Assign coefficients for enthalpy-temperature conversion polynomials
-        to the coolant object        
-        """
-        self._coeffs_h2T = self._read_coefficients(h2T_COEFF_FILE)
-        self._coeffs_T2h = self._read_coefficients(T2h_COEFF_FILE)
 
 
     @property
@@ -622,25 +596,11 @@ class Material(LoggedClass):
         numpy.ndarray
             Coefficients for polynomial converting enthalpy to temperature
         """
-        if not np.all(self._coeffs_T2h):
+        if not np.all(self._coeffs_h2T):
             self.log("error", "Temperature-enthalpy coefficients not yet"
                      "assigned")
         return self._coeffs_h2T
     
-    @property
-    def coeffs_T2h(self) -> np.ndarray:
-        """
-        Coefficients for polynomial converting temperature to enthalpy
-        
-        Returns
-        -------
-        numpy.ndarray
-            Coefficients for polynomial converting temperature to enthalpy
-        """
-        if not np.all(self._coeffs_T2h):
-            self.log("error", "Enthalpy-temperature coefficients not yet"
-                     "assigned")
-        return self._coeffs_T2h
 
 class _MatInterp(object):
     """Interpolation object for material properties"""

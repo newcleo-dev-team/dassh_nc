@@ -423,11 +423,9 @@ class TestEnthalpyTemperatureConversion():
         simple_ctrl_rr_ent : dassh.RoddedRegion
             The RoddedRegion object to test
         """
-        for mat in mat_data.enthalpy['coeffs_T2h'].keys():
-            mm = Material(mat, temperature=mat_data.enthalpy['T1'], solve_enthalpy=True)
-            assert mm.coeffs_T2h == \
-                pytest.approx(mat_data.enthalpy['coeffs_T2h'][mat], 
-                              abs=mat_data.enthalpy['tol'])
+        for mat in mat_data.enthalpy['coeffs_h2T'].keys():
+            mm = Material(mat, temperature=mat_data.enthalpy['T1'],
+                          solve_enthalpy=True)
             assert mm.coeffs_h2T == \
                 pytest.approx(mat_data.enthalpy['coeffs_h2T'][mat], 
                               abs=mat_data.enthalpy['tol'])
@@ -435,7 +433,7 @@ class TestEnthalpyTemperatureConversion():
 
     def test_temp_from_enthalpy(self):
         """
-        Test the _temp_from_enthalpy method of the Material class
+        Test the temp_from_enthalpy method of the Material class
         
         Parameters
         ----------
@@ -443,7 +441,25 @@ class TestEnthalpyTemperatureConversion():
             The RoddedRegion object to test
         """
         for mat in mat_data.enthalpy['h2'].keys():
-            mm = Material(mat, temperature=mat_data.enthalpy['T1'], solve_enthalpy=True)
+            mm = Material(mat, temperature=mat_data.enthalpy['T1'], 
+                          solve_enthalpy=True)
             assert mm.temp_from_enthalpy(mat_data.enthalpy['h2'][mat]) == \
                 pytest.approx(mat_data.enthalpy['T2'],
+                              abs=mat_data.enthalpy['tol'])
+                
+    def test_enthalpy_from_temp(self):
+        """
+        Test the enthalpy_from_temp method of the Material class
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_ent : dassh.RoddedRegion
+            The RoddedRegion object to test
+        """
+        for mat in mat_data.enthalpy['h2'].keys():
+            print(mat)
+            mm = Material(mat, temperature=mat_data.enthalpy['T1'], 
+                          solve_enthalpy=True)
+            assert mm.enthalpy_from_temp(mat_data.enthalpy['T2']) == \
+                pytest.approx(mat_data.enthalpy['h2'][mat],
                               abs=mat_data.enthalpy['tol'])

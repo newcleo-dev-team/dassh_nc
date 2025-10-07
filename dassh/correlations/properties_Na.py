@@ -2,7 +2,7 @@ import numpy as np
 from dassh.correlations.properties_abs import PropertyClass
 from typing import Union
 
-class mat_from_corr(PropertyClass):
+class Mat_from_corr(PropertyClass):
     """
     Correlation object for sodium properties
     
@@ -52,6 +52,14 @@ class mat_from_corr(PropertyClass):
         # CODATA equation for Na
         return (1.6582 - 8.4790e-4*T + 4.4541e-7*T**2 - 2992.6/T**2)*1000  # J/kg-K
     
+    def enthalpy(self, T: float) -> float:
+        """
+        Computes sodium enthalpy (relative to solid sodium at 298.15 K)
+        Eq. (1) pag. 4 of [1]
+        """
+        return (-365.77 + 1.6582*T - 4.2395e-4*T**2 + 1.4847e-7*T**3 
+                + 2992.6/T)*1e3  # J/kg
+    
     @property 
     def density_range(self) -> tuple[float]:
         return (371, 2500)
@@ -66,4 +74,8 @@ class mat_from_corr(PropertyClass):
     
     @property 
     def heat_capacity_range(self) -> tuple[float]:
+        return (371, 2000)
+    
+    @property 
+    def enthalpy_range(self) -> tuple[float]:
         return (371, 2000)

@@ -34,7 +34,7 @@ from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
 from dassh.material import _MatTracker
 from typing import Union, Dict, List
-from ._commons import SQRT3, SQRT3OVER3, Q_P2SC
+from ._commons import SQRT3, SQRT3OVER3, Q_P2SC, PROPS_NAME
 
 
 
@@ -444,10 +444,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if not self._rad_isotropic:
             self.sc_properties = {k: np.zeros(
                 self.subchannel.n_sc['coolant']['total']) \
-                for k in self.coolant.PROPS_NAME}
+                for k in PROPS_NAME}
         if self._ent:
             self._enthalpy = \
-                    self.coolant.init_enthalpy(self.coolant.temperature) * \
+                    self.coolant.enthalpy_from_temp(self.coolant.temperature) * \
                         np.ones(self.subchannel.n_sc['coolant']['total'])
             
     ####################################################################
