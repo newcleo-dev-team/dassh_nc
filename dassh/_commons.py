@@ -7,28 +7,27 @@ from types import ModuleType
 from typing import Type
 
 ROOT: str = os.path.dirname(os.path.abspath(__file__))
-"""Root folder of the dassh package."""
+"""Root folder of the dassh package"""
 DATA_FOLDER: str = 'data'
-"""Folder where data files are stored."""
+"""Folder where data files are stored"""
 h2T_COEFF_FILE: str = 'coeffs_h2T.csv'
-"""File name for the enthalpy-to-temperature conversion coefficients."""
+"""File name for the enthalpy-to-temperature conversion coefficients"""
 SQRT3: float = np.sqrt(3)
 """Square root of 3."""
 SQRT3OVER3: float = np.sqrt(3) / 3
-"""Square root of 3 divided by 3."""
+"""Square root of 3 divided by 3"""
 Q_P2SC: np.ndarray = np.array([0.166666666666667, 0.25, 0.166666666666667])
-"""Fraction of pin surface in contact with each type of subchannel if contact exists."""
-
+"""Fraction of pin surface in contact with each type of subchannel"""
 MATERIAL_LBH: dict[str, Type] = {
             'lead': Lead,
             'bismuth': Bismuth,
             'lbe': LBE
         }
-
+"""Mapping between material names and lbh15 classes"""
 PROP_LBH15: dict[str, ModuleType] = {'lead': lead_properties,
                 'bismuth': bismuth_properties,
                 'lbe': lbe_properties}
-
+"""Mapping between material names and lbh15 property modules"""
 LBH15_PROPERTIES: list[str] = ['rho', 'cp', 'mu', 'k']
 """Property names as used in lbh15"""
 PROPS_NAME: list[str] = ['density', 'heat_capacity', 'viscosity', 
