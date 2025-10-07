@@ -29,7 +29,7 @@ import sympy as sp
 import csv
 import warnings
 from typing import Union, Callable, Any, Dict, Tuple, List
-from _commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE, T2h_COEFF_FILE
+from ._commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE, T2h_COEFF_FILE
 
 def update_lbh15_material(logger: Callable[[str, str], None], temp: float, 
                           cool: Union[Lead, LBE, Bismuth] = None,
@@ -356,7 +356,7 @@ class Material(LoggedClass):
                     msg = f'Invalid correlation for {self.name} {property}: {e}'
                     self.log('error', msg)
                 if corr_symbols != ['T'] and corr_symbols != []:
-                    msg = f'Correlation for {self.name} {property} contains'
+                    msg = f'Correlation for {self.name} {property} contains '
                     msg += 'invalid symbols'
                     self.log('error', msg)            
                 self._data[property] = _MatUserCorr(property, expr) 

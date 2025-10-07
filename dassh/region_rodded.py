@@ -34,7 +34,7 @@ from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
 from dassh.material import _MatTracker
 from typing import Union, Dict, List
-from _commons import SQRT3, SQRT3OVER3, Q_P2SC
+from ._commons import SQRT3, SQRT3OVER3, Q_P2SC
 
 
 
