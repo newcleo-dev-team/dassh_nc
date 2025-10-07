@@ -29,19 +29,12 @@ import sympy as sp
 import csv
 import warnings
 from typing import Union, Callable, Any, Dict, Tuple, List
+from _commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE, T2h_COEFF_FILE
 
-
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-_DATA_FOLDER = 'data'
-_h2T_COEFF_FILE = 'coeffs_h2T.csv'
-_T2h_COEFF_FILE = 'coeffs_T2h.csv'
-
-_BUILTINS = ['ht9', 'ss316', 'ss304', 'd9', 'bismuth', 'lbe', 'lead',
-             'nak', 'potassium', 'sodium', 'water' 'ht9_se2anl',
-             'ht9_se2anl_425', 'sodium_se2anl', 'sodium_se2anl_425']
-
-def update_lbh15_material(logger: Callable[[str, str], None], temp: float, cool: Union[Lead, LBE, Bismuth] = None,
-                          prop: Union[str, None] = None, name: Union[str, None] = None) -> Union[float, None]:
+def update_lbh15_material(logger: Callable[[str, str], None], temp: float, 
+                          cool: Union[Lead, LBE, Bismuth] = None,
+                          prop: Union[str, None] = None, 
+                          name: Union[str, None] = None) -> Union[float, None]:
     """
     Handle warnings that may be raised by lbh15 while istantiating a material
     or while updating material properties
@@ -112,28 +105,29 @@ class Material(LoggedClass):
         - Thermal conductivity (k): W/m-K
 
     """
-    MATERIAL_LBH = {
+    MATERIAL_LBH: dict[str, Any] = {
             'lead': Lead,
             'bismuth': Bismuth,
             'lbe': LBE
         }
-    
-    PROP_LBH15 = {'lead': lead_properties,
+
+    PROP_LBH15: dict[str, Any] = {'lead': lead_properties,
                   'bismuth': bismuth_properties,
                   'lbe': lbe_properties}
-    
-    LBH15_PROPERTIES = ['rho', 'cp', 'mu', 'k']
+
+    LBH15_PROPERTIES: list[str] = ['rho', 'cp', 'mu', 'k']
     """Property names as used in lbh15"""
-    PROPS_NAME = ['density', 'heat_capacity', 'viscosity', 
+    PROPS_NAME: list[str] = ['density', 'heat_capacity', 'viscosity', 
                   'thermal_conductivity']
     """Property names as used in dassh"""
-    PROPS_NAME_FULL = dict(zip(PROPS_NAME, LBH15_PROPERTIES))
+    PROPS_NAME_FULL: dict[str, str] = dict(zip(PROPS_NAME, LBH15_PROPERTIES))
     """Mapping between property names as used in dassh and in lbh15"""
-    BUILTIN_COOLANTS = ['sodium', 'nak', 'lead', 'lbe', 'bismuth']
+    BUILTIN_COOLANTS: list[str] = ['sodium', 'nak', 'lead', 'lbe', 'bismuth']
     """Builtin coolant materials"""
-    MATERIAL_NAMES = BUILTIN_COOLANTS + ['potassium', 'water', 'ss304', 'ss316']
+    MATERIAL_NAMES: list[str] = BUILTIN_COOLANTS + ['potassium', 'water', 
+                                                    'ss304', 'ss316']
     """Material names built-in in dassh"""
-    AMBIENT_TEMPERATURE = 298.15
+    AMBIENT_TEMPERATURE: float = 298.15
     """Default temperature (K)"""
     
     _coeffs_hT2: np.ndarray | None = None
@@ -155,7 +149,8 @@ class Material(LoggedClass):
             self._define_from_user_corr(corr_dict)
         elif use_correlation and self.name in Material.MATERIAL_LBH.keys():
             if temperature is None:
-                temperature = self.__get_mid_temp(self.validity_ranges, use_correlation)
+                temperature = self.__get_mid_temp(self.validity_ranges,
+                                                  use_correlation)
             self._define_from_lbh15(lbh15_correlations, temperature) 
         elif use_correlation and self.name in ['sodium', 'nak']:
             self._define_from_correlation()
@@ -171,7 +166,8 @@ class Material(LoggedClass):
 
         # Initialize material temperature
         if temperature is None:
-            self.temperature = self.__get_mid_temp(self.validity_ranges, use_correlation)
+            self.temperature = self.__get_mid_temp(self.validity_ranges,
+                                                   use_correlation)
         else: 
             self.temperature = temperature
         # Update properties based on input temperature
@@ -181,7 +177,8 @@ class Material(LoggedClass):
             self._assign_ent_coefficients()
         
         
-    def __get_mid_temp(self, val_range: Union[Dict[str, tuple], None] = None, use_corr: Union[bool, None] = False) -> float:
+    def __get_mid_temp(self, val_range: Union[Dict[str, tuple], None] = None,
+                       use_corr: Union[bool, None] = False) -> float:
         """
         Find the middle temperature of the validity range of the properties
         
@@ -196,7 +193,8 @@ class Material(LoggedClass):
             Middle temperature of the validity range of the properties
         """
         if self.name in self.MATERIAL_LBH.keys() and use_corr: # lbh15
-            return (self.PROP_LBH15[self.name].T_m0 + self.PROP_LBH15[self.name].T_b0) / 2
+            return (self.PROP_LBH15[self.name].T_m0 + \
+                self.PROP_LBH15[self.name].T_b0) / 2
         elif val_range: # table or Na/Nak correlations
             val_range_values = val_range.values()
             return (min(value[0] for value in val_range_values)) \
@@ -221,7 +219,8 @@ class Material(LoggedClass):
         if line1[0] == 'temperature' and 'thermal_conductivity' in line1:
             self._define_from_table(path)
         elif 'temperature' in line1 and line1[0] != 'temperature':
-            self.log('error', 'First column must be "temperature" for materials defined by table properties interpolation')
+            self.log('error', 'First column must be "temperature" for materials' 
+                     ' defined by table properties interpolation')
         elif '=' in data[0]:
             self._define_from_user_corr(self._corr_from_file(path))
         else:  
@@ -264,7 +263,7 @@ class Material(LoggedClass):
     def _define_from_table(self, path):
         """Define correlation by interpolation of data table"""
         if not path:
-            path = os.path.join(_ROOT, 'data', self.name + '.csv')
+            path = os.path.join(ROOT, 'data', self.name + '.csv')
             
         with open(path, 'r') as f:
             reader = csv.reader(f)
@@ -292,24 +291,32 @@ class Material(LoggedClass):
             x2 = x[y > 0]  # Need to ignore zeros in dependent var
             y2 = y[y > 0]  # Now filter from dependent var
             if not np.all(np.diff(x) > 0):
-                msg = f'Non strictly increasing temperature values detected in material data {path}'
+                msg = f'Non strictly increasing temperature values detected in' 
+                msg += f' material data {path}'
                 self.log('error', msg)
             self._data[cols[i]] = _MatInterp(x2, y2)
     
     def _define_from_lbh15(self, lbh15_correlations, temperature):
         """Define correlation by using lbh15"""    
         self._data = {}
-        cool_lbh15 = update_lbh15_material(self.log, temp = temperature, name = self.name)
+        cool_lbh15 = update_lbh15_material(self.log, temp = temperature, 
+                                           name = self.name)
         for property in Material.PROPS_NAME:
-            correlations = cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
+            correlations = \
+                cool_lbh15.available_correlations(Material.LBH15_PROPERTIES)
             corr_name = lbh15_correlations[Material.PROPS_NAME_FULL[property]]
-            if corr_name and corr_name not in correlations[Material.PROPS_NAME_FULL[property]]:
-                msg = f'Correlation {corr_name} for {Material.PROPS_NAME_FULL[property]} not available for {self.name}'
+            if corr_name and corr_name not in correlations[
+                Material.PROPS_NAME_FULL[property]]:
+                msg = f'Correlation {corr_name} for '
+                msg += f'{Material.PROPS_NAME_FULL[property]} ' 
+                msg += f'not available for {self.name}'
                 self.log('error', msg)
             if corr_name in correlations[Material.PROPS_NAME_FULL[property]]:
-                cool_lbh15.change_correlation_to_use(Material.PROPS_NAME_FULL[property], corr_name)        
+                cool_lbh15.change_correlation_to_use(
+                    Material.PROPS_NAME_FULL[property], corr_name)        
         for property in Material.PROPS_NAME:
-            self._data[property] = _Matlbh15(Material.PROPS_NAME_FULL[property], cool_lbh15)           
+            self._data[property] = _Matlbh15(
+                Material.PROPS_NAME_FULL[property], cool_lbh15)           
                                                                     
     @staticmethod
     def _coeff_from_table(path):
@@ -349,7 +356,8 @@ class Material(LoggedClass):
                     msg = f'Invalid correlation for {self.name} {property}: {e}'
                     self.log('error', msg)
                 if corr_symbols != ['T'] and corr_symbols != []:
-                    msg = f'Correlation for {self.name} {property} contains invalid symbols'
+                    msg = f'Correlation for {self.name} {property} contains'
+                    msg += 'invalid symbols'
                     self.log('error', msg)            
                 self._data[property] = _MatUserCorr(property, expr) 
             else:
@@ -459,15 +467,19 @@ class Material(LoggedClass):
     
     def __check_extreme_limits(self) -> None:
         """
-        Check if the temperature is within the maximum validity range of the material,
-        i.e. the largest range of all the properties
+        Check if the temperature is within the maximum validity range of the
+        material, i.e. the largest range of all the properties
         """
         val_range_values = self.validity_ranges.values()
         if self.temperature < min(value[0] for value in val_range_values): 
-            msg = f'Temperature {self.temperature} K is below the minimum allowed value of the validity range for {self.name}: {max(value[0] for value in val_range_values)} K'
+            msg = f'Temperature {self.temperature} K is below the minimum '
+            msg += f'allowed value of the validity range for {self.name}: '
+            msg += f'{max(value[0] for value in val_range_values)} K'
             self.log('error', msg)
         elif self.temperature > max(value[1] for value in val_range_values):
-            msg = f'Temperature {self.temperature} K is above the maximum allowed value of the validity range for {self.name}: {max(value[1] for value in val_range_values)} K'
+            msg = f'Temperature {self.temperature} K is above the maximum '
+            msg += f'allowed value of the validity range for {self.name}: '
+            msg += f'{max(value[1] for value in val_range_values)} K'
             self.log('error', msg)
 
     def __check_internal_limits(self, prop: str) -> None:
@@ -481,10 +493,12 @@ class Material(LoggedClass):
         """
         prop_range = self.validity_ranges[f"{prop}_range"]
         if self.temperature > prop_range[1]:
-            msg = f'Temperature {self.temperature} K is above the validity range of {prop} for {self.name}: {prop_range[1]} K'
+            msg = f'Temperature {self.temperature} K is above the validity '
+            msg += f'range of {prop} for {self.name}: {prop_range[1]} K'
             self.log('warning', msg)
         elif self.temperature < prop_range[0]:
-            msg = f'Temperature {self.temperature} K is below the validity range of {prop} for {self.name}: {prop_range[0]} K'
+            msg = f'Temperature {self.temperature} K is below the validity '
+            msg += f'range of {prop} for {self.name}: {prop_range[0]} K'
             self.log('warning', msg)
                 
     def __check_limits(self, prop: str)-> None:
@@ -572,7 +586,7 @@ class Material(LoggedClass):
         numpy.ndarray
             Coefficients 
         """
-        path = os.path.join(_ROOT, _DATA_FOLDER, file_name)
+        path = os.path.join(ROOT, DATA_FOLDER, file_name)
         try:
             with open(path, 'r') as f:
                 reader = csv.reader(f)
@@ -594,8 +608,8 @@ class Material(LoggedClass):
         Assign coefficients for enthalpy-temperature conversion polynomials
         to the coolant object        
         """
-        self._coeffs_h2T = self._read_coefficients(_h2T_COEFF_FILE)
-        self._coeffs_T2h = self._read_coefficients(_T2h_COEFF_FILE)
+        self._coeffs_h2T = self._read_coefficients(h2T_COEFF_FILE)
+        self._coeffs_T2h = self._read_coefficients(T2h_COEFF_FILE)
 
 
     @property
@@ -677,7 +691,8 @@ class _Matlbh15(LoggedClass):
     prop: str
         Property to calculate
     cool_lbh15: lbh15 object
-        lbh15 object representative of the liquid metal to which the property is related
+        lbh15 object representative of the liquid metal to which the property
+        is related
     """
     def __init__(self, prop, cool_lbh15):
         LoggedClass.__init__(self, 0, f'dassh._Matlbh15')
@@ -687,10 +702,14 @@ class _Matlbh15(LoggedClass):
         if type(temperature) is np.ndarray:
             result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
-                result[ii] = update_lbh15_material(self.log, temp = temperature[ii], cool = self.cool_lbh15, 
+                result[ii] = update_lbh15_material(self.log, 
+                                                   temp = temperature[ii], 
+                                                   cool = self.cool_lbh15, 
                                                    prop = self.prop)
             return result
-        result = update_lbh15_material(self.log, temp = temperature, cool = self.cool_lbh15, prop = self.prop)
+        result = update_lbh15_material(self.log, temp = temperature, 
+                                       cool = self.cool_lbh15, 
+                                       prop = self.prop)
         return result    
     
 class _MatUserCorr(object):
@@ -712,7 +731,8 @@ class _MatUserCorr(object):
         if isinstance(temperature, np.ndarray):
             result = np.zeros(len(temperature))
             for ii in range(len(temperature)):
-                result[ii] = float(self.expr.subs(self.T,temperature[ii]).evalf())
+                result[ii] = \
+                    float(self.expr.subs(self.T,temperature[ii]).evalf())
             return result
         return float(self.expr.subs(self.T,temperature).evalf())
     
