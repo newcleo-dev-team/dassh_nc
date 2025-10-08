@@ -428,8 +428,7 @@ class TestEnthalpyTemperatureConversion():
         for mat in mat_data.enthalpy['coeffs_h2T'].keys():
             mm = self.mat_dict[mat]
             assert mm.coeffs_h2T == \
-                pytest.approx(mat_data.enthalpy['coeffs_h2T'][mat], 
-                              abs=mat_data.enthalpy['tol'])
+                pytest.approx(mat_data.enthalpy['coeffs_h2T'][mat])
 
     def test_temp_from_enthalpy(self):
         """
@@ -448,5 +447,4 @@ class TestEnthalpyTemperatureConversion():
         for mat in mat_data.enthalpy['h2'].keys():
             mm = self.mat_dict[mat]
             assert mm.enthalpy_from_temp(mat_data.enthalpy['T2']) == \
-                pytest.approx(mat_data.enthalpy['h2'][mat],
-                              abs=mat_data.enthalpy['tol'])
+                pytest.approx(mat_data.enthalpy['h2'][mat])
