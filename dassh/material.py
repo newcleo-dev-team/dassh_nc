@@ -29,11 +29,9 @@ import sympy as sp
 import csv
 import warnings
 from typing import Union, Callable, Any, Dict, Tuple, List, Type
-from types import ModuleType
-from ._commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE
-from ._commons import MATERIAL_LBH, PROP_LBH15, PROPS_NAME, \
-    AMBIENT_TEMPERATURE, PROPS_NAME_FULL, BUILTIN_COOLANTS, MATERIAL_NAMES, \
-    LBH15_PROPERTIES 
+from ._commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE, MATERIAL_LBH, \
+    PROP_LBH15, PROPS_NAME, AMBIENT_TEMPERATURE, PROPS_NAME_FULL, \
+        BUILTIN_COOLANTS, MATERIAL_NAMES, LBH15_PROPERTIES 
     
 def update_lbh15_material(logger: Callable[[str, str], None], temp: float, 
                           cool: Union[Lead, LBE, Bismuth] = None,
@@ -266,8 +264,8 @@ class Material(LoggedClass):
             x2 = x[y > 0]  # Need to ignore zeros in dependent var
             y2 = y[y > 0]  # Now filter from dependent var
             if not np.all(np.diff(x) > 0):
-                msg = f'Non strictly increasing temperature values detected in' 
-                msg += f' material data {path}'
+                msg = f'Non strictly increasing temperature values ' + \
+                    f'detected in material data {path}'
                 self.log('error', msg)
             self._data[cols[i]] = _MatInterp(x2, y2)
     
@@ -282,9 +280,9 @@ class Material(LoggedClass):
             corr_name = lbh15_correlations[PROPS_NAME_FULL[property]]
             if corr_name and corr_name not in correlations[
                 PROPS_NAME_FULL[property]]:
-                msg = f'Correlation {corr_name} for '
-                msg += f'{PROPS_NAME_FULL[property]} ' 
-                msg += f'not available for {self.name}'
+                msg = f'Correlation {corr_name} for ' + \
+                    f'{PROPS_NAME_FULL[property]} ' + \
+                    f'not available for {self.name}'
                 self.log('error', msg)
             if corr_name in correlations[PROPS_NAME_FULL[property]]:
                 cool_lbh15.change_correlation_to_use(
@@ -331,8 +329,8 @@ class Material(LoggedClass):
                     msg = f'Invalid correlation for {self.name} {property}: {e}'
                     self.log('error', msg)
                 if corr_symbols != ['T'] and corr_symbols != []:
-                    msg = f'Correlation for {self.name} {property} contains '
-                    msg += 'invalid symbols'
+                    msg = f'Correlation for {self.name} {property} ' + \
+                        'contains invalid symbols'
                     self.log('error', msg)            
                 self._data[property] = _MatUserCorr(property, expr) 
             else:
@@ -342,18 +340,22 @@ class Material(LoggedClass):
     def _define_from_correlation(self):
         """Define Na or NaK properties from correlation"""
         corr = self._import_mat_correlation()     
-        self.__get_validity_ranges(corr=corr.Mat_from_corr)
+        self.__get_validity_ranges(corr=corr)
         self._data = {}
         for property in PROPS_NAME:
-            self._data[property] = corr.Mat_from_corr(property)
+            self._data[property] = corr(property)
             
-    def _import_mat_correlation(self) -> ModuleType:
+    def _import_mat_correlation(self) -> Type:
         """Import correlation module for Na or NaK properties"""
+        if self.name not in ['sodium', 'nak']:
+            msg = f'Correlation not available for material {self.name}'
+            self.log('error', msg)
+            
         if self.name == 'sodium':
-            import dassh.correlations.properties_Na as corr  
-        elif self.name == 'nak':
+            import dassh.correlations.properties_Na as corr
+        else:
             import dassh.correlations.properties_NaK as corr
-        return corr
+        return corr.Mat_from_corr
     
     @property
     def name(self):
@@ -451,14 +453,14 @@ class Material(LoggedClass):
         """
         val_range_values = self.validity_ranges.values()
         if self.temperature < min(value[0] for value in val_range_values): 
-            msg = f'Temperature {self.temperature} K is below the minimum '
-            msg += f'allowed value of the validity range for {self.name}: '
-            msg += f'{max(value[0] for value in val_range_values)} K'
+            msg = f'Temperature {self.temperature} K is below the minimum ' + \
+                f'allowed value of the validity range for {self.name}: ' + \
+                    f'{max(value[0] for value in val_range_values)} K'
             self.log('error', msg)
         elif self.temperature > max(value[1] for value in val_range_values):
-            msg = f'Temperature {self.temperature} K is above the maximum '
-            msg += f'allowed value of the validity range for {self.name}: '
-            msg += f'{max(value[1] for value in val_range_values)} K'
+            msg = f'Temperature {self.temperature} K is above the maximum ' + \
+                f'allowed value of the validity range for {self.name}: ' + \
+                f'{max(value[1] for value in val_range_values)} K'
             self.log('error', msg)
 
     def __check_internal_limits(self, prop: str) -> None:
@@ -472,12 +474,12 @@ class Material(LoggedClass):
         """
         prop_range = self.validity_ranges[f"{prop}_range"]
         if self.temperature > prop_range[1]:
-            msg = f'Temperature {self.temperature} K is above the validity '
-            msg += f'range of {prop} for {self.name}: {prop_range[1]} K'
+            msg = f'Temperature {self.temperature} K is above the validity' + \
+                f' range of {prop} for {self.name}: {prop_range[1]} K'
             self.log('warning', msg)
         elif self.temperature < prop_range[0]:
-            msg = f'Temperature {self.temperature} K is below the validity '
-            msg += f'range of {prop} for {self.name}: {prop_range[0]} K'
+            msg = f'Temperature {self.temperature} K is below the validity' + \
+                f' range of {prop} for {self.name}: {prop_range[0]} K'
             self.log('warning', msg)
                 
     def __check_limits(self, prop: str)-> None:
@@ -549,10 +551,7 @@ class Material(LoggedClass):
         """ 
         if self.name in MATERIAL_LBH.keys():
             return MATERIAL_LBH[self.name](T=temperature).h
-        corr = self._import_mat_correlation()
-        ent = corr.Mat_from_corr('enthalpy')
-        return ent(temperature)
-
+        return self._import_mat_correlation()('enthalpy')(temperature)
 
     def _read_coefficients(self, file_name) -> np.ndarray:
         """
@@ -596,7 +595,7 @@ class Material(LoggedClass):
         numpy.ndarray
             Coefficients for polynomial converting enthalpy to temperature
         """
-        if not np.all(self._coeffs_h2T):
+        if self._coeffs_h2T is None:
             self.log("error", "Temperature-enthalpy coefficients not yet"
                      "assigned")
         return self._coeffs_h2T

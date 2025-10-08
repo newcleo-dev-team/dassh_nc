@@ -25,28 +25,28 @@ class Mat_from_corr(PropertyClass):
     """
     def density(self, T: float) -> float:
         """
-        Computes sodium density
+        Compute density
         Eg. (1) pag. 86 of [1]
         """
         return 219 + 275.32*(1-T/2503.7) + 511.58*(1-T/2503.7)**0.5 
     
     def thermal_conductivity(self, T: float) -> float:
         """
-        Computes sodium thermal conductivity
+        Compute thermal conductivity
         Eg. (1) pag. 181 of [1]
         """
         return 124.67 - 0.11381*T + 5.5226e-5*T**2 - 1.1842e-8*T**3
     
     def viscosity(self, T: float) -> float:
         """
-        Computes sodium viscosity
+        Compute viscosity
         Eq. (1) pag. 207 of [1]
         """
         return np.exp(-6.4406 - 0.3958 * np.log(T) + 556.835/T)
     
     def heat_capacity(self, T: float) -> float:
         """
-        Computes sodium heat capacity
+        Compute heat capacity
         Eq. (39) pag. 29 of [1]
         """
         # CODATA equation for Na
@@ -54,7 +54,7 @@ class Mat_from_corr(PropertyClass):
     
     def enthalpy(self, T: float) -> float:
         """
-        Computes sodium enthalpy (relative to solid sodium at 298.15 K)
+        Compute enthalpy (relative to solid sodium at 298.15 K)
         Eq. (1) pag. 4 of [1]
         """
         return (-365.77 + 1.6582*T - 4.2395e-4*T**2 + 1.4847e-7*T**3 

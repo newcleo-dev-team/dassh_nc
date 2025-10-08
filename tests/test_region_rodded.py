@@ -1262,16 +1262,15 @@ class TestEnthalpy():
             The RoddedRegion object to test
         """
         tmp_asm = simple_ctrl_rr_ent.clone()
-
-        qpins = np.zeros(tmp_asm.n_pin)
-        qcool = np.zeros(tmp_asm.subchannel.n_sc['coolant']['total'])
-        power = {'pins': qpins, 'cool': qcool}
+        power = {
+            'pins': np.zeros(tmp_asm.n_pin), 
+            'cool': np.zeros(tmp_asm.subchannel.n_sc['coolant']['total'])
+            }
         dz, _ = dassh.region_rodded.calculate_min_dz(tmp_asm, 
                                                      rr_data.enthalpy['T1'],
                                                      rr_data.enthalpy['T2'])
 
         # Calculate new temperatures and deltaT
-        print('temp before (K): ' + str(tmp_asm.temp['coolant_int']))
         tmp_asm._calc_coolant_int_temp(dz, power['pins'], power['cool'])
         assert np.allclose(tmp_asm.temp['coolant_int'], 
                            rr_data.enthalpy['T1']*np.ones(

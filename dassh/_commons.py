@@ -19,19 +19,18 @@ SQRT3OVER3: float = np.sqrt(3) / 3
 Q_P2SC: np.ndarray = np.array([0.166666666666667, 0.25, 0.166666666666667])
 """Fraction of pin surface in contact with each type of subchannel"""
 MATERIAL_LBH: dict[str, Type] = {
-            'lead': Lead,
-            'bismuth': Bismuth,
-            'lbe': LBE
-        }
+    'lead': Lead,
+    'bismuth': Bismuth,
+    'lbe': LBE}
 """Mapping between material names and lbh15 classes"""
 PROP_LBH15: dict[str, ModuleType] = {'lead': lead_properties,
-                'bismuth': bismuth_properties,
-                'lbe': lbe_properties}
+                                     'bismuth': bismuth_properties,
+                                     'lbe': lbe_properties}
 """Mapping between material names and lbh15 property modules"""
 LBH15_PROPERTIES: list[str] = ['rho', 'cp', 'mu', 'k']
 """Property names as used in lbh15"""
 PROPS_NAME: list[str] = ['density', 'heat_capacity', 'viscosity', 
-                'thermal_conductivity']
+                         'thermal_conductivity']
 """Property names as used in dassh"""
 PROPS_NAME_FULL: dict[str, str] = dict(zip(PROPS_NAME, LBH15_PROPERTIES))
 """Mapping between property names as used in dassh and in lbh15"""
