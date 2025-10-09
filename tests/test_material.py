@@ -410,4 +410,41 @@ class TestBuiltInDefinition():
         with pytest.raises(SystemExit):
             mat.update(mat_data.negative_temperature)
             
+class TestEnthalpyTemperatureConversion():
+    """
+    Class to test enthalpy-temperature conversion methods
+    """       
 
+    mat_dict: dict[str, Material] = {
+        mat: Material(mat,temperature=mat_data.enthalpy['T1'], 
+                      solve_enthalpy=True) \
+                          for mat in mat_data.enthalpy['coeffs_h2T'].keys()}
+    """Dictionary of Material objects with solve_enthalpy set to True"""
+    
+    def test_read_enthalpy_coefficients(self):
+        """
+        Test the _read_enthalpy_coefficients method of the Material class
+        """
+        for mat in mat_data.enthalpy['coeffs_h2T'].keys():
+            mm = self.mat_dict[mat]
+            assert mm.coeffs_h2T == \
+                pytest.approx(mat_data.enthalpy['coeffs_h2T'][mat])
+
+    def test_temp_from_enthalpy(self):
+        """
+        Test the temp_from_enthalpy method of the Material class
+        """
+        for mat in mat_data.enthalpy['h2'].keys():
+            mm = self.mat_dict[mat]
+            assert mm.temp_from_enthalpy(mat_data.enthalpy['h2'][mat]) == \
+                pytest.approx(mat_data.enthalpy['T2'],
+                              abs=mat_data.enthalpy['tol'])
+                
+    def test_enthalpy_from_temp(self):
+        """
+        Test the enthalpy_from_temp method of the Material class
+        """
+        for mat in mat_data.enthalpy['h2'].keys():
+            mm = self.mat_dict[mat]
+            assert mm.enthalpy_from_temp(mat_data.enthalpy['T2']) == \
+                pytest.approx(mat_data.enthalpy['h2'][mat])

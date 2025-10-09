@@ -2,7 +2,7 @@ import numpy as np
 from dassh.correlations.properties_abs import PropertyClass
 from typing import Union
 
-class mat_from_corr(PropertyClass):
+class Mat_from_corr(PropertyClass):
     """
     Correlation object for sodium properties
     
@@ -25,7 +25,7 @@ class mat_from_corr(PropertyClass):
     """
     def density(self, T: float) -> float:
         """
-        Computes NaK density
+        Compute density
         Eq. (1.9) pag. 18 of [1]
         """
         rho_na = 1000 * self.__density_Na(T) 
@@ -37,7 +37,7 @@ class mat_from_corr(PropertyClass):
     
     def thermal_conductivity(self, T: float) -> float:
         """
-        Computes NaK thermal conductivity
+        Compute thermal conductivity
         Eq. (1.53) pag. 46 of [1]
         """
         T = T - 273.15
@@ -45,7 +45,7 @@ class mat_from_corr(PropertyClass):
     
     def viscosity(self, T: float) -> float:
         """
-        Computes NaK viscosity
+        Compute viscosity
         Eq. (1.18) and (1.19) pag.24 of [1]
         """
         rho = self.density(T) / 1000 # g/cm3
@@ -56,12 +56,20 @@ class mat_from_corr(PropertyClass):
     
     def heat_capacity(self, T: float) -> float:
         """
-        Computes NaK heat capacity
+        Compute heat capacity
         Eq. (1.59) pag. 53 of [1]
         """
         cp = 0.2320 - 8.82e-5 * T + 8.2e-8*T**2
         return cp*4186.8
-    
+
+    def enthalpy(self, T: float) -> float:
+        """
+        Compute enthalpy
+        Obtained by integrating the heat capacity correlation (relative to 0 K)
+        in Eq. (1.59) pag. 53 of [1]
+        """
+        return 971.3376*T - 0.18465*T**2 + 1.1443e-4*T**3
+
     @property 
     def density_range(self) -> tuple[float]:
         return (323.15, 1423.15)
@@ -76,6 +84,10 @@ class mat_from_corr(PropertyClass):
     
     @property 
     def heat_capacity_range(self) -> tuple[float]:
+        return (323.15, 1423.15)
+    
+    @property
+    def enthalpy_range(self) -> tuple[float]:
         return (323.15, 1423.15)
     
     def __density_K(self, T: float) -> float:
