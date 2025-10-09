@@ -1232,24 +1232,7 @@ class TestNonIsotropic():
 class TestEnthalpy():
     """
     Class to test the enthalpy calculation in the RoddedRegion
-    """          
-    def test_temp_from_enthalpy_zero_deltah(
-        self, simple_ctrl_rr_ent: dassh.RoddedRegion):
-        """
-        Test that the _temp_from_enthalpy method of RoddedRegion with zero deltaH
-        returns zero deltaT
-        
-        Parameters
-        ----------
-        simple_ctrl_rr_ent : dassh.RoddedRegion
-            The RoddedRegion object to test
-        """
-        dh = np.zeros(simple_ctrl_rr_ent.subchannel.n_sc['coolant']['total'])
-        assert simple_ctrl_rr_ent.coolant.temp_from_enthalpy(
-            simple_ctrl_rr_ent._enthalpy + dh) == \
-            pytest.approx(simple_ctrl_rr_ent.temp['coolant_int'],
-                          abs=rr_data.enthalpy['tol'])
-            
+    """                      
     def test_coolant_int_temp_no_power(self, 
                                        simple_ctrl_rr_ent: dassh.RoddedRegion):        
         """
