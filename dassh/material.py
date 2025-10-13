@@ -146,7 +146,7 @@ class Material(LoggedClass):
         # Update properties based on input temperature
         self.update(self.temperature)
         
-        if solve_enthalpy and self.name in BUILTIN_COOLANTS:
+        if (solve_enthalpy) and self.name in BUILTIN_COOLANTS:
            self._coeffs_h2T = self._read_coefficients(h2T_COEFF_FILE)
         
         

@@ -956,13 +956,10 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
             Contains the assembly data to print
 
         """
-        if all(hasattr(reg, '_mixed_convection') for xx in r_obj.assemblies for reg in xx.region):
-            if any(reg._mixed_convection for xx in r_obj.assemblies for reg in xx.region):
+        mixed_ebal = False
+        if any(reg._mixed_convection for xx in r_obj.assemblies 
+               for reg in xx.region):
                 mixed_ebal = True
-            else: 
-                mixed_ebal = False
-        else:
-            mixed_ebal = False
             
         self.notes = """Column heading definitions
         A - Heat added to coolant through pins or by direct heating (W)
@@ -971,7 +968,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         D - Heat transferred to double-duct bypass coolant through duct walls (W)
         E - Assembly coolant mass flow rate (kg/s)"""
         
-        if mixed_ebal:
+        if mixed_ebal or r_obj._options['solve_enthalpy']:
             self.notes += """
         F - Assembly coolant enthalpy rise (W)
         G - Assembly coolant temperature rise (K)
@@ -994,7 +991,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
 
         # Use numpy for the calculations based on the preceding data;
         # calculated energy from temp rise and the sum (ebal[:, 7])
-        if mixed_ebal:
+        if mixed_ebal or r_obj._options['solve_enthalpy']:
             enthalpy_rise = ebal[:, 5]
         else:
             enthalpy_rise = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
@@ -1057,7 +1054,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                if mixed_ebal:
+                if mixed_ebal or r_obj._options['solve_enthalpy']:
                     ebal_asm[5] = reg.ebal['mcpdT_i']
                 else:
                     ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
@@ -1107,16 +1104,14 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         core_tot[6] = numerator / denominator
 
         # Calculate total energy change due to temp rise
-        q_dt_tot = asm_ebal[:, 5]
-        if r_obj.core.model == 'flow':
-            q_dt_tot += gap_ebal[4] * gap_ebal[5] * gap_ebal[6]
-        if mixed_ebal:
-            sum2 = np.sum(core_tot[0] + core_tot[1] - q_dt_tot)
-            core_tot[7] = sum2
+        if mixed_ebal or r_obj._options['solve_enthalpy']:
+            core_tot[7] = core_tot[0] + core_tot[1] - np.sum(asm_ebal[:, 5])
         else:
-            sum1 = (core_tot[0] + core_tot[1]
-            - core_tot[4] * core_tot[5] * core_tot[6])
-            core_tot[7] = sum1
+            core_tot[7] = (core_tot[0] + core_tot[1]
+                           - core_tot[4] * core_tot[5] * core_tot[6])
+        if r_obj.core.model == 'flow':
+            core_tot[7] -= gap_ebal[4] * gap_ebal[5] * gap_ebal[6]
+    
         total_power = core_tot[0] + core_tot[1]
         if total_power == 0.0:
             core_tot[8] = np.nan

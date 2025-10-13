@@ -41,3 +41,5 @@ MATERIAL_NAMES: list[str] = BUILTIN_COOLANTS + ['potassium', 'water',
 """Material names built-in in dassh"""
 AMBIENT_TEMPERATURE: float = 298.15
 """Default temperature (K)"""
+GRAVITY_CONST: float = 9.81
+"""Gravity acceleration [m/s^2]"""

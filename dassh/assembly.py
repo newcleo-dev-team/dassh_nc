@@ -72,7 +72,7 @@ class Assembly(LoggedClass):
     def __init__(self, name, loc, asm_input, mat_dict, inlet_temp,
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
                  param_update_tol=0.0, mixed_convection_tol=1e-5,
-                 gravity=False, rad_isotropic=True, solve_enthalpy):
+                 gravity=False, rad_isotropic=True, solve_enthalpy = False):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')

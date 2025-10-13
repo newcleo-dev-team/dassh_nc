@@ -11,11 +11,11 @@ import csv
 import numpy as np
 # import warnings
 import logging
-from dassh.region_rodded import RoddedRegion, calculate_ht_constants, _setup_conduction_constants, _setup_convection_constants
+from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
+    _setup_conduction_constants, _setup_convection_constants
 from dassh.pin_model import PinModel
-from lbh15 import Lead, Bismuth, LBE
 from typing import Tuple
-import copy
+from ._commons import ROOT, GRAVITY_CONST
 
 # Coefficients for the density of lead, bismuth and LBE
 # Density correlation is always in the form:
@@ -25,13 +25,7 @@ DENSITY_COEFF = {
     'bismuth': [10725, 1.22],
     'lbe': [11065, 1.293]
 }
-SODIUM_DENS_COEFF =  [275.32, 511.58, 219.0, 2503.7]
-
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-
-GRAVITY_CONST = 9.81  # Gravity acceleration [m/s^2]
-# Surface of pins in contact with each type of subchannel
-q_p2sc = np.array([0.166666666666667, 0.25, 0.166666666666667])
+SODIUM_DENS_COEFF = [275.32, 511.58, 219.0, 2503.7]
 
 module_logger = logging.getLogger('dassh.region_mixed')
 
@@ -169,7 +163,7 @@ class MixedRegion(RoddedRegion):
         self._pressure_drop = 0.0    # This overrides the attribute in RoddedRegion
         self._density = np.zeros(self.subchannel.n_sc['coolant']['total']) 
         self._sc_vel = np.zeros(self.subchannel.n_sc['coolant']['total'])
-        self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total']) 
+   #    self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total']) 
         # New attributes for the densities and velocities for the time being. 
         # In principle we already have self.sc_properties['density'] and 
         # self.coolant_int_params['sc_vel'] so this is not very smart... 
@@ -181,6 +175,10 @@ class MixedRegion(RoddedRegion):
         self._verbose = verbose
         self._mixed_convection = mc
         self._mixed_convection_tol = mixed_convection_tol
+        
+        self._enthalpy = \
+            self.coolant.enthalpy_from_temp(self.coolant.temperature) * \
+                np.ones(self.subchannel.n_sc['coolant']['total'])
         
     def activate(self, previous_reg, t_gap, h_gap, adiabatic):
         """Activate region by averaging coolant temperatures from
@@ -259,7 +257,7 @@ class MixedRegion(RoddedRegion):
         # velocities and densities and bundle pressure drop.
         self._solve_system(dz, z, q['pins'], q['cool'], ebal)
 
-        self.temp['coolant_int'] = self._temp_from_enthalpy() 
+        self.temp['coolant_int'] = self.coolant.temp_from_enthalpy(self._enthalpy) 
 
         # Update coolant properties for the duct wall calculation
         self._update_coolant_int_params(self.avg_coolant_int_temp)
@@ -678,35 +676,6 @@ class MixedRegion(RoddedRegion):
         RR = deltah/drho
         return RR
         
-    def _temp_from_enthalpy(self) -> np.ndarray:
-        """
-        Convert enthalpy difference to temperature difference
-        
-        Parameters
-        ----------
-        dh : float
-            Enthalpy difference (J/kg)
-        
-        Returns
-        -------
-        float
-            Temperature difference (K)
-        
-        """  
-        tref = self.temp['coolant_int'].copy()
-        TT = np.zeros(len(self._delta_h))
-        for i in range(len(self._delta_h)):
-            toll = 1e-3
-            err = 1
-            iter = 1
-            while (err >= toll) and (iter < 100):
-                deltah = self._calc_delta_h(self.temp['coolant_int'][i], tref[i])
-                self.coolant.update(tref[i])
-                TT[i] = tref[i] + (self._delta_h[i] - deltah)/self.coolant.heat_capacity
-                err = np.abs((TT[i]-tref[i]))
-                tref[i] = TT[i] 
-                iter += 1
-        return TT 
     
     def _init_static_correlated_params(self, t):
         """Calculate bundle friction factor and flowsplit parameters
@@ -824,11 +793,11 @@ class MixedRegion(RoddedRegion):
             return dd*(1 - ((-bb+np.sqrt(bb**2 - 4*aa*(cc-rho)))/(2*aa))**2)
         
         elif self.coolant.name in DENSITY_COEFF.keys():
-            a, b = DENSITY_COEFF[self.coolant.name]
-            return (a - rho) / b
-        
+            aa, bb = DENSITY_COEFF[self.coolant.name]
+            return (aa - rho) / bb
+
         else:
-            path = os.path.join(_ROOT, 'data', self.coolant.name + '.csv')
+            path = os.path.join(ROOT, 'data', self.coolant.name + '.csv')
 
             with open(path, 'r') as f:
                 reader = csv.reader(f)
