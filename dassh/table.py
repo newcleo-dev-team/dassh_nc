@@ -957,9 +957,11 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
 
         """
         mixed_ebal = False
-        if any(reg._mixed_convection for xx in r_obj.assemblies 
-               for reg in xx.region):
-                mixed_ebal = True
+        if all(hasattr(reg, '_mixed_convection') for xx in 
+               r_obj.assemblies for reg in xx.region):
+            if any(reg._mixed_convection for xx in r_obj.assemblies 
+                for reg in xx.region):
+                    mixed_ebal = True
             
         self.notes = """Column heading definitions
         A - Heat added to coolant through pins or by direct heating (W)
