@@ -30,8 +30,8 @@ SODIUM_DENS_COEFF = [275.32, 511.58, 219.0, 2503.7]
 module_logger = logging.getLogger('dassh.region_mixed')
 
 
-def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, mixed_convection_tol=1e-5, 
-         gravity=False, rad_isotropic=True):
+def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, 
+         mixed_convection_tol=1e-5, gravity=False, rad_isotropic=True):
     """Create RoddedRegion object within DASSH Assembly
 
     Parameters
@@ -161,16 +161,13 @@ class MixedRegion(RoddedRegion):
         # - Bundle pressure drop and their variations over dz
         
         self._pressure_drop = 0.0    # This overrides the attribute in RoddedRegion
-        self._density = np.zeros(self.subchannel.n_sc['coolant']['total']) 
-        self._sc_vel = np.zeros(self.subchannel.n_sc['coolant']['total'])
-   #    self._enthalpy = np.zeros(self.subchannel.n_sc['coolant']['total']) 
         # New attributes for the densities and velocities for the time being. 
         # In principle we already have self.sc_properties['density'] and 
         # self.coolant_int_params['sc_vel'] so this is not very smart... 
         # We should decide wether to use these or the old ones.
-        self._delta_P = -1e3
-        self._delta_v = 0.01*np.ones(self.subchannel.n_sc['coolant']['total'])
-        self._delta_rho = -10*np.ones(self.subchannel.n_sc['coolant']['total'])
+        self._delta_P = 0
+        self._delta_v = 0*np.ones(self.subchannel.n_sc['coolant']['total'])
+        self._delta_rho = np.ones(self.subchannel.n_sc['coolant']['total'])
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose = verbose
         self._mixed_convection = mc
@@ -222,8 +219,6 @@ class MixedRegion(RoddedRegion):
     ####################################################################
     # TEMPERATURE CALCULATION
     ####################################################################
-
-
     def calculate(self, dz, z, q, t_gap, h_gap, adiab=False, ebal=False):
         """Calculate new coolant and duct temperatures and pressure
         drop across axial step
@@ -249,7 +244,6 @@ class MixedRegion(RoddedRegion):
         Returns
         -------
         None
-
         """
         # Duct temperatures: calculate with new coolant properties
         self._calc_duct_temp(q['duct'], t_gap, h_gap, adiab) # This is the same as in RoddedRegion (fttb)
@@ -275,8 +269,8 @@ class MixedRegion(RoddedRegion):
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION METHODS
     ####################################################################
-
-    def _solve_system(self, dz: float, z: float, q_pins: np.ndarray, q_cool: np.ndarray, ebal: bool) -> None:
+    def _solve_system(self, dz: float, z: float, q_pins: np.ndarray, 
+                      q_cool: np.ndarray, ebal: bool) -> None:
         """
         Method to solve the system.
         
@@ -303,12 +297,14 @@ class MixedRegion(RoddedRegion):
         RR = self._calc_RR(delta_rho0)  
         
         iter = 0
-        err_rho, err_v, err_P = 1, 1, 1  # Initialize errors
+        err_rho, err_v, err_P = 1, 1, 1
+        res = 1
         if self._verbose:
             self.log('info', '---------------------------------------------------------------')
-            self.log('info', 'Iter.    Error density       Error velocity      Error pressure')
-        while (np.any(np.array([err_rho, err_v, err_P]) > self._mixed_convection_tol) 
-               and iter < 15):
+            self.log('info', 'Iter.    Error density       Error velocity      Error pressure   Residual')
+            
+        while (np.any(np.array([err_rho, err_v, err_P, res]) 
+                      > self._mixed_convection_tol) and iter < 50):
 
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
             xx = np.linalg.solve(AA, bb)
@@ -317,35 +313,43 @@ class MixedRegion(RoddedRegion):
             delta_v = xx[1:2*self.subchannel.n_sc['coolant']['total']:2]
             delta_P = xx[-1]
             
-           # residuals = np.abs(AA @ xx - bb)
-           # res_rho = np.sum(residuals[0:2*self.subchannel.n_sc['coolant']['total']:2])
-           # res_v = np.sum(residuals[1:2*self.subchannel.n_sc['coolant']['total']:2])
-           # res_P = np.sum(residuals[-1])
+            residuals = np.abs(AA @ xx - bb)
             
+            res = np.sum(residuals)
             err_rho = np.max(np.abs(delta_rho - delta_rho0))
             err_v = np.max(np.abs(delta_v - delta_v0))
             err_P = np.max(np.abs(delta_P - delta_P0)) 
-            
+
             if self._verbose:
-                self.log('info', f'{iter+1}        {err_rho:.6e}        {err_v:.6e}        {err_P:.6e}')
-            delta_v0 =    delta_v        #0.7*delta_v + 0.3*delta_v0
-            delta_rho0 =  delta_rho      #0.7*delta_rho + 0.3 * delta_rho0
-            delta_P0 =    delta_P        #0.7*delta_P + 0.3 * delta_P0
+                self.log('info', f'{iter+1}        {err_rho:.6e}        {err_v:.6e}        {err_P:.6e}        {res:.6e}')
+                
+            delta_v0 =    delta_v.copy()  
+            delta_rho0 =  delta_rho.copy() 
+            delta_P0 =    delta_P
             
             RR = self._calc_RR(delta_rho)
             iter += 1
             
-        self._delta_v = delta_v
-        self._delta_rho = delta_rho
+        self._delta_v = delta_v.copy()
+        self._delta_rho = delta_rho.copy()
         self._delta_P = delta_P
+        
+        mfr_mid = (self._density + delta_rho/2) * \
+            (self._sc_vel + delta_v/2) * \
+            self.params['area'][self.subchannel.type[
+                :self.subchannel.n_sc['coolant']['total']]]
+        
         self._sc_vel += delta_v
-        self._density += delta_rho  
+        self._density += delta_rho
         self._pressure_drop -= delta_P
-        self._delta_h = RR*delta_rho
+        self._delta_h = RR*self._delta_rho
         self._enthalpy += self._delta_h
-
+    
         if ebal:
-            mcpdT_i = self.sc_mfr * self._delta_h 
+            mcpdT_i = mfr_mid * self._delta_h
+            print(dz*np.sum(qq), np.sum(mcpdT_i), 
+                  'error:', dz*np.sum(qq) - np.sum(mcpdT_i), 
+                  (dz*np.sum(qq) - np.sum(mcpdT_i))/(dz*np.sum(qq)))
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
 
     def _build_vector(self, qq: np.ndarray, dz: float, z: float) -> np.ndarray:
@@ -534,7 +538,7 @@ class MixedRegion(RoddedRegion):
         AA : np.ndarray
             Coefficient matrix for the system of equations.
         """
-        hstar = self._enthalpy + RR*self._delta_rho/2 
+        hstar = self._enthalpy + RR*delta_rho/2 
         vstar = self._sc_vel + delta_v/2
         
         nn = self.subchannel.n_sc['coolant']['total']
@@ -726,9 +730,10 @@ class MixedRegion(RoddedRegion):
                 self.coolant_int_params['fs'] = \
                     self.corr['fs'](self)
 
-        self._sc_vel = self.coolant_int_params['vel'] * self.coolant_int_params['fs']
-        self._sc_vel = self._sc_vel[self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
-        
+        rho_v_X_avg = self.coolant.density * \
+            self.coolant_int_params['vel'] * \
+            self.coolant_int_params['fs'] 
+            
         # Friction factor
         if self.corr['ff'] is not None:
             self.coolant_int_params['ff'] = self.corr['ff'](self)
@@ -736,9 +741,13 @@ class MixedRegion(RoddedRegion):
         # Reset inlet temperature
         self.coolant.temperature = t_inlet
         self._update_coolant(t_inlet)
+        self._sc_vel = rho_v_X_avg / self.coolant.density 
+        self._sc_vel = self._sc_vel[self.subchannel.type[
+            :self.subchannel.n_sc['coolant']['total']]]
         self._density = self.coolant.density * np.ones(
             self.subchannel.n_sc['coolant']['total'])
-        
+
+                
     def _calculate_mixing_params(self) -> None:
         """
         Calculate mixing parameters for the coolant subchannels
