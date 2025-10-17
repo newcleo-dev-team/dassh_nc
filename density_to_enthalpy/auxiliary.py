@@ -166,7 +166,9 @@ def eval_poly(reference: np.ndarray, data: np.ndarray) \
                 warnings.simplefilter('error', RankWarning)
                 coeffs_rho2h = np.polyfit(data[:,0], data[:,1], deg=dd)
         except RankWarning:
-            print(f"Polynomial degree {dd} issues a NumPy RankWarning. Stopping here.")
+            print(f"Polynomial degree {dd} issues a NumPy RankWarning.")
+            print(f'Polynomial coefficients for degree {dd-1}:')
+            print(coeffs_rho2h)
             break
 
         errors = eval_accuracy(reference, coeffs_rho2h=coeffs_rho2h)
@@ -335,4 +337,3 @@ def plot_polynomial_results(poly_results: dict[str, np.ndarray],
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.4)
     plt.suptitle(material)
-   # plt.savefig(os.path.join('results', material, 'polynomial_degree.png'))
