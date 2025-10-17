@@ -13,7 +13,7 @@ ENTHALPY_RANGE: dict[str, tuple[float, float]] = {
     'sodium': (371.0, 2000.0)
 }
 """Enthalpy correlation valid ranges for each fluid"""
-REFERENCE_STEPS: int = 1000
+REFERENCE_STEPS: int = 5000
 """Number of points in the reference database"""
 MATERIAL_LBH: dict[str, Type] = {
     'lead': Lead,
