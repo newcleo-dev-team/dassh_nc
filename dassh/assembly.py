@@ -117,7 +117,8 @@ class Assembly(LoggedClass):
                                     se2geo,
                                     param_update_tol,
                                     gravity,
-                                    rad_isotropic)
+                                    rad_isotropic,
+                                    solve_enthalpy)
                 ]
 
         # Create other requested unrodded regions

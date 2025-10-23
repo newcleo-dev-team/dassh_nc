@@ -43,3 +43,10 @@ AMBIENT_TEMPERATURE: float = 298.15
 """Default temperature (K)"""
 GRAVITY_CONST: float = 9.81
 """Gravity acceleration [m/s^2]"""
+MIX_CON_VERBOSE_OUTPUT: list[str] = [
+    '----------------------------------------------------------------',
+    'info', 'Iter.    Error density       Error velocity       Error pressure'
+]
+"""Verbose output header for mixed convection region solver"""
+MC_MAX_ITER: int = 50
+"""Maximum number of iterations for mixed convection region solver"""

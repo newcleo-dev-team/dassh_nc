@@ -104,6 +104,7 @@
         use_low_fidelity_model = boolean(default=False)
         mixed_convection = boolean(default=False)
         verbose = boolean(default=False)
+        approx_star_quantities = boolean(default=False)
         low_fidelity_model = option(simple, 6node, default=simple)
         convection_factor = string(default="calculate")
         [[[AxialRegion]]]

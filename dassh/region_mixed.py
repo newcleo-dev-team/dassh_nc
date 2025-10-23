@@ -15,7 +15,7 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
     _setup_conduction_constants, _setup_convection_constants
 from dassh.pin_model import PinModel
 from typing import Tuple
-from ._commons import ROOT, GRAVITY_CONST
+from ._commons import ROOT, GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, MC_MAX_ITER
 
 # Coefficients for the density of lead, bismuth and LBE
 # Density correlation is always in the form:
@@ -53,12 +53,12 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
         Tolerance in the change in coolant temp-dependent material
         properties that triggers correlated parameter recalculation
         (default=0.0; recalculate at every step)
-    gravity : bool (optional)
-        Include gravity head loss in pressure drop (default=False)
+    mixed_convection_tol (optional) : float
+        Tolerance for the mixed convection region solver (default=1e-5)
 
     Returns
     -------
-    DASSH RoddedRegion object
+    DASSH MixedRegion object
 
     """
     rr = MixedRegion(name,
@@ -71,6 +71,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
                       inp['duct_ftf'],
                       inp['mixed_convection'],
                       inp['verbose'],
+                      inp['approx_star_quantities'],
                       fr,
                       mat['coolant'],
                       mat['duct'],
@@ -88,7 +89,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
                       se2geo,
                       update_tol,
                       mixed_convection_tol,
-                      gravity, 
+                      gravity,
                       rad_isotropic)
 
     # Add z lower/upper boundaries
@@ -134,8 +135,77 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
     return rr
 
 class MixedRegion(RoddedRegion):
+    """Class to represent a rodded region with mixed convection
+    
+    Parameters
+    ----------
+    name : str
+        Name of the region
+    n_ring : int
+        Number of rings of pins in the assembly
+    pin_pitch : float
+        Fuel pin center-to-center pin_pitch distance (m)
+    pin_diam : float
+        Outer diameter of the fuel pin cladding (m)
+    wire_pitch : float
+        Wire wrap pitch (m)
+    wire_diam : float
+        Wire wrap diameter (m)
+    clad_thickness : float
+        Cladding thickness (m)
+    duct_ftf : list
+        List of tuples containing the inner and outer duct 
+        flat-to-flat distances for each duct surrounding the bundle
+    mc : boolean
+        Indicate whether mixed convection model is to be used
+    verbose : boolean
+        Indicate whether to print verbose output during iterations
+    approx_star_quantities : boolean
+        Indicate whether to approximate star quantities
+    flow_rate : float
+        Coolant mass flow rate (kg/s)
+    coolant_mat : DASSH Material
+        Coolant Material object
+    duct_mat : DASSH Material
+        Duct Material object
+    htc_params_duct : list
+        List of heat transfer coefficient parameters for duct
+    corr_friction : str {'NOV', 'REH', 'ENG', 'CTD', 'CTS', 'UCTD'}
+        Correlation for bundle friction factor; "CTD" is recommended.
+    corr_flowsplit : str {'NOV', 'MIT', 'CTD', 'UCTD'}
+        Correlation for subchannel flow split; "CTD" is recommended
+    corr_mixing : str {'MIT', 'CTD'}
+        Correlation for subchannel mixing params; "CTD" is recommended
+    corr_nusselt : str (optional) {'DB'}
+        Correlation for Nu; "DB" (Dittus-Boelter) is recommended
+    corr_shapefactor : str (optional) {'CT'}
+        Correlation for conduction shape factor
+    spacer_grid : dict (optional) {None}
+        Input parameters for spacer grid pressure losses
+    byp_ff : float (optional)
+        Unused
+    byp_k : float (optional)
+        Unused
+    wwdir : str {'clockwise', 'counterclockwise'}
+        Wire wrap direction
+    sf : float (optional)
+        Shape factor multiplier on coolant material thermal conductivity
+    se2 : bool
+        Indicate whether to use DASSH or SE2 bundle geometry definitions
+        (use only when comparing DASSH and SE2)
+    param_update_tol (optional) : float
+        Fractional change in material properties required to trigger
+        correlation recalculation
+    mixed_convection_tol (optional) : float
+        Tolerance for the mixed convection region solver
+    gravity (optional) : boolean
+        Indicate whether to include gravity effects
+    rad_isotropic (optional) : boolean
+        Indicate whether to assume isotropic properties
+    """
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
-                 wire_diam, clad_thickness, duct_ftf, mc, verbose, flow_rate,
+                 wire_diam, clad_thickness, duct_ftf, mc, verbose, 
+                 approx_star_quantities, flow_rate,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
@@ -143,7 +213,6 @@ class MixedRegion(RoddedRegion):
                  param_update_tol=0.0, mixed_convection_tol=1e-5, 
                  gravity=False, rad_isotropic=True):
         """Instantiate MixedRegion object"""
-        
         # Instantiate RoddedRegion object
         RoddedRegion.__init__(self, name, n_ring, pin_pitch, pin_diam,
                               wire_pitch, wire_diam, clad_thickness,
@@ -154,7 +223,6 @@ class MixedRegion(RoddedRegion):
                               byp_k, wwdir, sf, se2, param_update_tol,
                               gravity, rad_isotropic)
                  
-
         # Variables of interest are:
         # - SC velocities and their variations over dz
         # - SC densities and their variations over dz
@@ -172,6 +240,7 @@ class MixedRegion(RoddedRegion):
         self._verbose = verbose
         self._mixed_convection = mc
         self._mixed_convection_tol = mixed_convection_tol
+        self._approx_star_quantities = approx_star_quantities
         
         self._enthalpy = \
             self.coolant.enthalpy_from_temp(self.coolant.temperature) * \
@@ -216,10 +285,12 @@ class MixedRegion(RoddedRegion):
             self._update_coolant_byp_params(self.avg_coolant_byp_temp)
         self._calc_duct_temp(p_duct, t_gap, h_gap, adiabatic)
 
+
     ####################################################################
-    # TEMPERATURE CALCULATION
+    # TEMPERATURE AND PRESSURE DROP CALCULATION
     ####################################################################
-    def calculate(self, dz, z, q, t_gap, h_gap, adiab=False, ebal=False):
+    def calculate(self, dz, z, q, t_gap, h_gap, adiab=False, ebal=False) \
+        -> None:
         """Calculate new coolant and duct temperatures and pressure
         drop across axial step
 
@@ -227,6 +298,8 @@ class MixedRegion(RoddedRegion):
         ----------
         dz : float
             Axial step size (m)
+        z : float
+            Axial position (m)
         q : dict
             Power (W/m) generated in pins, duct, and coolant
         t_gap : numpy.ndarray
@@ -236,24 +309,20 @@ class MixedRegion(RoddedRegion):
             Heat transfer coefficient for convection between the gap
             coolant and outer duct wall based on core-average inter-
             assembly gap coolant temperature
-        adiabatic : boolean
+        adiab : boolean
             Indicate whether outer duct has adiabatic BC
         ebal : boolean
             Indicate whether to track energy balance
-
-        Returns
-        -------
-        None
         """
         # Duct temperatures: calculate with new coolant properties
-        self._calc_duct_temp(q['duct'], t_gap, h_gap, adiab) # This is the same as in RoddedRegion (fttb)
+        self._calc_duct_temp(q['duct'], t_gap, h_gap, adiab) 
         # Solve the system of equations for the SC
-        # velocities and densities and bundle pressure drop.
+        # velocities and densities and bundle pressure drop
         self._solve_system(dz, z, q['pins'], q['cool'], ebal)
-
-        self.temp['coolant_int'] = self.coolant.temp_from_enthalpy(self._enthalpy) 
-
-        # Update coolant properties for the duct wall calculation
+        # Update coolant temperatures from enthalpy
+        self.temp['coolant_int'] = \
+            self.coolant.temp_from_enthalpy(self._enthalpy) 
+        # Update coolant properties
         self._update_coolant_int_params(self.avg_coolant_int_temp)
         # Bypass coolant temperatures
         if self.n_bypass > 0:
@@ -263,16 +332,17 @@ class MixedRegion(RoddedRegion):
             else:
                 self.temp['coolant_byp'] += \
                     self._calc_coolant_byp_temp_stagnant(dz, ebal)
-            # Update bypass coolant properties for the duct wall calc
+            # Update bypass coolant properties 
             self._update_coolant_byp_params(self.avg_coolant_byp_temp)
         
+        
     ####################################################################
-    # COOLANT TEMPERATURE CALCULATION METHODS
+    # COOLANT TEMPERATURE  AND PRESSURE CALCULATION METHODS
     ####################################################################
     def _solve_system(self, dz: float, z: float, q_pins: np.ndarray, 
                       q_cool: np.ndarray, ebal: bool) -> None:
         """
-        Method to solve the system.
+        Method to solve the system
         
         Parameters
         ----------
@@ -287,74 +357,86 @@ class MixedRegion(RoddedRegion):
         ebal : bool
             Indicate whether to track energy balance
         """
+        # Use previous step deltas as initial guesses
         delta_v0 = self._delta_v.copy()
         delta_rho0 = self._delta_rho.copy()
         delta_P0 = self._delta_P
-        
+        # Calculate power added to coolant
         qq = self._calc_int_sc_power(q_pins, q_cool)
-        
+        # Build known vector
         bb = self._build_vector(qq, dz, z)
+        # Calculate initial RR using guess `delta_rho0`
         RR = self._calc_RR(delta_rho0)  
-        
-        iter = 0
-        err_rho, err_v, err_P = 1, 1, 1
-        res = 1
+        # Verbose output header
         if self._verbose:
-            self.log('info', '---------------------------------------------------------------')
-            self.log('info', 'Iter.    Error density       Error velocity      Error pressure   Residual')
-            
-        while (np.any(np.array([err_rho, err_v, err_P, res]) 
-                      > self._mixed_convection_tol) and iter < 50):
-
+            self.log('info', MIX_CON_VERBOSE_OUTPUT[0])
+            self.log('info', MIX_CON_VERBOSE_OUTPUT[1])
+        # Iterate to solve the non-linear system
+        iter = 0
+        err_vect = np.ones(3) # Max. errors on delta_rho and delta_v, and
+                              # error on delta_P
+        while np.any(err_vect) > self._mixed_convection_tol \
+            and iter < MC_MAX_ITER:
+            # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
+            # Solve system
             xx = np.linalg.solve(AA, bb)
-            
+            # Extract deltas from solution vector
             delta_rho = xx[0:2*self.subchannel.n_sc['coolant']['total']:2]
             delta_v = xx[1:2*self.subchannel.n_sc['coolant']['total']:2]
             delta_P = xx[-1]
-            
-            residuals = np.abs(AA @ xx - bb)
-            
-            res = np.sum(residuals)
-            err_rho = np.max(np.abs(delta_rho - delta_rho0))
-            err_v = np.max(np.abs(delta_v - delta_v0))
-            err_P = np.max(np.abs(delta_P - delta_P0)) 
-
+            # Calculate errors
+            err_vect[0] = np.max(np.abs(delta_rho - delta_rho0))
+            err_vect[1] = np.max(np.abs(delta_v - delta_v0))
+            err_vect[2] = np.max(np.abs(delta_P - delta_P0))
+            # Verbose output iteration info
             if self._verbose:
-                self.log('info', f'{iter+1}        {err_rho:.6e}        {err_v:.6e}        {err_P:.6e}        {res:.6e}')
-                
-            delta_v0 =    delta_v.copy()  
-            delta_rho0 =  delta_rho.copy() 
+                self.log('info', f'{iter+1}       {err_vect[0]:.6e}' + \
+                    f'       {err_vect[1]:.6e}       {err_vect[2]:.6e}')
+            # Update guesses for next iteration
+            delta_v0 =    delta_v.copy()
+            delta_rho0 =  delta_rho.copy()
             delta_P0 =    delta_P
-            
+            # Recalculate RR
             RR = self._calc_RR(delta_rho)
+            # Update iteration counter
             iter += 1
-            
+        # Update deltas with converged values
         self._delta_v = delta_v.copy()
         self._delta_rho = delta_rho.copy()
         self._delta_P = delta_P
-        
-        mfr_mid = (self._density + delta_rho/2) * \
-            (self._sc_vel + delta_v/2) * \
-            self.params['area'][self.subchannel.type[
-                :self.subchannel.n_sc['coolant']['total']]]
-        
+        # Update state variables
         self._sc_vel += delta_v
         self._density += delta_rho
         self._pressure_drop -= delta_P
         self._delta_h = RR*self._delta_rho
         self._enthalpy += self._delta_h
-    
-        if ebal:
-            mcpdT_i = mfr_mid * self._delta_h
-            print(dz*np.sum(qq), np.sum(mcpdT_i), 
-                  'error:', dz*np.sum(qq) - np.sum(mcpdT_i), 
-                  (dz*np.sum(qq) - np.sum(mcpdT_i))/(dz*np.sum(qq)))
+        # Update energy balance if requested
+        # Calculated as:
+        # # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
+        if ebal:                          
+            enthalpy_old = self._enthalpy - self._delta_h
+            mfr_old = (self._density - self._delta_rho) * \
+                (self._sc_vel - self._delta_v) * \
+                self.params['area'][self.subchannel.type[
+                    :self.subchannel.n_sc['coolant']['total']]]
+            mcpdT_i = self.sc_mfr * self._enthalpy - mfr_old * enthalpy_old
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
+            #mcpdT_i = (self._density - self._delta_rho/2) * \
+            #    (self._sc_vel - self._delta_v/2) * \
+            #    self.params['area'][self.subchannel.type[
+            #        :self.subchannel.n_sc['coolant']['total']]] * \
+            #    self._delta_h
+            #if self._approx_star_quantities:
+            #    error_introduced = (enthalpy_old + self._delta_h/2) * \
+            #        (self.sc_mfr - mfr_old)
+            #delta_m = self.sc_mfr - mfr_old
+            #error_introduced = - self._hstar * delta_m
+            
 
     def _build_vector(self, qq: np.ndarray, dz: float, z: float) -> np.ndarray:
         """
-        Build the known vector for the system of equations.
+        Build the known vector for the system of equations
         
         Parameters
         ----------
@@ -370,35 +452,35 @@ class MixedRegion(RoddedRegion):
         bb : np.ndarray
             Known vector for the system of equations
         """
-        
+        # Number of coolant subchannels
         nn = self.subchannel.n_sc['coolant']['total']
-        
-        MEX = self._calc_MEX(dz)
-        EEX = self._calc_EEX(dz)
-        GG = -self._density * \
-             (GRAVITY_CONST*dz + dz*self.coolant_int_params['ff']*self._sc_vel**2/2 \
-             /self.params['de'][self.subchannel.type[:nn]])
-        
-        energy_b = qq*dz/self.params['area'][self.subchannel.type[:nn]] + EEX 
-        
+        # Calculate MEX, EEX and GG terms
+        EEX, MEX = self._calc_EEX_MEX(dz)
+        GG = -self._density * (GRAVITY_CONST * dz + dz * 
+                               self.coolant_int_params['ff'] * 
+                               self._sc_vel**2 / 2 / 
+                               self.params['de'][self.subchannel.type[:nn]])
+        # Wall convection term
         qwi = self._wall_convection()
-        energy_b[self.ht['conv']['ind']] += \
-                qwi * dz / self.params['area'][self.subchannel.type[self.ht['conv']['ind']]]
+        # Build energy terms of the known vector
+        energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
+            + EEX + qwi * dz / self.params['area'][
+                self.subchannel.type[self.ht['conv']['ind']]]
+        # Build momentum terms of the known vector
         momentum_b = GG + MEX 
-        
         if 'grid' in self.corr_constants.keys():
             momentum_b += self.params['area'][self.subchannel.type[:nn]] * \
                           self.calculate_spacergrid_pressure_drop(z, dz)
-
+        # Assemble known vector
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
         bb[0:2*nn:2] = momentum_b
-
         return bb
+
 
     def _wall_convection(self) -> np.ndarray:
         """
-        Calculate convection between edge/corner subchannels and duct wall.
+        Calculate convection between edge/corner subchannels and duct wall
         
         Returns
         -------
@@ -406,7 +488,6 @@ class MixedRegion(RoddedRegion):
             Temperature difference over the resistance between coolant
             and duct wall (K)
         """
-        
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
         htc_coeff = self.coolant_int_params['sc_htc'][self.ht['conv']['ind']]
@@ -425,103 +506,108 @@ class MixedRegion(RoddedRegion):
                   - self.temp['coolant_int'][self.ht['conv']['ind']])
                  / (R1 + R2))
         else:
-            dT_conv_over_R = \
-                htc_coeff * (self.temp['duct_surf'][0, 0, self.ht['conv']['adj']]
-                       - self.temp['coolant_int'][self.ht['conv']['ind']])
+            dT_conv_over_R = htc_coeff * \
+                (self.temp['duct_surf'][0, 0, self.ht['conv']['adj']]
+                 - self.temp['coolant_int'][self.ht['conv']['ind']])
 
         return self.ht['conv']['const'] * dT_conv_over_R
-    
-    def _calc_EEX(self, dz: float) -> np.ndarray:
+
+
+    def _calc_EEX_MEX(self, dz: float) -> np.ndarray:
         """
-        Calculate the energy exchange term between adjacent subchannels.
+        Calculate the inter-channel energy and momentum exchange terms 
         
         Parameters
         ----------
         dz : float
-            Axial discretization step (m)
+            Axial step size (m)
 
         Returns
         -------
         EEX : np.ndarray
-            Energy exchange term between adjacent subchannels 
+            Energy exchange term between adjacent subchannels
+        MEX : np.ndarray
+            Momentum exchange term between adjacent subchannels
         """
-
+        # Instantiate exchange arrays
         ene_exchange = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
-        for i in range(self.subchannel.n_sc['coolant']['total']):
-            for k in range(3):
-                j = self.ht['cond']['adj'][i][k]
-                if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] and k == 2:
-                    continue
-                else:
-                    rho_ij = self._calc_mass_flow_average_property('density', i, j)
-                    cp_ij = self._calc_mass_flow_average_property('heat_capacity', i, j)
-                    k_ij = self._calc_mass_flow_average_property('thermal_conductivity', i, j)
-                    WW_ij = self.coolant_int_params['eddy'] * rho_ij + self._sf * k_ij / cp_ij
-                    ene_exchange[i][k] = WW_ij  * (self.ht['cond']['const'][i][k]
-                    * (self._enthalpy[j]
-                    - self._enthalpy[i]))
-                        
-        EEX = (ene_exchange[:, 0] + \
-            ene_exchange[:, 1] + ene_exchange[:, 2])
-        
-        swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']]    
-        swirl_exchange = swirl_consts* \
-                    (self._density[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
-                     * self._enthalpy[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
-                     - self._density[self.ht['conv']['ind']]
-                     * self._enthalpy[self.ht['conv']['ind']])           
-        EEX[self.ht['conv']['ind']] += swirl_exchange
-        EEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]] 
-        return EEX
-    
-    def _calc_MEX(self, dz: float) -> np.ndarray:
-        """
-        Calculate the momentum exchange term between adjacent subchannels.
-
-        Parameters
-        ----------
-        dz : float
-            Axial discretization step (m)
-
-        Returns
-        -------
-        np.ndarray
-            Momentum exchange term between adjacent subchannels 
-        """
         mom_exchange = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+        # Iterate over subchannels and adjacent subchannels
         for i in range(self.subchannel.n_sc['coolant']['total']):
+            # Loop over adjacent subchannels
             for k in range(3):
                 j = self.ht['cond']['adj'][i][k]
-                if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] and k == 2:
+                # If `i` is a corner subchannel and `j` is also a corner 
+                # subchannel (`k==2`), skip the calculation
+                if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] \
+                    and k == 2:
                     continue
                 else:
-                    rho_ij = self._calc_mass_flow_average_property('density', i, j)
-                    WW_ij = self.coolant_int_params['eddy'] * rho_ij
-                    mom_exchange[i][k] = WW_ij  * (self.ht['cond']['const'][i][k]
-                                        * (self._sc_vel[j]
-                                        - self._sc_vel[i]))
-                        
-        MEX = (mom_exchange[:, 0] + \
-            mom_exchange[:, 1] + mom_exchange[:, 2])
-
-        swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']]  
-        swirl_exchange = swirl_consts* \
-                    (self._density[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]] 
-                     * self._sc_vel[self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]]
+                    # Calculate mass flow averaged properties between SCs
+                    rho_ij = self._calc_mass_flow_average_property(
+                        'density', i, j)
+                    cp_ij = self._calc_mass_flow_average_property(
+                        'heat_capacity', i, j)
+                    k_ij = self._calc_mass_flow_average_property(
+                        'thermal_conductivity', i, j)
+                    # Eddy diffusivity coefficient is given as adimensional 
+                    # coefficient. It has to be multiplied by velocity to get 
+                    # the correct units (m/s)
+                    vm = (self._sc_vel[i] + self._sc_vel[j]) / 2
+                    WW_ij = self.coolant_int_params['eddy'] * vm * rho_ij 
+                    # Calculate energy and momentum exchange terms
+                    # Eddy diffusivity + conduction for energy exchange
+                    ene_exchange[i][k] = \
+                        (WW_ij + self._sf * k_ij / cp_ij) * \
+                            (self.ht['cond']['const'][i][k] 
+                             * (self._enthalpy[j] - self._enthalpy[i]))
+                    # Eddy diffusivity for momentum exchange
+                    mom_exchange[i][k] = \
+                        WW_ij * (self.ht['cond']['const'][i][k]
+                                 * (self._sc_vel[j] - self._sc_vel[i]))
+        # Sum over adjacent subchannels
+        EEX = (ene_exchange[:, 0] + ene_exchange[:, 1] + ene_exchange[:, 2])
+        MEX = (mom_exchange[:, 0] + mom_exchange[:, 1] + mom_exchange[:, 2])
+        
+        # Swirl mixing term
+        swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']
+        swirl_consts = swirl_consts[self.ht['conv']['type']]
+        # Swirl coefficient is given as adimensional coefficient. It has to be 
+        # multiplied by velocity to get the correct units (m/s)
+        vm = (self._sc_vel[self.subchannel.sc_adj[self.ht['conv']['ind'], 
+                                                  self._adj_sw]] + 
+              self._sc_vel[self.ht['conv']['ind']]) / 2
+        # Calculate swirl energy and momentum exchange terms
+        swirl_energy = swirl_consts * vm * \
+                    (self._density[self.subchannel.sc_adj[
+                        self.ht['conv']['ind'], self._adj_sw]] 
+                     * self._enthalpy[self.subchannel.sc_adj[
+                         self.ht['conv']['ind'], self._adj_sw]]
+                     - self._density[self.ht['conv']['ind']]
+                     * self._enthalpy[self.ht['conv']['ind']])       
+        swirl_momentum = swirl_consts * vm * \
+                    (self._density[self.subchannel.sc_adj[
+                        self.ht['conv']['ind'], self._adj_sw]] 
+                     * self._sc_vel[self.subchannel.sc_adj[
+                         self.ht['conv']['ind'], self._adj_sw]]
                      - self._density[self.ht['conv']['ind']]
                      * self._sc_vel[self.ht['conv']['ind']])
-        MEX[self.ht['conv']['ind']] += swirl_exchange
-        MEX *= dz/self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
-        return MEX
-
-
-    def _build_matrix(self, dz: float, delta_v: np.ndarray, delta_rho: np.ndarray, 
-                      RR: np.ndarray) -> np.ndarray:
-        """
-        Build the matrix.
+        # Add swirl terms to total exchange terms, and multiply by dz/area            
+        EEX[self.ht['conv']['ind']] += swirl_energy
+        EEX *= dz / self.params['area'][self.subchannel.type[
+            :self.subchannel.n_sc['coolant']['total']]]
         
+        MEX[self.ht['conv']['ind']] += swirl_momentum
+        MEX *= dz/self.params['area'][self.subchannel.type[
+            :self.subchannel.n_sc['coolant']['total']]]
+        return EEX, MEX
+
+
+    def _build_matrix(self, dz: float, delta_v: np.ndarray,
+                      delta_rho: np.ndarray, RR: np.ndarray) -> np.ndarray:
+        """
+        Build the matrix for the system of equations
+
         Parameters
         ----------
         dz : float
@@ -532,21 +618,19 @@ class MixedRegion(RoddedRegion):
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
             Enthalpy variation coefficient (J/kg/K)
-            
+
         Returns
         -------
         AA : np.ndarray
-            Coefficient matrix for the system of equations.
+            Coefficient matrix for the system of equations
         """
-        hstar = self._enthalpy + RR*delta_rho/2 
-        vstar = self._sc_vel + delta_v/2
-        
+        hstar, vstar = self._calc_h_v_star(delta_v, delta_rho, RR)
         nn = self.subchannel.n_sc['coolant']['total']
-        
+        # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, hstar, RR)
         C_rho, C_v = self._calc_continuity_coefficients(delta_v)
-        
+        # Build matrix
         AA = np.zeros((2*nn + 1, 2*nn + 1))
             
         diag = np.zeros(2*nn + 1)
@@ -559,18 +643,101 @@ class MixedRegion(RoddedRegion):
         sub_diag[0:2*nn:2] = SS
             
         AA += np.diag(diag) + np.diag(sup_diag, k=1) + np.diag(sub_diag, k=-1)
-            
         AA[0:-2:2, -1] = 1
-            
-        AA[-1, 0:2*nn:2] = C_rho  # 2*n, non 2*n+1 perché l'ultimo è 0 (corrsponde al deltaP)
-        AA[-1, 1:2*nn:2] = C_v 
-        
-        return AA  
-        
-    def _calc_momentum_coefficients(self, nn: int, dz: float, delta_v: np.ndarray, 
-                                    vstar: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:      
+        AA[-1, 0:2*nn:2] = C_rho
+        AA[-1, 1:2*nn:2] = C_v
+        return AA
+
+
+    def _calc_h_v_star(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
+                      RR: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Calculate Ei and Fi coefficients for the momentum equation.
+        Calculate hstar and vstar
+        
+        Parameters
+        ----------
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+        delta_rho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+        RR : np.ndarray
+            Enthalpy variation coefficient (J/kg/K)
+            
+        Returns
+        -------
+        hstar : np.ndarray
+            Effective enthalpy transported from adjacent subchannels (J/kg)
+        vstar : np.ndarray
+            Effective velocity transported from adjacent subchannels (m/s)
+            
+        Notes
+        -----
+        Two options are available:
+        1) Approximate hstar and vstar as the midpoint values of enthalpy
+           and velocity (i.e., at z + dz/2) `h_mid` and `v_mid`
+        2) Calculate hstar and vstar as the mass-flow-weighted average
+           of enthalpy and velocity from adjacent subchannels
+        """
+        h_mid = self._enthalpy + RR * delta_rho / 2
+        v_mid = self._sc_vel + delta_v / 2
+
+        if self._approx_star_quantities:
+            hstar = h_mid
+            vstar = v_mid
+        else:
+            # Initialize arrays
+            nn = self.subchannel.n_sc['coolant']['total']
+            numerator_h = np.zeros((nn, 3))
+            numerator_v = np.zeros((nn, 3))
+            denominator = np.zeros((nn, 3))
+            xij = np.zeros((nn, 3))
+            delta_mi = np.zeros(nn)
+            delta_mj = np.zeros(nn)
+            # Iterate over subchannels and adjacent subchannels
+            for i in range(nn):
+                for k in range(3):
+                    j = self.ht['cond']['adj'][i][k]
+                    if i in self.ht['conv']['ind'][
+                        self.ht['conv']['type'] == 2] and k == 2:
+                        continue
+                    else:
+                        # Calculate mass flow variations
+                        delta_mi[i] = ((self._density[i] + delta_rho[i]) * \
+                            (self._sc_vel[i] + delta_v[i]) - \
+                                self._density[i]*self._sc_vel[i]) * \
+                                    self.params['area'][
+                                        self.subchannel.type[i]]
+                        
+                        delta_mj[j] = ((self._density[j] + delta_rho[j]) * \
+                            (self._sc_vel[j] + delta_v[j]) - \
+                                self._density[j]*self._sc_vel[j]) * \
+                                    self.params['area'][
+                                        self.subchannel.type[j]]
+
+                        xij[i][k] = delta_mi[i] - delta_mj[j] + 1e-15
+                        # Calculate numerators and denominators
+                        numerator_h[i][k] = np.abs(xij[i][k]) * \
+                        (h_mid[i] + h_mid[j]) - xij[i][k] * \
+                        (h_mid[i] - h_mid[j])
+                        numerator_v[i][k] = np.abs(xij[i][k]) * \
+                            (v_mid[i] + v_mid[j]) - xij[i][k] * \
+                                (v_mid[i] - v_mid[j])
+                        denominator[i][k] = np.abs(xij[i][k])
+            # Calculate hstar and vstar
+            hstar = (numerator_h[:, 0] + numerator_h[:, 1] + 
+                     numerator_h[:, 2]) / 2 / (denominator[:, 0] + \
+                         denominator[:, 1] + denominator[:, 2])
+            vstar = (numerator_v[:, 0] + numerator_v[:, 1] + 
+                     numerator_v[:, 2]) / 2 / (denominator[:, 0] + \
+                         denominator[:, 1] + denominator[:, 2])
+        return hstar, vstar
+
+
+    def _calc_momentum_coefficients(self, nn: int, dz: float, 
+                                    delta_v: np.ndarray, vstar: np.ndarray) \
+                                        -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate Ei and Fi coefficients for the momentum equation
         
         Parameters
         ----------
@@ -591,22 +758,23 @@ class MixedRegion(RoddedRegion):
             Coefficients for the momentum equation
         """
         
-        EE = (self._sc_vel + delta_v) * \
-            (self._sc_vel + delta_v - vstar) + \
-                GRAVITY_CONST*dz/2 + \
-            self.coolant_int_params['ff']*dz/16/self.params['de'][self.subchannel.type[:nn]] * \
-                (2*self._sc_vel + delta_v)**2 
-                
-        FF = self._density * \
-            ((2 + self.coolant_int_params['ff']*dz \
-            /2/self.params['de'][self.subchannel.type[:nn]])*self._sc_vel + \
-            (1 + self.coolant_int_params['ff']*dz/8/
-            self.params['de'][self.subchannel.type[:nn]])* delta_v - vstar) 
-
+        EE = (self._sc_vel + delta_v) * (self._sc_vel + delta_v - vstar) + \
+            GRAVITY_CONST*dz/2 + self.coolant_int_params['ff'] * dz / 16 / \
+                self.params['de'][self.subchannel.type[:nn]] * \
+                    (2*self._sc_vel + delta_v)**2 
+        FF = self._density * ((2 + self.coolant_int_params['ff'] * dz / 2 / 
+                               self.params['de'][self.subchannel.type[:nn]]) 
+                              * self._sc_vel + 
+                              (1 + self.coolant_int_params['ff'] * dz / 8 /
+                               self.params['de'][self.subchannel.type[:nn]]) 
+                              * delta_v - vstar)
         return EE, FF
 
-    def _calc_energy_coefficients(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
-                                  hstar: np.ndarray, RR: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+
+    def _calc_energy_coefficients(self, delta_v: np.ndarray, 
+                                  delta_rho: np.ndarray, hstar: np.ndarray, 
+                                  RR: np.ndarray) \
+                                      -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculate coefficients for the energy equation.
         
@@ -628,14 +796,14 @@ class MixedRegion(RoddedRegion):
         TT : np.ndarray
             Coefficients for the energy equation
         """
-        
         SS = (self._sc_vel + delta_v) * \
-                (-hstar + self._enthalpy + RR*(self._density + delta_rho))
-        
-        TT = self._density*(-hstar + self._enthalpy)
+                (self._enthalpy - hstar + RR * (self._density + delta_rho))
+        TT = self._density * (self._enthalpy - hstar)
         return SS, TT
 
-    def _calc_continuity_coefficients(self, delta_v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+
+    def _calc_continuity_coefficients(self, delta_v: np.ndarray) \
+        -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculate coefficients for the continuity equation.
         
@@ -676,8 +844,7 @@ class MixedRegion(RoddedRegion):
         T1 = self._T_from_rho(self._density)
         T2 = self._T_from_rho(self._density + drho)
         deltah = self._calc_delta_h(T1, T2)
-
-        RR = deltah/drho
+        RR = deltah / drho
         return RR
         
     
@@ -707,8 +874,8 @@ class MixedRegion(RoddedRegion):
         # Coolant axial velocity, bundle Reynolds number
         mfr_over_area = self.int_flow_rate / self.bundle_params['area']
         self.coolant_int_params['vel'] = mfr_over_area / self.coolant.density
-        self.coolant_int_params['Re'] = \
-            mfr_over_area * self.bundle_params['de'] / self.coolant.viscosity
+        self.coolant_int_params['Re'] = mfr_over_area * \
+            self.bundle_params['de'] / self.coolant.viscosity
         # Spacer grid, if present
         if 'grid' in self.corr_constants.keys():
             try:
@@ -720,7 +887,6 @@ class MixedRegion(RoddedRegion):
                         self.coolant_int_params['Re'],
                         self.corr_constants['grid']['solidity'],
                         self.corr_constants['grid']['corr_coeff'])
-
         # Flow split parameters
         if self.corr['fs'] is not None:
             if 'grid' in self.corr.keys():
@@ -729,9 +895,8 @@ class MixedRegion(RoddedRegion):
             else:
                 self.coolant_int_params['fs'] = \
                     self.corr['fs'](self)
-
-        rho_v_X_avg = self.coolant.density * \
-            self.coolant_int_params['vel'] * \
+        # Average rho*v*X       
+        rho_v_X_avg = self.coolant.density * self.coolant_int_params['vel'] * \
             self.coolant_int_params['fs'] 
             
         # Friction factor
@@ -745,34 +910,13 @@ class MixedRegion(RoddedRegion):
         self._sc_vel = self._sc_vel[self.subchannel.type[
             :self.subchannel.n_sc['coolant']['total']]]
         self._density = self.coolant.density * np.ones(
-            self.subchannel.n_sc['coolant']['total'])
-
-                
-    def _calculate_mixing_params(self) -> None:
-        """
-        Calculate mixing parameters for the coolant subchannels
-        """
-        if self.corr['mix'] is not None:
-            interior_idx = self.subchannel.n_sc['coolant']['interior']
-            central_sc_vel = np.sum(self.sc_mfr[:interior_idx] * 
-                                    self._sc_vel[:interior_idx]) / \
-                                    np.sum(self.sc_mfr[:interior_idx])
-
-            mix = self.corr['mix'](self)
-            self.coolant_int_params['eddy'] = mix[0] * central_sc_vel
-                
-            peripheral_sc_vel = np.sum(self.sc_mfr[self.ht['conv']['ind']] * 
-                                    self._sc_vel[[self.ht['conv']['ind']]]) / \
-                                    np.sum(self.sc_mfr[self.ht['conv']['ind']])
-                                    
-            swirl_vel = mix[1] * peripheral_sc_vel
-            
-            self.coolant_int_params['swirl'][1] = swirl_vel
-            self.coolant_int_params['swirl'][2] = swirl_vel
-                
+            self.subchannel.n_sc['coolant']['total'])     
+        
+                   
     @property
     def pressure_drop(self):
         return self._pressure_drop
+    
     
     def _setup_ht_constants(self):
         """Setup heat transfer constants in numpy arrays"""
@@ -782,6 +926,7 @@ class MixedRegion(RoddedRegion):
         self.ht['old'] = const
         self.ht['cond'] = _setup_conduction_constants(self, const)
         self.ht['conv'] = _setup_convection_constants(self, const)
+        
         
     def _T_from_rho(self, rho: np.ndarray) -> np.ndarray:
         """
@@ -797,11 +942,7 @@ class MixedRegion(RoddedRegion):
         np.ndarray
             Temperature (K)
         """
-        if self.coolant.name == 'sodium':
-            aa, bb, cc, dd = SODIUM_DENS_COEFF
-            return dd*(1 - ((-bb+np.sqrt(bb**2 - 4*aa*(cc-rho)))/(2*aa))**2)
-        
-        elif self.coolant.name in DENSITY_COEFF.keys():
+        if self.coolant.name in DENSITY_COEFF.keys():
             aa, bb = DENSITY_COEFF[self.coolant.name]
             return (aa - rho) / bb
 
@@ -814,18 +955,18 @@ class MixedRegion(RoddedRegion):
 
             idx = header.index('density')
             y = np.genfromtxt(path, delimiter=',', skip_header=1)[:,0] # temperatures always in the first column
-            x = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx] 
+            x = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
         
             y = y[~np.isnan(x)][::-1]
             x = x[~np.isnan(x)][::-1]
             return np.interp(rho, x, y)
         
+        
     @property
     def sc_mfr(self):
         """Return mass flow rate in each subchannel"""
-        mfr = self._density * self._sc_vel * \
-            self.params['area'][self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
-
+        mfr = self._density * self._sc_vel * self.params['area'][
+            self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
         return mfr    
     
     ############################################################################
