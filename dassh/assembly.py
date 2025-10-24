@@ -72,7 +72,8 @@ class Assembly(LoggedClass):
     def __init__(self, name, loc, asm_input, mat_dict, inlet_temp,
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
                  param_update_tol=0.0, mixed_convection_tol=1e-5,
-                 gravity=False, rad_isotropic=True, solve_enthalpy = False):
+                 gravity=False, rad_isotropic=True, solve_enthalpy = False,
+                 mixed_convection=False):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')
@@ -96,29 +97,27 @@ class Assembly(LoggedClass):
                 self.name, asm_input, mat_dict, flow_rate, se2geo, gravity)
             ]
         else:
-            if asm_input.get('mixed_convection'):
+            if mixed_convection:
                 self.region = [
                     region_mixed.make(asm_input,
-                                   self.name,
-                                   mat_dict,
-                                   flow_rate,
-                                   se2geo,
-                                   param_update_tol,
-                                   mixed_convection_tol,
-                                   gravity,
-                                   rad_isotropic)
+                                      self.name,
+                                      mat_dict,
+                                      flow_rate,
+                                      se2geo,
+                                      param_update_tol,
+                                      mixed_convection_tol)
             ]
             else:
                 self.region = [
                     region_rodded.make(asm_input,
-                                    self.name,
-                                    mat_dict,
-                                    flow_rate,
-                                    se2geo,
-                                    param_update_tol,
-                                    gravity,
-                                    rad_isotropic,
-                                    solve_enthalpy)
+                                       self.name,
+                                       mat_dict,
+                                       flow_rate,
+                                       se2geo,
+                                       param_update_tol,
+                                       gravity,
+                                       rad_isotropic,
+                                       solve_enthalpy)
                 ]
 
         # Create other requested unrodded regions
