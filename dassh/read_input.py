@@ -1955,7 +1955,8 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                                    temperature=inlet_temp,
                                    lbh15_correlations=self.data['Core']['lbh15_correlations'],
                                    use_correlation=self.data['Core']['use_correlation'],
-                                   solve_enthalpy=self.data['Setup']['solve_enthalpy'])
+                                   solve_enthalpy=self.data['Setup']['solve_enthalpy'],
+                                   mixed_convection=self.data['Setup']['mixed_convection'])
 
         # Check all of the materials to make sure they all have the
         # properties they need. Structure: thermal conductivity
