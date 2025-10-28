@@ -26,7 +26,7 @@ def check_material(material_name: str) -> None:
         Options are: 'lead', 'LBE', 'bismuth', 'NaK', 'sodium'
         
     Raises
-    ----
+    ------
     ValueError
         If the material name is not recognized
     """
@@ -44,11 +44,11 @@ def generate_database(material_name: str, reference: bool = False) -> None:
         Name of the coolant. 
         Options are: 'lead', 'LBE', 'bismuth', 'NaK', 'sodium'
     reference : bool, optional
-        If True, generate a reference database with 1000 points, 
+        If True, generate a reference database with 5000 points, 
         by default False
         
     Raises
-    ----
+    ------
     ValueError
         If the material name is not recognized
     """
@@ -83,7 +83,7 @@ def assign_correlations(material_name: str) -> None:
         Options are: 'lead', 'LBE', 'bismuth', 'NaK', 'sodium'
         
     Raises
-    ----
+    ------
     ValueError
         If the material name is not recognized
     """
@@ -100,7 +100,7 @@ def assign_correlations(material_name: str) -> None:
         return properties_Na.Mat_from_corr(prop='density'), \
             properties_Na.Mat_from_corr(prop='enthalpy')
     
-    return properties_Na.Mat_from_corr(prop='density'), \
+    return properties_NaK.Mat_from_corr(prop='density'), \
         properties_NaK.Mat_from_corr(prop='enthalpy')
         
 
@@ -123,7 +123,7 @@ def prop_from_lbh15(prop: str, cool: Type, temperature: float) -> float:
         Property value
         
     Raises
-    ----
+    ------
     ValueError
         If the material name or property name is not recognized
     """    
@@ -137,7 +137,7 @@ def prop_from_lbh15(prop: str, cool: Type, temperature: float) -> float:
 def eval_poly(reference: np.ndarray, data: np.ndarray) \
     -> tuple[dict[str, np.ndarray], int]:
     """
-    Function to get the results of the polynomial method for different degrees
+    Get the results of the polynomial method for different degrees
     
     Parameters
     ----------
@@ -171,20 +171,22 @@ def eval_poly(reference: np.ndarray, data: np.ndarray) \
             print(coeffs_rho2h)
             break
 
-        errors = eval_accuracy(reference, coeffs_rho2h=coeffs_rho2h)
         poly_results['eave_poly'] = np.append(poly_results['eave_poly'], 
-                                              np.mean(errors))
+                                              eval_accuracy(reference, 
+                                                            coeffs_rho2h=\
+                                                                coeffs_rho2h))
 
         poly_results['time_poly'] = np.append(poly_results['time_poly'], 
-                                            eval_time(coeffs_rho2h, 
-                                                      reference[0,0]))
+                                              eval_time(coeffs_rho2h, 
+                                                        reference[0,0]))
     return poly_results, dd-1
 
 
 def eval_accuracy(reference: np.ndarray, coeffs_rho2h: np.ndarray) \
     -> np.ndarray:
     """
-    Function to evaluate the accuracy of the function `method`
+    Evaluate the accuracy of the polynomial function built on
+    the coefficients `coeffs_rho2h`
     
     Parameters
     ----------
@@ -196,18 +198,18 @@ def eval_accuracy(reference: np.ndarray, coeffs_rho2h: np.ndarray) \
     Returns
     -------
     np.ndarray
-        Array containing the relative error with respect to the reference data.
+        Array containing the relative errors with respect to the reference data
     """
     rho_ref = reference[:,0]
     hh_ref = reference[:,1]
 
     res = poly_method(rho_ref, coeffs_rho2h)
-    return np.abs((res - hh_ref) / hh_ref)
+    return np.mean(np.abs((res - hh_ref) / hh_ref))
 
 
 def calc_elapsed_time(coeffs_rho2h: float, rho: float) -> float:
     """
-    Function to calculate the time effort needed for calculating the enthalpy
+    Calculate the time effort needed for calculating the enthalpy
     from density using the function `poly_method`
     
     Parameters
@@ -230,7 +232,7 @@ def calc_elapsed_time(coeffs_rho2h: float, rho: float) -> float:
 
 def eval_time(coeffs_rho2h: np.ndarray, rho: float) -> float:
     """
-    Function to estimate the average time effort of a function `method`
+    Estimate the average time effort
     
     Parameters
     ----------
@@ -272,8 +274,7 @@ def eval_time(coeffs_rho2h: np.ndarray, rho: float) -> float:
 ##############################################################################
 def poly_method(rho: np.ndarray, coeffs_rho2h: np.ndarray) -> np.ndarray:
     """
-    Function to calculate the enthalpy from density using an interpolating 
-    polynomium
+    Calculate the enthalpy from density using an interpolating polynomium
     
     Parameters
     ----------
