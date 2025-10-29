@@ -22,7 +22,7 @@ def check_material(material_name: str) -> None:
     Parameters
     ----------
     material_name : str
-        Name of the coolant. 
+        Name of the coolant
         Options are: 'lead', 'LBE', 'bismuth', 'NaK', 'sodium'
         
     Raises
@@ -41,7 +41,7 @@ def generate_database(material_name: str, reference: bool = False) -> None:
     Parameters
     ----------
     material_name : str
-        Name of the coolant. 
+        Name of the coolant
         Options are: 'lead', 'LBE', 'bismuth', 'NaK', 'sodium'
     reference : bool, optional
         If True, generate a reference database with 5000 points, 
@@ -79,7 +79,7 @@ def assign_correlations(material_name: str) -> None:
     Parameters
     ----------
     material_name : str
-        Name of the coolant. 
+        Name of the coolant 
         Options are: 'lead', 'LBE', 'bismuth', 'NaK', 'sodium'
         
     Raises
@@ -171,14 +171,12 @@ def eval_poly(reference: np.ndarray, data: np.ndarray) \
             print(coeffs_rho2h)
             break
 
-        poly_results['eave_poly'] = np.append(poly_results['eave_poly'], 
-                                              eval_accuracy(reference, 
-                                                            coeffs_rho2h=\
-                                                                coeffs_rho2h))
+        poly_results['eave_poly'] = np.append(
+            poly_results['eave_poly'], 
+            eval_accuracy(reference, coeffs_rho2h=coeffs_rho2h))
 
-        poly_results['time_poly'] = np.append(poly_results['time_poly'], 
-                                              eval_time(coeffs_rho2h, 
-                                                        reference[0,0]))
+        poly_results['time_poly'] = np.append(
+            poly_results['time_poly'], eval_time(coeffs_rho2h, reference[0,0]))
     return poly_results, dd-1
 
 
