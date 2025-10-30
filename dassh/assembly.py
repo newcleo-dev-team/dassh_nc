@@ -108,6 +108,7 @@ class Assembly(LoggedClass):
                                       mixed_convection_tol)
             ]
             else:
+                asm_input['mixed_convection'] = mixed_convection
                 self.region = [
                     region_rodded.make(asm_input,
                                        self.name,
@@ -483,7 +484,8 @@ class Assembly(LoggedClass):
             self.active_region._calc_duct_temp(
                 temp_gap, htc_gap, adiabatic)
 
-    def calculate(self, dz, t_gap, h_gap, z=None, adiabatic=False, ebal=False):
+    def calculate(self, dz, t_gap, h_gap, z=None, adiabatic=False, ebal=False,
+                  mixed_convection=False):
         """Calculate coolant and temperatures at axial level j+1 based
         on coolant and duct wall temperatures at axial level j
 
@@ -528,11 +530,12 @@ class Assembly(LoggedClass):
         # Calculate coolant and duct temperatures, pressure drop
         
         if self.active_region.is_rodded:
-            if not self.active_region._mixed_convection:
+            if not mixed_convection:
                 self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
                 self.active_region.calculate_pressure_drop(self.z, dz)
             else: 
-                self.active_region.calculate(dz, z, pow_j, t_gap, h_gap, adiabatic, ebal)
+                self.active_region.calculate(dz, z, pow_j, t_gap, h_gap, 
+                                             adiabatic, ebal)
         else:
             self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
             self.active_region.calculate_pressure_drop(self.z, dz)
