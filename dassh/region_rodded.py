@@ -618,7 +618,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         """
         self.corr, self.corr_names, self.corr_constants = \
-            import_corr(ff, fs, mix, nu, sf, self, warn)
+            import_corr(ff, fs, mix, nu, sf, self, warn, 
+                        self._mixed_convection)
         self.coolant_int_params = \
             {'Re': 0.0,  # bundle-average Reynolds number
              'Re_sc': np.zeros(3),  # subchannel Reynolds numbers
@@ -881,7 +882,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     # UPDATE PROPERTIES
     ####################################################################
 
-    def _update_coolant_int_params(self, temp, use_mat_tracker=True):
+    def _update_coolant_int_params(self, temp, use_mat_tracker=True) -> None:
         """Update correlated bundle coolant parameters based
         on current average coolant temperature
 
@@ -903,10 +904,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             'swirl': swirl velocity
 
         """
-        # self.coolant.update(temp)
-        self._update_coolant(temp)
         if not self._rad_isotropic:
             self._update_subchannels_properties(self.temp['coolant_int'])
+        self._update_coolant(temp)
         # Only reason you wouldn't update all correlated parameters is if
         # the coolant tracker object says not to. If it says not to, skip
         # the update. Otherwise, proceed.
@@ -941,6 +941,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Friction factor
         # if self.corr['ff'] is not None:
         #     self.coolant_int_params['ff'] = self.corr['ff'](self)
+        if self._mixed_convection:
+            self.coolant_int_params['ff_i'] = self.corr['ff_i'](self)
                     
         # Mixing params - these come dimensionless, need to adjust
         self._calculate_mixing_params()
@@ -1383,7 +1385,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if self._ent:
             self._enthalpy += delta_T_or_h
             self.temp['coolant_int'] = \
-                self.coolant.temp_from_enthalpy(self._enthalpy)
+                self.coolant.convert_properties(enthalpy=self._enthalpy)
         else:
             self.temp['coolant_int'] += delta_T_or_h
 
@@ -1473,7 +1475,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 / (self.sc_mfr[i] + self.sc_mfr[j])
 
 
-            
     def _calc_int_sc_power(self, pin_power, cool_power):
         """Determine power from pins and from direct heating in the
         coolant that gets put into each subchannel at the given axial
@@ -2358,7 +2359,7 @@ def _setup_convection_constants(rr, ht_consts):
 ########################################################################
 
 
-def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
+def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn, mc):
     """Import correlations to be used in a DASSH Assembly object
 
     Parameters
@@ -2381,6 +2382,8 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
     bundle : DASSH RoddedRegion object
     warn : bool
         Raise applicability warnings or no
+    mc : bool
+        Whether or not regime is mixed convection
 
     Returns
     -------
@@ -2400,8 +2403,13 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
     # Friction factor
     if friction is not None:
         friction = '-'.join(re.split('-| ', friction.lower()))
-        corr_names['ff'], corr['ff'], corr_const['ff'] = \
-            _import_friction_correlation(friction, bundle, warn)
+        if mc:
+            corr_names['ff'], corr['ff'], corr_const['ff'], \
+                corr['ff_i'] = \
+                    _import_friction_correlation(friction, bundle, warn, mc)
+        else:
+            corr_names['ff'], corr['ff'], corr_const['ff'] = \
+                _import_friction_correlation(friction, bundle, warn, mc)
     else:
         corr['ff'] = None
         corr_names['ff'] = None
@@ -2457,7 +2465,7 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
     return corr, corr_names, corr_const
 
 
-def _import_friction_correlation(name, bundle, warn):
+def _import_friction_correlation(name, bundle, warn, mc):
     """Import friction factor correlation for DASSH Assembly object
 
     Parameters
@@ -2468,6 +2476,8 @@ def _import_friction_correlation(name, bundle, warn):
     bundle : DASSH RoddedRegion object
     warn : bool
         Raise applicability warnings
+    mc : bool
+        Whether or not regime is mixed convection
 
     Returns
     -------
@@ -2519,6 +2529,10 @@ def _import_friction_correlation(name, bundle, warn):
         sys.exit(1)
     if warn:
         check_correlation.check_application_range(bundle, ff)
+    
+    if mc:
+        return nickname, ff.calculate_bundle_friction_factor, constants, \
+            ff.calculate_subchannel_friction_factor
     return nickname, ff.calculate_bundle_friction_factor, constants
 
 

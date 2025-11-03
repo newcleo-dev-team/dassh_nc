@@ -860,7 +860,8 @@ class _RREquivalent(RoddedRegion):
                      'htc_params',
                      '_sf',
                      '_spacer_grid',
-                     '_rad_isotropic']
+                     '_rad_isotropic',
+                     '_mixed_convection']
 
     def __init__(self, asm_input, mat_dict, fr, se2geo=False):
         """Instantiate RoddedRegion object and pull out useful attr"""
@@ -876,7 +877,7 @@ class _RREquivalent(RoddedRegion):
             asm_input['clad_thickness'],
             asm_input['duct_ftf'],
             fr,
-            asm_input['mixed_convection'],
+            False,
             mat_dict['coolant'],
             mat_dict['duct'],
             asm_input['htc_params_duct'],

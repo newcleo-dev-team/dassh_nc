@@ -524,20 +524,27 @@ class Material(LoggedClass):
     ##########################################################################
     #          ENTHALPY-TEMPERATURE CONVERSION METHODS AND PROPERTIES
     ##########################################################################
-    def temp_from_enthalpy(self, enthalpy: np.ndarray) -> np.ndarray:
+    def convert_properties(self, enthalpy: np.ndarray = None,
+                           density: np.ndarray = None) -> np.ndarray:
         """
-        Convert enthalpy to the temperature 
+        Convert properties
+        Available options: enthalpy to the temperature, and density to enthalpy
         
         Parameters
         ----------
         enthalpy : np.ndarray
             Enthalpy values of the state for which temperature is seeked (J/kg)
+        density : np.ndarray
+            Density values of the state for which enthalpy is seeked (kg/m^3)
 
         Returns
         -------
         np.ndarray
-            Temperature corresponding to `enthalpy` (K)
+            Temperature corresponding to `enthalpy` (K) or enthalpy 
+            corresponding to `density` (J/kg)
         """  
+        if density is not None:
+            return np.polyval(self._coeffs_rho2h, density)
         return np.polyval(self._coeffs_h2T, enthalpy)
     
     
@@ -558,23 +565,6 @@ class Material(LoggedClass):
         if self.name in MATERIAL_LBH.keys():
             return MATERIAL_LBH[self.name](T=temperature).h
         return self._import_mat_correlation()('enthalpy')(temperature)
-
-    
-    def enthalpy_from_density(self, density: float) -> np.ndarray:
-        """
-        Convert density to enthalpy 
-        
-        Parameters
-        ----------
-        density : float
-            Density (kg/m^3)
-
-        Returns
-        -------
-        float
-            Enthalpy (J/kg) at the given `density`
-        """
-        return np.polyval(self._coeffs_rho2h, density)
         
         
     def _read_coefficients(self, file_name) -> np.ndarray:
