@@ -610,7 +610,7 @@ class Material(LoggedClass):
         """
         if self._coeffs_h2T is None:
             self.log("error", "Temperature-enthalpy coefficients not yet"
-                     "assigned")
+                     " assigned")
         return self._coeffs_h2T
     
     
@@ -626,7 +626,7 @@ class Material(LoggedClass):
         """
         if self._coeffs_rho2h is None:
             self.log("error", "Density-enthalpy coefficients not yet"
-                     "assigned")
+                     " assigned")
         return self._coeffs_rho2h
     
 

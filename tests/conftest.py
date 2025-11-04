@@ -587,7 +587,8 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True
                               bundle_params['bypass_gap_loss_coeff'],
                               bundle_params['wire_direction'],
                               bundle_params['shape_factor'],
-                              rad_isotropic=rad_iso)
+                              rad_isotropic=rad_iso,
+                              solve_enthalpy=solve_enthalpy)
 
 def make_mixed_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True):
     return dassh.MixedRegion(name,
@@ -613,8 +614,8 @@ def make_mixed_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True)
                               bundle_params['bypass_gap_flow_fraction'],
                               bundle_params['bypass_gap_loss_coeff'],
                               bundle_params['wire_direction'],
-                              bundle_params['shape_factor'],
-                              rad_isotropic=rad_iso)
+                              bundle_params['shape_factor']
+                              )
 
 @pytest.fixture(scope='module')
 def assembly_default_params():
@@ -945,8 +946,14 @@ def simple_ctrl_rr_mixconv(simple_ctrl_params):
     """DASSH MixeddRegion object: simple hexagonal bundle parameters
     for double-ducted assembly"""
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
+    mat = {'coolant': dassh.Material('sodium', 
+                                     temperature = \
+                                         pytest.rr_data.enthalpy['T1'],
+                                         solve_enthalpy=True,
+                                         mixed_convection=True),
+           'duct': dassh.Material('ss316')}
     rr = make_mixed_region_fixture('simple_ctrl', simple_ctrl_params[0],
-                                    simple_ctrl_params[1], flowrate, rad_iso=False)
+                                    mat, flowrate, rad_iso=False)
     return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
 @pytest.fixture
