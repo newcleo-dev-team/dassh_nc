@@ -591,6 +591,8 @@ class MixedRegion(RoddedRegion):
             Coefficient matrix for the system of equations
         """
         hstar, vstar = self._calc_h_v_star(delta_v, delta_rho, RR)
+        self.hstar = hstar  # Store hstar for energy balance error calc
+        self.vstar = vstar  # Store vstar for momentum balance error calc
         nn = self.subchannel.n_sc['coolant']['total']
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
@@ -877,11 +879,6 @@ class MixedRegion(RoddedRegion):
                 
         self._density = self.coolant.density * np.ones(
             self.subchannel.n_sc['coolant']['total'])     
-        
-                   
-    @property
-    def pressure_drop(self):
-        return self._pressure_drop
     
     
     def _setup_ht_constants(self):
@@ -893,6 +890,11 @@ class MixedRegion(RoddedRegion):
         self.ht['cond'] = _setup_conduction_constants(self, const)
         self.ht['conv'] = _setup_convection_constants(self, const)
         
+    
+    @property
+    def pressure_drop(self):
+        return self._pressure_drop
+    
         
     @property
     def sc_mfr(self):
@@ -900,5 +902,3 @@ class MixedRegion(RoddedRegion):
         mfr = self._density * self._sc_vel * self.params['area'][
             self.subchannel.type[:self.subchannel.n_sc['coolant']['total']]]
         return mfr    
-
-    

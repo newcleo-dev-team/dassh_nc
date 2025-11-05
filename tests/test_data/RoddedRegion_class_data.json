@@ -210,7 +210,8 @@
             "nak": 779.256
         },
         "tol_balance": 1e-10,
-        "dT": 1
+        "dT": 1,
+        "gravity_const": 9.81
 
     }
 
