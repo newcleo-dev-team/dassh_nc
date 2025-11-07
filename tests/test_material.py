@@ -469,4 +469,4 @@ class TestEnthalpyTemperatureConversion():
             assert mm.convert_properties(
                 density=mat_data.enthalpy['density2'][mat]) == \
                     pytest.approx(mat_data.enthalpy['h2'][mat],
-                                  abs=mat_data.enthalpy['tol'])
+                                  rel=mat_data.enthalpy['tol'])
