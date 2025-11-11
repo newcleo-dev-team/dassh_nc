@@ -204,6 +204,9 @@ class MixedRegion(RoddedRegion):
         # Tolerance for mixed convection solver and star quantities calculation
         self._mixed_convection_tol = mixed_convection_tol
         self._approx_star_quantities = approx_star_quantities
+        # Initialize star quantities
+        self._hstar = np.zeros_like(self._delta_v)
+        self._vstar = np.zeros_like(self._delta_v)
         # Initialize enthalpy array
         self._enthalpy = \
             self.coolant.enthalpy_from_temp(self.coolant.temperature) * \
@@ -345,11 +348,10 @@ class MixedRegion(RoddedRegion):
                 self.params['area'][self.subchannel.type[
                     :self.subchannel.n_sc['coolant']['total']]]
             mcpdT_i = self.sc_mfr * self._enthalpy - mfr_old * enthalpy_old
-            self.update_ebal(dz*np.sum(qq), 0, mcpdT_i)
-            
             # Error introduced in the energy balance by h_star approximation
-            # delta_m = self.sc_mfr - mfr_old
-            # error_introduced = self._hstar * delta_m
+            delta_m = self.sc_mfr - mfr_old
+            star_error = self._hstar * delta_m
+            self.update_ebal(dz*np.sum(qq), 0, mcpdT_i, star_error)
             
 
     def _build_vector(self, qq: np.ndarray, dz: float, z: float) -> np.ndarray:
@@ -534,13 +536,11 @@ class MixedRegion(RoddedRegion):
         AA : np.ndarray
             Coefficient matrix for the system of equations
         """
-        hstar, vstar = self._calc_h_v_star(delta_v, delta_rho, RR)
-        self.hstar = hstar  # Store hstar for energy balance error calc
-        self.vstar = vstar  # Store vstar for momentum balance error calc
+        self._calc_h_v_star(delta_v, delta_rho, RR)
         nn = self.subchannel.n_sc['coolant']['total']
         # Calculate coefficients for the matrix
-        EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v, vstar)
-        SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, hstar, RR)
+        EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v)
+        SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
         C_rho, C_v = self._calc_continuity_coefficients(nn, delta_v)
         # Build matrix
         AA = np.zeros((2*nn + 1, 2*nn + 1))
@@ -562,9 +562,9 @@ class MixedRegion(RoddedRegion):
 
 
     def _calc_h_v_star(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
-                      RR: np.ndarray) -> Tuple[np.ndarray]:
+                      RR: np.ndarray):
         """
-        Calculate hstar and vstar
+        Update hstar and vstar
         
         Parameters
         ----------
@@ -574,13 +574,6 @@ class MixedRegion(RoddedRegion):
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
             Enthalpy variation coefficient (J/kg/K)
-            
-        Returns
-        -------
-        hstar : np.ndarray
-            Effective enthalpy transported from adjacent subchannels (J/kg)
-        vstar : np.ndarray
-            Effective velocity transported from adjacent subchannels (m/s)
             
         Notes
         -----
@@ -594,7 +587,9 @@ class MixedRegion(RoddedRegion):
         v_mid = self._sc_vel + delta_v / 2
         # OPTION 1: Approximate hstar and vstar as midpoints
         if self._approx_star_quantities:
-            return h_mid, v_mid
+            self._hstar = h_mid
+            self._vstar = v_mid
+            return
         # OPTION 2: Calculate hstar and vstar as mass-flow-weighted averages
         # Initialize arrays
         nn = self.subchannel.n_sc['coolant']['total']
@@ -626,16 +621,15 @@ class MixedRegion(RoddedRegion):
         # Calculate hstar and vstar
         sum_den = 2 * (denominator[:, 0] + denominator[:, 1] + 
                        denominator[:, 2])
-        hstar = (numerator_h[:, 0] + numerator_h[:, 1] + numerator_h[:, 2]) \
-            / sum_den
-        vstar = (numerator_v[:, 0] + numerator_v[:, 1] + numerator_v[:, 2]) \
-            / sum_den
-        return hstar, vstar
+        self._hstar = (numerator_h[:, 0] + numerator_h[:, 1] + 
+                       numerator_h[:, 2]) / sum_den
+        self._vstar = (numerator_v[:, 0] + numerator_v[:, 1] + 
+                       numerator_v[:, 2]) / sum_den
+        
 
 
     def _calc_momentum_coefficients(self, nn: int, dz: float, 
-                                    delta_v: np.ndarray, vstar: np.ndarray) \
-                                        -> Tuple[np.ndarray]:
+                                    delta_v: np.ndarray) -> Tuple[np.ndarray]:
         """
         Calculate Ei and Fi coefficients for the momentum equation
         
@@ -647,8 +641,6 @@ class MixedRegion(RoddedRegion):
             Axial step size (m)
         delta_v : np.ndarray
             Variation of the SC velocities (m/s)
-        vstar : np.ndarray
-            Effective velocity transported from adjacent subchannels (m/s)
             
         Returns
         -------
@@ -657,22 +649,23 @@ class MixedRegion(RoddedRegion):
         FF : np.ndarray
             Coefficients for the momentum equation
         """
-        EE = (self._sc_vel + delta_v) * (self._sc_vel + delta_v - vstar) + \
-            GRAVITY_CONST * dz / 2 + self.coolant_int_params['ff_i'] * dz \
-                / 16 / self.params['de'][self.subchannel.type[:nn]] * \
-                    (2 * self._sc_vel + delta_v)**2 
+        EE = (self._sc_vel + delta_v) * \
+            (self._sc_vel + delta_v - self._vstar) + GRAVITY_CONST * dz / 2 + \
+                self.coolant_int_params['ff_i'] * dz / 16 / \
+                    self.params['de'][self.subchannel.type[:nn]] * \
+                        (2 * self._sc_vel + delta_v)**2 
         FF = self._density * ((2 + self.coolant_int_params['ff_i'] * dz / 2 / 
                                self.params['de'][self.subchannel.type[:nn]]) 
                               * self._sc_vel + 
                               (1 + self.coolant_int_params['ff_i'] * dz / 8 /
                                self.params['de'][self.subchannel.type[:nn]]) 
-                              * delta_v - vstar)
+                              * delta_v - self._vstar)
         return EE, FF
 
 
     def _calc_energy_coefficients(self, delta_v: np.ndarray, 
-                                  delta_rho: np.ndarray, hstar: np.ndarray, 
-                                  RR: np.ndarray) -> Tuple[np.ndarray]:
+                                  delta_rho: np.ndarray, RR: np.ndarray) \
+                                      -> Tuple[np.ndarray]:
         """
         Calculate coefficients for the energy equation.
         
@@ -682,8 +675,6 @@ class MixedRegion(RoddedRegion):
             Variation of the SC velocities (m/s)
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
-        hstar : np.ndarray
-            Average enthalpy between adjacent subchannels (J/kg)
         RR : np.ndarray
             Enthalpy variation coefficient (J/kg/K)
             
@@ -695,8 +686,8 @@ class MixedRegion(RoddedRegion):
             Coefficients for the energy equation
         """
         SS = (self._sc_vel + delta_v) * \
-                (self._enthalpy - hstar + RR * (self._density + delta_rho))
-        TT = self._density * (self._enthalpy - hstar)
+            (self._enthalpy - self._hstar + RR * (self._density + delta_rho))
+        TT = self._density * (self._enthalpy - self._hstar)
         return SS, TT
 
 

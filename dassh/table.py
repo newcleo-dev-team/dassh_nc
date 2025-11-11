@@ -975,12 +975,18 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         D - Heat transferred to double-duct bypass coolant through duct walls (W)
         E - Assembly coolant mass flow rate (kg/s)"""
 
-        if r_obj._options['mixed_convection'] \
-            or r_obj._options['solve_enthalpy']:
+        if r_obj._options['solve_enthalpy']:
             self.notes += """
-        F - Assembly coolant enthalpy rise (W)
-        G - Assembly coolant temperature rise (K)
+        F - Assembly coolant enthalpy rise (W)"""
+            if r_obj._options['mixed_convection']:
+                self.notes += """
+        G - Error introduced by approximation on H*
         SUM - Assembly energy balance: A + C + D - F (W)
+        ERROR - SUM / (A + B)""" + "\n"
+            else: 
+                self.notes += """
+        G - Assembly coolant temperature rise (K)
+        SUM - Assembly energy balance: A + C + D - E * F * G (W)
         ERROR - SUM / (A + B)""" + "\n"
         else:
             self.notes += """
@@ -1063,9 +1069,10 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                if r_obj._options['mixed_convection'] \
-                    or r_obj._options['solve_enthalpy']:
+                if r_obj._options['solve_enthalpy']:
                     ebal_asm[5] = reg.ebal['mcpdT_i']
+                    if r_obj._options['mixed_convection']:
+                        ebal_asm[6] = reg.ebal['star_error']
                 else:
                     ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
                         (asm.avg_coolant_temp - r_obj.inlet_temp)
@@ -1075,7 +1082,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         if ebal_asm[5] == 0:
             ebal_asm[5] = self._get_asm_avg_cp(asm, r_obj)
         # Temperature rise
-        ebal_asm[6] = asm.avg_coolant_temp - r_obj.inlet_temp
+        if ebal_asm[6] == 0:
+            ebal_asm[6] = asm.avg_coolant_temp - r_obj.inlet_temp
         return ebal_asm
 
     def _calc_gap_energy_balance(self, r_obj):
