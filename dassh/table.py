@@ -544,7 +544,7 @@ representation of the flow is not accurate.
         # Float formatting option
         self._ffmt = '{' + f':.{self.dp}E' + '}'
         # Inherit from DASSH_Table
-        DASSH_Table.__init__(self, 8, col_width, col0_width, sep)
+        DASSH_Table.__init__(self, 10, col_width, col0_width, sep)
 
     def make(self, r_obj):
         """Create the table
@@ -561,7 +561,7 @@ representation of the flow is not accurate.
         mfr_conv = self._get_mfr_conv(fr_unit)
         len_conv = self._get_len_conv(len_unit)
         self.add_row('', ['', '', 'Flow rate', 'Power', 'dz',
-                          'Limiting', '', 'Forced'])
+                          'Limiting', '', 'Forced', '', 'Natural'])
         self.add_row('Asm.', ['Name',
                               'Loc.',
                               f'({fr_unit})',
@@ -569,7 +569,9 @@ representation of the flow is not accurate.
                               f'({len_unit})',
                               'SC',
                               'Gr*',
-                              'Conv Repr'])
+                              'convection',
+                              'Y*',
+                              'convection'])
         self.add_horizontal_line()
         for i in range(len(r_obj.assemblies)):
             a = r_obj.assemblies[i]
@@ -578,15 +580,21 @@ representation of the flow is not accurate.
             # Calculate Gr_star
             if a.has_rodded:
                 try:
-                    gr_star, gr_star_crit = \
+                    gr_star, gr_star_crit, y_star, y_star_crit = \
                         self._determine_applicability(
                             a, r_obj.inlet_temp, r_obj.core_length)
+                    
                 except (AttributeError, TypeError, AssertionError):
                     gr_star = _OMIT
                     gr_star_crit = _OMIT
+                    y_star = _OMIT
+                    y_star_crit = _OMIT
             else:
                 gr_star = _OMIT
                 gr_star_crit = _OMIT
+                y_star = _OMIT
+                y_star_crit = _OMIT
+                
             self.add_row(
                 # _fmt_idx(a.id),
                 _fmt_idx(i),
@@ -597,7 +605,9 @@ representation of the flow is not accurate.
                  self._ffmt.format(len_conv(r_obj.min_dz['dz'][i])),
                  str(r_obj.min_dz['sc'][i]),
                  gr_star,
-                 gr_star_crit]
+                 gr_star_crit,
+                 y_star,
+                 y_star_crit]
             )
         if r_obj.core.model == 'flow':
             core_fr = mfr_conv(r_obj.core.gap_flow_rate)
@@ -614,19 +624,26 @@ representation of the flow is not accurate.
     def _determine_applicability(self, asm, t_inlet, core_len):
         """x"""
         pin_power_skew = asm.power.calculate_pin_power_skew()
-        gr_star = self._calc_modified_gr(asm.rodded,
+        gr_star, y_star = self._calc_modified_gr(asm.rodded,
                                          t_inlet,
                                          asm._estimated_T_out,
                                          pin_power_skew,
                                          core_len)
         if gr_star >= 0.02:
-            gr_star_crit = 'ERROR'
+            gr_star_crit = 'NO'
         else:
             gr_star_crit = str(u'\u2713')  # check mark
         gr_star = self._ffmt.format(gr_star)  # format for table
-        return gr_star, gr_star_crit
+        
+        if y_star < 100:
+            y_star_crit = 'NO'
+        else:
+            y_star_crit = str(u'\u2713')  # check mark
+        y_star = self._ffmt.format(y_star)  # format for table
+        return gr_star, gr_star_crit, y_star, y_star_crit
 
-    def _calc_modified_gr(self, rr, t_in, t_out, pskew, length):
+    def _calc_modified_gr(self, rr, t_in, t_out, pskew, length) \
+        -> tuple[float]:
         """Calculate modified Grashof number to evaluate importance of
         buoyancy effects on flow distribution in bundle
 
@@ -645,9 +662,10 @@ representation of the flow is not accurate.
 
         Returns
         -------
-        float
+        tuple[float]
             Modified Grashof number to be evaluated against critical
             Grashof number (Gr*_C = 0.2)
+            Y* factor to be evaluated against critical Y* (Y*_C = 100)
 
         Notes
         -----
@@ -698,9 +716,11 @@ representation of the flow is not accurate.
         beta = rr.coolant.beta
         Gr = g0 * beta * (t_out - t_in) * rr.params['de'][0]**3 / kvisc**2
         Gr_star = Gr * chi / ff / Re**2
+        # Evaluate Y*
+        Y_star = Gr / Re
         # Re-update coolant properties at the inlet temperature
         rr._update_coolant_int_params(t_in)
-        return Gr_star
+        return Gr_star, Y_star
 
 
 ########################################################################

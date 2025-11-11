@@ -2403,7 +2403,6 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn, mc):
     # Friction factor
     if friction is not None:
         friction = '-'.join(re.split('-| ', friction.lower()))
-        print(friction)
         if mc and friction in ['ctd', 'uctd', 'eng']:
             corr_names['ff'], corr['ff'], corr_const['ff'], \
                 corr['ff_i'] = \
