@@ -21,7 +21,9 @@ Upgraded Cheng-Todreas Detailed correlations (2018)
 ########################################################################
 import numpy as np
 from . import friction_ctd as ctd
-
+MM = {'laminar': 1.0, 'turbulent': 0.18}
+GAMMA = 0.33
+LAMBDA = 7.0  # Exponent for turbulent friction factor in transition regime
 
 # Application ranges of friction factor correlations
 applicability = {}
@@ -212,7 +214,7 @@ def calculate_bundle_friction_factor(asm_obj):
     f = {}
     # Calculate friction factor for laminar and turbulent regimes
     for r in cfb.keys():
-        f[r] = cfb[r] / asm_obj.coolant_int_params['Re']**ctd._m[r]
+        f[r] = cfb[r] / asm_obj.coolant_int_params['Re']**MM[r]
     # If transition region, combine laminar and turbulent friction
     # factors using intermittency fxn; otherwise, return value
     try:
@@ -230,3 +232,51 @@ def calculate_bundle_friction_factor(asm_obj):
         # Different correlation for transition region than O.G. CTD
         return (f['laminar'] * (1 - x)**(1 / 3.0) * (1 - x**7.0)
                 + f['turbulent'] * x**(1 / 3.0))
+
+
+########################################################################
+# SUBCHANNEL FRICTION FACTOR
+########################################################################
+def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
+    """
+    Calculate the subchannel friction factors using the Upgraded Cheng–Todreas
+    Detailed correlation 
+    
+    Parameters
+    ----------
+    asm_obj : DASSH Assembly object
+        Contains the assembly geometric details and subchannel Reynolds numbers
+    
+    Returns
+    -------
+    np.ndarray
+        Subchannel friction factors at given flow conditions
+    """
+    Cf_sc = calculate_subchannel_friction_factor_const(asm_obj)
+    Re_bounds = calculate_Re_bounds(asm_obj)
+    Re_all = asm_obj.coolant_int_params['Re_all_sc']
+    sc_type = asm_obj.subchannel.type[
+        :asm_obj.subchannel.n_sc['coolant']['total']]
+
+    ff_laminar = Cf_sc['laminar'][sc_type] / Re_all
+    ff_turbulent = Cf_sc['turbulent'][sc_type] / Re_all ** MM['turbulent']
+
+    INT_i = ctd._calc_intermittency_factor_sc(asm_obj, *Re_bounds)
+    trans_indices = np.where((Re_all > Re_bounds[0]) & (Re_all < Re_bounds[1]))
+    ff_transition = np.zeros_like(Re_all)
+    ff_transition[trans_indices] = ff_laminar[trans_indices] * \
+        (1 - INT_i[trans_indices]) ** GAMMA * \
+            (1 - INT_i[trans_indices] ** LAMBDA) + \
+                ff_turbulent[trans_indices] * INT_i[trans_indices] ** GAMMA
+    ff = np.select(
+        [
+            Re_all <= Re_bounds[0],   # laminar region
+            Re_all >= Re_bounds[1],   # turbulent region
+        ],
+        [
+            ff_laminar,               # laminar value
+            ff_turbulent,             # turbulent value
+        ],
+        default=ff_transition         # transition region 
+    )
+    return ff

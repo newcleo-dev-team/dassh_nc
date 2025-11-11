@@ -800,6 +800,8 @@ class MixedRegion(RoddedRegion):
             self.coolant_int_params['ff'] = self.corr['ff'](self)
         if self.corr['ff_i'] is not None:
             self.coolant_int_params['ff_i'] = self.corr['ff_i'](self)
+        else:
+            self.coolant_int_params['ff_i'] = self.coolant_int_params['ff']
         
         self._sc_vel = self.coolant_int_params['vel'] * \
             self.coolant_int_params['fs'][self.subchannel.type[

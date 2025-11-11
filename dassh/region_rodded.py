@@ -941,7 +941,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Friction factor
         # if self.corr['ff'] is not None:
         #     self.coolant_int_params['ff'] = self.corr['ff'](self)
-        if self._mixed_convection:
+        if self._mixed_convection and self.corr['ff_i'] is not None:
             self.coolant_int_params['ff_i'] = self.corr['ff_i'](self)
                     
         # Mixing params - these come dimensionless, need to adjust
@@ -2403,13 +2403,15 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn, mc):
     # Friction factor
     if friction is not None:
         friction = '-'.join(re.split('-| ', friction.lower()))
-        if mc:
+        print(friction)
+        if mc and friction in ['ctd', 'uctd', 'eng']:
             corr_names['ff'], corr['ff'], corr_const['ff'], \
                 corr['ff_i'] = \
                     _import_friction_correlation(friction, bundle, warn, mc)
         else:
             corr_names['ff'], corr['ff'], corr_const['ff'] = \
                 _import_friction_correlation(friction, bundle, warn, mc)
+            corr['ff_i'] = None
     else:
         corr['ff'] = None
         corr_names['ff'] = None
@@ -2530,7 +2532,9 @@ def _import_friction_correlation(name, bundle, warn, mc):
     if warn:
         check_correlation.check_application_range(bundle, ff)
     
-    if mc:
+    if mc and name in ['ctd', 'cheng-todreas-detailed', 
+                      'uctd', 'upgraded-cheng-todreas-detailed',
+                      'upgraded-cheng-todreas', 'engel', 'eng']:
         return nickname, ff.calculate_bundle_friction_factor, constants, \
             ff.calculate_subchannel_friction_factor
     return nickname, ff.calculate_bundle_friction_factor, constants

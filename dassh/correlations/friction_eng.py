@@ -61,3 +61,31 @@ def calculate_bundle_friction_factor(asm_obj):
         f = (110 * np.sqrt(1 - x) / asm_obj.coolant_int_params['Re']
              + 0.55 * np.sqrt(x) / asm_obj.coolant_int_params['Re']**0.25)
     return f
+
+
+
+def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
+    """
+    Calculate the subchannel friction factors using the Engel correlation 
+    
+    Parameters
+    ----------
+    asm_obj : DASSH Assembly object
+        Contains the assembly geometric details and subchannel Reynolds numbers
+    
+    Returns
+    -------
+    np.ndarray
+        Subchannel friction factors at given flow conditions
+    """
+    f_sc = np.zeros_like(asm_obj.coolant_int_params['Re_all_sc'])
+    for i, Re_sc in enumerate(asm_obj.coolant_int_params['Re_all_sc']):
+        if Re_sc < 400.0:
+            f_sc[i] = 110 / Re_sc
+        elif Re_sc > 5000.0:
+            f_sc[i] = 0.55 / Re_sc**0.25
+        else:  # transition
+            x = (Re_sc - 400) / 4600
+            f_sc[i] = (110 * np.sqrt(1 - x) / Re_sc
+                       + 0.55 * np.sqrt(x) / Re_sc**0.25)
+    return f_sc
