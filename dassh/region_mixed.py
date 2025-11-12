@@ -302,7 +302,7 @@ class MixedRegion(RoddedRegion):
         iter = 0
         err_vect = np.ones(3) # Max. errors on delta_rho and delta_v, and
                               # error on delta_P
-        while np.any(err_vect) > self._mixed_convection_tol \
+        while np.any(err_vect > self._mixed_convection_tol) \
             and iter < MC_MAX_ITER:
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)

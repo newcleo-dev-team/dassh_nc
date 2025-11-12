@@ -67,5 +67,5 @@ MIX_CON_VERBOSE_OUTPUT: list[str] = [
 ]
 """Verbose output header for mixed convection region solver"""
 
-MC_MAX_ITER: int = 5
+MC_MAX_ITER: int = 10
 """Maximum number of iterations for mixed convection region solver"""
