@@ -534,7 +534,7 @@ class Assembly(LoggedClass):
                 self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
                 self.active_region.calculate_pressure_drop(self.z, dz)
             else: 
-                self.active_region.calculate(dz, z, pow_j, t_gap, h_gap, 
+                self.active_region.calculate(dz, self._z, pow_j, t_gap, h_gap, 
                                              adiabatic, ebal)
         else:
             self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
