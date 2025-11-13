@@ -954,11 +954,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         if self.corr['mix'] is not None:
             mix = self.corr['mix'](self)           
-            if self._mixed_convection:
-                self.coolant_int_params['eddy'] = mix[0]
-                self.coolant_int_params['swirl'][1] = mix[1]
-                self.coolant_int_params['swirl'][2] = mix[1]
-                return 
             self.coolant_int_params['eddy'] = \
                 (mix[0] * self.coolant_int_params['fs'][0]
                     * self.coolant_int_params['vel'])

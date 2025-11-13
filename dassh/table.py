@@ -975,7 +975,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         D - Heat transferred to double-duct bypass coolant through duct walls (W)
         E - Assembly coolant mass flow rate (kg/s)"""
 
-        if r_obj._options['solve_enthalpy']:
+        if r_obj._options['solve_enthalpy'] or \
+            r_obj._options['mixed_convection']:
             self.notes += """
         F - Assembly coolant enthalpy rise (W)"""
             if r_obj._options['mixed_convection']:

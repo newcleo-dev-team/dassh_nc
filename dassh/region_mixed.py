@@ -13,6 +13,7 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
 from dassh.pin_model import PinModel
 from typing import Tuple
 from ._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, MC_MAX_ITER
+import scipy.sparse as sp
 
 
 module_logger = logging.getLogger('dassh.region_mixed')
@@ -306,8 +307,10 @@ class MixedRegion(RoddedRegion):
             and iter < MC_MAX_ITER:
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
+            #AA = sp.csr_matrix(self._build_matrix(dz, delta_v0, delta_rho0, RR))
             # Solve system
             xx = np.linalg.solve(AA, bb)
+            #xx = sp.linalg.spsolve(AA, bb)
             # Extract deltas from solution vector
             delta_rho = xx[0:2*self.subchannel.n_sc['coolant']['total']:2]
             delta_v = xx[1:2*self.subchannel.n_sc['coolant']['total']:2]
