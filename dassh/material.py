@@ -149,10 +149,11 @@ class Material(LoggedClass):
         # Update properties based on input temperature
         self.update(self.temperature)
         
-        if solve_enthalpy or self.name in BUILTIN_COOLANTS:
+        if (solve_enthalpy or mixed_convection) \
+            and self.name in BUILTIN_COOLANTS :
             self._coeffs_h2T = self._read_coefficients(h2T_COEFF_FILE)
-        if mixed_convection and self.name in BUILTIN_COOLANTS:
-            self._coeffs_rho2h = self._read_coefficients(rho2h_COEFF_FILE)
+            if mixed_convection:
+                self._coeffs_rho2h = self._read_coefficients(rho2h_COEFF_FILE)
         
         
     def __get_mid_temp(self, val_range: Union[Dict[str, tuple], None] = None,
@@ -528,14 +529,14 @@ class Material(LoggedClass):
                            density: np.ndarray = None) -> np.ndarray:
         """
         Convert properties
-        Available options: enthalpy to the temperature, and density to enthalpy
+        Available options: enthalpy to temperature, and density to enthalpy
         
         Parameters
         ----------
-        enthalpy : np.ndarray
-            Enthalpy values of the state for which temperature is seeked (J/kg)
-        density : np.ndarray
-            Density values of the state for which enthalpy is seeked (kg/m^3)
+        enthalpy : np.ndarray, optional
+            Enthalpy values of the states for which temperature is seeked (J/kg)
+        density : np.ndarray, optional
+            Density values of the states for which enthalpy is seeked (kg/m^3)
 
         Returns
         -------
@@ -545,7 +546,9 @@ class Material(LoggedClass):
         """  
         if density is not None:
             return np.polyval(self._coeffs_rho2h, density)
-        return np.polyval(self._coeffs_h2T, enthalpy)
+        if enthalpy is not None:
+            return np.polyval(self._coeffs_h2T, enthalpy)
+        self.log('error', 'No conversion option selected.')
     
     
     def enthalpy_from_temp(self, temperature: float) -> float:
@@ -585,28 +588,23 @@ class Material(LoggedClass):
         path = os.path.join(ROOT, DATA_FOLDER, file_name)
         try:
             with open(path, 'r') as f:
-                reader = csv.reader(f)
-                header = next(reader) 
-        except:
-            self.log('error', f"Could not find coefficients file {path}.") 
-        try: 
+                    reader = csv.reader(f)
+                    header = next(reader) 
             idx = header.index(self.name)
         except ValueError:
             self.log('error', "Could not find coefficients " \
                 f"for material {self.name}.")
+        except:
+            self.log('error', f"Could not find coefficients file {path}.") 
+            
         coeffs = np.genfromtxt(path, delimiter=',', skip_header=1)[:,idx]
         return coeffs[~np.isnan(coeffs)]
 
 
     @property
-    def coeffs_h2T(self) -> np.ndarray:
+    def coeffs_h2T(self):
         """
         Coefficients for polynomial converting enthalpy to temperature
-        
-        Returns
-        -------
-        numpy.ndarray
-            Coefficients for polynomial converting enthalpy to temperature
         """
         if self._coeffs_h2T is None:
             self.log("error", "Temperature-enthalpy coefficients not yet"
@@ -615,14 +613,9 @@ class Material(LoggedClass):
     
     
     @property
-    def coeffs_rho2h(self) -> np.ndarray:
+    def coeffs_rho2h(self):
         """
         Coefficients for polynomial converting density to enthalpy
-
-        Returns
-        -------
-        numpy.ndarray
-            Coefficients for polynomial converting density to enthalpy
         """
         if self._coeffs_rho2h is None:
             self.log("error", "Density-enthalpy coefficients not yet"

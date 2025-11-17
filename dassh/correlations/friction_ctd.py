@@ -19,13 +19,17 @@ author: matz
 Cheng-Todreas Detailed original correlations (1986)
 """
 ########################################################################
+from typing import Union
 import numpy as np
 from . import corr_utils
 
 
 # Cheng-Todreas Reynolds number exponent
-_m = {'laminar': 1.0, 'turbulent': 0.18}
-_gam = 0.33
+MM = {'laminar': 1.0, 'turbulent': 0.18}
+# Exponent for transition regime correlation
+GAMMA = 1 / 3
+# Valid 'whichRe' options for intermittency factor calculation
+WHICH_RE = ['Re', 'Re_all_sc']
 
 # Application ranges of friction factor correlations
 applicability = {}
@@ -184,9 +188,9 @@ def _calc_sc_ff_const(asm, wd, ws):
                         + (wd[r] * (3 * wproj[0] / b_area[0])
                            * (asm.params['de'][0] / asm.wire_pitch)
                            * (asm.params['de'][0]
-                              / asm.wire_diameter)**_m[r]))
+                              / asm.wire_diameter)**MM[r]))
             # Edge
-            _exp = (3.0 - _m[r]) / 2
+            _exp = (3.0 - MM[r]) / 2
             Cf[r][1] = Cfb[r][1]
             Cf[r][1] *= (1 + (ws[r] * (wproj[1] / b_area[1])
                               * np.tan(asm.params['theta'])**2))**_exp
@@ -259,10 +263,6 @@ def calculate_bundle_friction_factor_const(asm_obj):
     ----------
     asm_obj : DASSH Assembly object
         Contains geometric and flow parameters
-    subchannel_cf : dict
-        dict (keys: ['laminar', 'turbulent']) of numpy.ndarray
-        (length = 3), each containing friction factor constants
-        for each coolant subchannel
 
     Notes
     -----
@@ -303,9 +303,9 @@ def _calc_cfb(asm_obj, subchannel_cf):
     # Combine constants into bundle-avg friction factor constant
     for r in subchannel_cf.keys():  # flow regimes: laminar, turbulent
         cfb[r] = 0.0
-        _exp1 = _m[r] / (2 - _m[r])
-        _exp2 = 1 / (_m[r] - 2)
-        _exp3 = _m[r] - 2
+        _exp1 = MM[r] / (2 - MM[r])
+        _exp2 = 1 / (MM[r] - 2)
+        _exp3 = MM[r] - 2
         for i in range(3):
             sci = ['interior', 'edge', 'corner'][i]
             NAi = (asm_obj.subchannel.n_sc['coolant'][sci]
@@ -382,7 +382,7 @@ def _calc_bundle_ff(asm_obj, cfb):
     f = {}
     # Calculate friction factor for laminar and turbulent regimes
     for r in cfb.keys():
-        f[r] = cfb[r] / asm_obj.coolant_int_params['Re']**_m[r]
+        f[r] = cfb[r] / asm_obj.coolant_int_params['Re']**MM[r]
 
     # If transition region, combine laminar and turbulent friction
     # factors using intermittency fxn; otherwise, return value
@@ -398,11 +398,12 @@ def _calc_bundle_ff(asm_obj, cfb):
     else:
         # Transition regime intermittency factor
         x = calc_intermittency_factor(asm_obj, Re_bl, Re_bt)
-        return (f['laminar'] * (1 - x)**(1 / 3.0)
-                + f['turbulent'] * x**(1 / 3.0))
+        return (f['laminar'] * (1 - x)**GAMMA
+                + f['turbulent'] * x**GAMMA)
 
 
-def calc_intermittency_factor(asm_obj, Re_bl, Re_bt):
+def calc_intermittency_factor(asm_obj, Re_bl: float, Re_bt: float, 
+                              whichRe: str ='Re') -> Union[float, np.ndarray]:
     """Calculate the bundle intermittency factor used to
     determine the transition regime friction factor
 
@@ -413,9 +414,15 @@ def calc_intermittency_factor(asm_obj, Re_bl, Re_bt):
         Laminar-transition boundary Reynolds number
     Re_bt : float
         Transition-turbulent boundary Reynolds number
+    whichRe : str, optional
+        Key for which Reynolds number to use from asm_obj.coolant_int_params,
+        by default 'Re', which is the bundle Reynolds number. Can also be
+        'Re_all_sc' to use subchannel Reynolds numbers.
 
     """
-    return((np.log10(asm_obj.coolant_int_params['Re']) - np.log10(Re_bl))
+    if whichRe not in WHICH_RE:
+        raise KeyError(f"Option 'whichRe' must be one of {WHICH_RE}")
+    return((np.log10(asm_obj.coolant_int_params[whichRe]) - np.log10(Re_bl))
            / (np.log10(Re_bt) - np.log10(Re_bl)))
 
 
@@ -436,46 +443,66 @@ def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
     -------
     np.ndarray
         Subchannel friction factors at given flow conditions
+    """        
+    if not asm_obj.corr_constants['ff']['Re_bnds']:
+        Re_bl, Re_bt = calculate_Re_bounds(asm_obj)
+        Cf_sc = calculate_subchannel_friction_factor_const(asm_obj)
+    else:
+        Re_bl, Re_bt = asm_obj.corr_constants['ff']['Re_bnds']
+        Cf_sc = asm_obj.corr_constants['ff']['Cf_sc']
+    return _calc_sc_ff(asm_obj, Re_bl, Re_bt, Cf_sc)
+
+
+def _calc_f_trans(fturb: np.ndarray, flam: np.ndarray, Re_all: np.ndarray, 
+                  Re_bl: float, Re_bt: float, asm_obj):
     """
-    Cf_sc = calculate_subchannel_friction_factor_const(asm_obj)
-    Re_bounds = calculate_Re_bounds(asm_obj)
+    Calculate the subchannel friction factors in the transition regime
+    using the Cheng–Todreas Detailed correlation
+    
+    Parameters
+    ----------
+    fturb : np.ndarray
+        Subchannel turbulent friction factors
+    flam : np.ndarray
+        Subchannel laminar friction factors
+    Re_all : np.ndarray
+        Subchannel Reynolds numbers
+    Re_bl : float
+        Laminar-transition boundary Reynolds number
+    Re_bt : float
+        Transition-turbulent boundary Reynolds number
+    asm_obj : DASSH Assembly object
+        Contains the assembly geometric details and subchannel Reynolds numbers
+    """
+    INT_i: np.ndarray = calc_intermittency_factor(asm_obj, Re_bl, Re_bt, 
+                                                  whichRe='Re_all_sc')
+    trans_indices: np.ndarray = np.where((Re_all > Re_bl) & (Re_all < Re_bt))
+    ff_transition: np.ndarray = np.zeros_like(Re_all)
+    ff_transition[trans_indices] = flam[trans_indices] * \
+        (1 - INT_i[trans_indices]) ** GAMMA + \
+            fturb[trans_indices] * INT_i[trans_indices] ** GAMMA
+    return ff_transition
+
+
+def _calc_sc_ff(asm_obj, Re_bl: float, Re_bt: float, Cf_sc: dict[str, np.ndarray]) -> np.ndarray:
     Re_all = asm_obj.coolant_int_params['Re_all_sc']
     sc_type = asm_obj.subchannel.type[
         :asm_obj.subchannel.n_sc['coolant']['total']]
+    # Calculate laminar and turbulent friction factors
+    ff_laminar: np.ndarray = Cf_sc['laminar'][sc_type] / Re_all
+    ff_turbulent: np.ndarray = Cf_sc['turbulent'][sc_type] / \
+        Re_all ** MM['turbulent']
 
-    ff_laminar = Cf_sc['laminar'][sc_type] / Re_all
-    ff_turbulent = Cf_sc['turbulent'][sc_type] / Re_all ** _m['turbulent']
-
-    INT_i = _calc_intermittency_factor_sc(asm_obj, *Re_bounds)
-    trans_indices = np.where((Re_all > Re_bounds[0]) & (Re_all < Re_bounds[1]))
-    ff_transition = np.zeros_like(Re_all)
-    ff_transition[trans_indices] = ff_laminar[trans_indices] * (1 - INT_i[trans_indices]) ** _gam + \
-        ff_turbulent[trans_indices] * INT_i[trans_indices] ** _gam
     ff = np.select(
         [
-            Re_all <= Re_bounds[0],   # laminar region
-            Re_all >= Re_bounds[1],   # turbulent region
+            Re_all <= Re_bl,   # laminar region
+            Re_all >= Re_bt,   # turbulent region
         ],
         [
             ff_laminar,               # laminar value
             ff_turbulent,             # turbulent value
         ],
-        default=ff_transition         # transition region 
+        default = _calc_f_trans(ff_turbulent, ff_laminar, Re_all, Re_bl,
+                                Re_bt, asm_obj)        # transition region 
     )
     return ff
-
-def _calc_intermittency_factor_sc(asm_obj, Re_il, Re_it):
-    """Calculate the bundle intermittency factor used to
-    determine the transition regime friction factor
-
-    Parameters
-    ----------
-    asm_obj : DASSH Assembly object
-    Re_bl : float
-        Laminar-transition boundary Reynolds number
-    Re_bt : float
-        Transition-turbulent boundary Reynolds number
-
-    """
-    return np.log10(asm_obj.coolant_int_params['Re_all_sc'] / Re_il) \
-        / np.log10(Re_it / Re_il)

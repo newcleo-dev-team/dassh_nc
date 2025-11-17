@@ -37,31 +37,34 @@ applicability['bare rod'] = False
 ########################################################################
 
 
-def calculate_bundle_friction_factor(asm_obj):
-    """Calculate the bundle-average friction factor
+def calculate_bundle_friction_factor(asm_obj, Re: float = None) -> float:
+    """Calculate the bundle-average friction factor. Optionally is used to
+    calculate friction factor at subchannel Reynolds numbers
 
     Parameters
     ----------
     asm_obj : DASSH Assembly object
         Contains the assembly geometric details and bundle Re
+    Re : float, optional
+        Bundle Reynolds number to use in case of subchannel `ff` calculation
 
     Returns
     -------
     float
         Bundle-average friction factor based on assembly geometry
-        and flow regime
-
+        and flow regime. Optionally calculated at given subchannel `Re`
     """
-    if asm_obj.coolant_int_params['Re'] < 400.0:
-        f = 110 / asm_obj.coolant_int_params['Re']
-    elif asm_obj.coolant_int_params['Re'] > 5000.0:
-        f = 0.55 / asm_obj.coolant_int_params['Re']**0.25
-    else:  # transition
-        x = (asm_obj.coolant_int_params['Re'] - 400) / 4600
-        f = (110 * np.sqrt(1 - x) / asm_obj.coolant_int_params['Re']
-             + 0.55 * np.sqrt(x) / asm_obj.coolant_int_params['Re']**0.25)
-    return f
+    if not Re:
+        Re = asm_obj.coolant_int_params['Re']
+        
+    if Re < 400.0:
+        return 110 / Re
+    elif Re > 5000.0:
+        return 0.55 / Re**0.25
 
+    x = (Re - 400) / 4600
+    return (110 * np.sqrt(1 - x) / Re 
+            + 0.55 * np.sqrt(x) / Re**0.25)
 
 
 def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
@@ -80,12 +83,5 @@ def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
     """
     f_sc = np.zeros_like(asm_obj.coolant_int_params['Re_all_sc'])
     for i, Re_sc in enumerate(asm_obj.coolant_int_params['Re_all_sc']):
-        if Re_sc < 400.0:
-            f_sc[i] = 110 / Re_sc
-        elif Re_sc > 5000.0:
-            f_sc[i] = 0.55 / Re_sc**0.25
-        else:  # transition
-            x = (Re_sc - 400) / 4600
-            f_sc[i] = (110 * np.sqrt(1 - x) / Re_sc
-                       + 0.55 * np.sqrt(x) / Re_sc**0.25)
+        f_sc[i] = calculate_bundle_friction_factor(asm_obj, Re=Re_sc)
     return f_sc
