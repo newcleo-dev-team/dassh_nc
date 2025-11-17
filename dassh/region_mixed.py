@@ -54,7 +54,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
                      inp['pin_diameter'], inp['wire_pitch'], 
                      inp['wire_diameter'], inp['clad_thickness'], 
                      inp['duct_ftf'], inp['verbose'], 
-                     inp['approx_star_quantities'], fr, mat['coolant'],
+                     inp['accurate_star_quantities'], fr, mat['coolant'],
                      mat['duct'], inp['htc_params_duct'], inp['corr_friction'],
                      inp['corr_flowsplit'], inp['corr_mixing'], 
                      inp['corr_nusselt'], inp['corr_shapefactor'],
@@ -129,7 +129,7 @@ class MixedRegion(RoddedRegion):
         flat-to-flat distances for each duct surrounding the bundle
     verbose : boolean
         Indicate whether to print verbose output during iterations
-    approx_star_quantities : boolean
+    accurate_star_quantities : boolean
         Indicate whether to approximate star quantities
     flow_rate : float
         Coolant mass flow rate (kg/s)
@@ -170,7 +170,7 @@ class MixedRegion(RoddedRegion):
     """
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
                  wire_diam, clad_thickness, duct_ftf, verbose, 
-                 approx_star_quantities, flow_rate,
+                 accurate_star_quantities, flow_rate,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
@@ -204,7 +204,7 @@ class MixedRegion(RoddedRegion):
         self._verbose = verbose
         # Tolerance for mixed convection solver and star quantities calculation
         self._mixed_convection_tol = mixed_convection_tol
-        self._approx_star_quantities = approx_star_quantities
+        self._accurate_star_quantities = accurate_star_quantities
         # Initialize star quantities
         self._hstar = np.zeros_like(self._delta_v)
         self._vstar = np.zeros_like(self._delta_v)
@@ -589,7 +589,7 @@ class MixedRegion(RoddedRegion):
         h_mid = self._enthalpy + RR * delta_rho / 2
         v_mid = self._sc_vel + delta_v / 2
         # OPTION 1: Approximate hstar and vstar as midpoints
-        if self._approx_star_quantities:
+        if not self._accurate_star_quantities:
             self._hstar = h_mid
             self._vstar = v_mid
             return
