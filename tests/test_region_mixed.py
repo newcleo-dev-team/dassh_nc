@@ -65,7 +65,7 @@ class TestBalances():
         # Delta(m2*h2 - m1*h1)
         delta_mh = np.sum(mfr_2 * h_2 - mfr_1 * h_1)
         # Error introduced by h_star, err = hstar * (m2 - m1)
-        error_hstar = np.sum(mr.hstar * (mfr_2 - mfr_1))
+        error_hstar = np.sum(mr._hstar * (mfr_2 - mfr_1))
         print('Delta(mh): ', delta_mh)
         print('Q_in: ', Q_in)
         print('Error introduced by h_star: ', error_hstar)
@@ -126,7 +126,7 @@ class TestBalances():
         # Acceleration losses
         acceleration = (mfr_2 * v_2 - mfr_1 * v_1) / Ai
         # Error introduced by v_star, err = vstar * (m2 - m1) / A_i
-        error_vstar = mr.vstar * (mfr_2 - mfr_1) / Ai
+        error_vstar = mr._vstar * (mfr_2 - mfr_1) / Ai
         
         print('total: ', gravity + friction + acceleration - error_vstar)
         print('Error introduced by v_star: ', error_vstar)

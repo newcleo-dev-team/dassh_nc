@@ -619,6 +619,9 @@ representation of the flow is not accurate.
                                  self._ffmt.format(core_dz),
                                  str(r_obj.min_dz['sc'][-1]),
                                  _OMIT,
+                                 _OMIT,
+                                 _OMIT,
+                                 _OMIT,
                                  _OMIT])
 
     def _determine_applicability(self, asm, t_inlet, core_len):

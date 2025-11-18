@@ -22,7 +22,7 @@ Cheng-Todreas Detailed original correlations (1986)
 from typing import Union
 import numpy as np
 from . import corr_utils
-
+from dassh import RoddedRegion
 
 # Cheng-Todreas Reynolds number exponent
 MM = {'laminar': 1.0, 'turbulent': 0.18}
@@ -402,23 +402,25 @@ def _calc_bundle_ff(asm_obj, cfb):
                 + f['turbulent'] * x**GAMMA)
 
 
-def calc_intermittency_factor(asm_obj, Re_bl: float, Re_bt: float, 
-                              whichRe: str ='Re') -> Union[float, np.ndarray]:
+def calc_intermittency_factor(asm_obj: RoddedRegion, Re_bl: float, 
+                              Re_bt: float, whichRe: str ='Re') \
+                                  -> Union[float, np.ndarray]:
     """Calculate the bundle intermittency factor used to
     determine the transition regime friction factor
 
     Parameters
     ----------
-    asm_obj : DASSH Assembly object
+    asm_obj : RoddedRegion 
+        DASSH Assembly object
     Re_bl : float
         Laminar-transition boundary Reynolds number
     Re_bt : float
         Transition-turbulent boundary Reynolds number
     whichRe : str, optional
-        Key for which Reynolds number to use from asm_obj.coolant_int_params,
-        by default 'Re', which is the bundle Reynolds number. Can also be
-        'Re_all_sc' to use subchannel Reynolds numbers.
-
+        Key to identify the Reynolds number to use from 
+        asm_obj.coolant_int_params, by default 'Re', which is the bundle 
+        Reynolds number, otherwise 'Re_all_sc' to use subchannel Reynolds 
+        numbers
     """
     if whichRe not in WHICH_RE:
         raise KeyError(f"Option 'whichRe' must be one of {WHICH_RE}")
@@ -429,14 +431,14 @@ def calc_intermittency_factor(asm_obj, Re_bl: float, Re_bt: float,
 ########################################################################
 # SUBCHANNEL FRICTION FACTOR
 ########################################################################
-def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
+def calculate_subchannel_friction_factor(asm_obj: RoddedRegion) -> np.ndarray:
     """
     Calculate the subchannel friction factors using the Cheng–Todreas
     Detailed correlation 
     
     Parameters
     ----------
-    asm_obj : DASSH Assembly object
+    asm_obj : RoddedRegion
         Contains the assembly geometric details and subchannel Reynolds numbers
     
     Returns
@@ -454,7 +456,8 @@ def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
 
 
 def _calc_f_trans(fturb: np.ndarray, flam: np.ndarray, Re_all: np.ndarray, 
-                  Re_bl: float, Re_bt: float, asm_obj):
+                  Re_bl: float, Re_bt: float, asm_obj: RoddedRegion) \
+                      -> np.ndarray:
     """
     Calculate the subchannel friction factors in the transition regime
     using the Cheng–Todreas Detailed correlation
@@ -471,8 +474,13 @@ def _calc_f_trans(fturb: np.ndarray, flam: np.ndarray, Re_all: np.ndarray,
         Laminar-transition boundary Reynolds number
     Re_bt : float
         Transition-turbulent boundary Reynolds number
-    asm_obj : DASSH Assembly object
+    asm_obj : RoddedRegion
         Contains the assembly geometric details and subchannel Reynolds numbers
+        
+    Returns
+    -------
+    np.ndarray
+        Subchannel friction factors in the transition regime
     """
     INT_i: np.ndarray = calc_intermittency_factor(asm_obj, Re_bl, Re_bt, 
                                                   whichRe='Re_all_sc')
@@ -484,7 +492,29 @@ def _calc_f_trans(fturb: np.ndarray, flam: np.ndarray, Re_all: np.ndarray,
     return ff_transition
 
 
-def _calc_sc_ff(asm_obj, Re_bl: float, Re_bt: float, Cf_sc: dict[str, np.ndarray]) -> np.ndarray:
+def _calc_sc_ff(asm_obj: RoddedRegion, Re_bl: float, Re_bt: float, 
+                Cf_sc: dict[str, np.ndarray]) -> np.ndarray:
+    """
+    Calculate the subchannel friction factors using the Cheng–Todreas
+    Detailed correlation
+    
+    Parameters
+    ----------
+    asm_obj : RoddedRegion
+        Contains the assembly geometric details and subchannel Reynolds numbers
+    Re_bl : float
+        Laminar-transition boundary Reynolds number
+    Re_bt : float
+        Transition-turbulent boundary Reynolds number
+    Cf_sc : dict[str, np.ndarray]
+        Friction factor constants for different coolant subchannels in 
+        different flow regimes
+    
+    Returns
+    -------
+    np.ndarray
+        Subchannel friction factors at given flow conditions
+    """
     Re_all = asm_obj.coolant_int_params['Re_all_sc']
     sc_type = asm_obj.subchannel.type[
         :asm_obj.subchannel.n_sc['coolant']['total']]

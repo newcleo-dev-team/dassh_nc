@@ -21,6 +21,8 @@ Upgraded Cheng-Todreas Detailed correlations (2018)
 ########################################################################
 import numpy as np
 from . import friction_ctd as ctd
+from dassh import RoddedRegion
+
 MM = {'laminar': 1.0, 'turbulent': 0.18}
 GAMMA = 1 / 3
 LAMBDA = 7.0  # Exponent for turbulent friction factor in transition regime
@@ -233,14 +235,14 @@ def calculate_bundle_friction_factor(asm_obj):
 ########################################################################
 # SUBCHANNEL FRICTION FACTOR
 ########################################################################
-def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
+def calculate_subchannel_friction_factor(asm_obj: RoddedRegion) -> np.ndarray:
     """
     Calculate the subchannel friction factors using the Upgraded Cheng–Todreas
     Detailed correlation 
     
     Parameters
     ----------
-    asm_obj : DASSH Assembly object
+    asm_obj : RoddedRegion
         Contains the assembly geometric details and subchannel Reynolds numbers
     
     Returns
