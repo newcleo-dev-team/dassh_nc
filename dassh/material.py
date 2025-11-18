@@ -602,7 +602,7 @@ class Material(LoggedClass):
 
 
     @property
-    def coeffs_h2T(self):
+    def coeffs_h2T(self) -> np.ndarray:
         """
         Coefficients for polynomial converting enthalpy to temperature
         """
@@ -613,7 +613,7 @@ class Material(LoggedClass):
     
     
     @property
-    def coeffs_rho2h(self):
+    def coeffs_rho2h(self) -> np.ndarray:
         """
         Coefficients for polynomial converting density to enthalpy
         """
