@@ -580,20 +580,20 @@ representation of the flow is not accurate.
             # Calculate Gr_star
             if a.has_rodded:
                 try:
-                    gr_star, gr_star_crit, y_star, y_star_crit = \
+                    gr_star, is_forced_conv, y_star, is_natural_conv = \
                         self._determine_applicability(
                             a, r_obj.inlet_temp, r_obj.core_length)
                     
                 except (AttributeError, TypeError, AssertionError):
                     gr_star = _OMIT
-                    gr_star_crit = _OMIT
+                    is_forced_conv = _OMIT
                     y_star = _OMIT
-                    y_star_crit = _OMIT
+                    is_natural_conv = _OMIT
             else:
                 gr_star = _OMIT
-                gr_star_crit = _OMIT
+                is_forced_conv = _OMIT
                 y_star = _OMIT
-                y_star_crit = _OMIT
+                is_natural_conv = _OMIT
                 
             self.add_row(
                 # _fmt_idx(a.id),
@@ -605,9 +605,9 @@ representation of the flow is not accurate.
                  self._ffmt.format(len_conv(r_obj.min_dz['dz'][i])),
                  str(r_obj.min_dz['sc'][i]),
                  gr_star,
-                 gr_star_crit,
+                 is_forced_conv,
                  y_star,
-                 y_star_crit]
+                 is_natural_conv]
             )
         if r_obj.core.model == 'flow':
             core_fr = mfr_conv(r_obj.core.gap_flow_rate)
@@ -627,7 +627,7 @@ representation of the flow is not accurate.
     def _determine_applicability(self, asm, t_inlet, core_len):
         """x"""
         pin_power_skew = asm.power.calculate_pin_power_skew()
-        gr_star, y_star = self._calc_modified_gr(asm.rodded,
+        gr_star, y_star = self._calc_gr_star_and_y_star(asm.rodded,
                                          t_inlet,
                                          asm._estimated_T_out,
                                          pin_power_skew,
@@ -645,7 +645,7 @@ representation of the flow is not accurate.
         y_star = self._ffmt.format(y_star)  # format for table
         return gr_star, gr_star_crit, y_star, y_star_crit
 
-    def _calc_modified_gr(self, rr, t_in, t_out, pskew, length) \
+    def _calc_gr_star_and_y_star(self, rr, t_in, t_out, pskew, length) \
         -> tuple[float]:
         """Calculate modified Grashof number to evaluate importance of
         buoyancy effects on flow distribution in bundle
@@ -981,23 +981,23 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         if r_obj._options['solve_enthalpy'] or \
             r_obj._options['mixed_convection']:
             self.notes += """
-        F - Assembly coolant enthalpy rise (W)"""
+        F - Power removed by the coolant (W)"""
             if r_obj._options['mixed_convection']:
                 self.notes += """
         G - Error introduced by approximation on H*
         SUM - Assembly energy balance: A + C + D - F (W)
-        ERROR - SUM / (A + B)""" + "\n"
+        ERROR - SUM / (A + B)\n"""
             else: 
                 self.notes += """
         G - Assembly coolant temperature rise (K)
-        SUM - Assembly energy balance: A + C + D - E * F * G (W)
-        ERROR - SUM / (A + B)""" + "\n"
+        SUM - Assembly energy balance: A + C + D - F (W)
+        ERROR - SUM / (A + B)\n"""
         else:
             self.notes += """
         F - Assembly axially averaged heat capacity (J/kg-K)
         G - Assembly coolant temperature rise (K)
         SUM - Assembly energy balance: A + C + D - E * F * G (W)
-        ERROR - SUM / (A + B)""" + "\n"
+        ERROR - SUM / (A + B)\n"""
         
         self.add_row('Asm.', ['A', 'B', 'C', 'D', 'E', 'F', 'G',
                               'SUM', 'ERROR'])
@@ -1011,10 +1011,10 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         # calculated energy from temp rise and the sum (ebal[:, 7])
         if r_obj._options['mixed_convection'] \
             or r_obj._options['solve_enthalpy']:
-            enthalpy_rise = ebal[:, 5]
+            removed_power = ebal[:, 5]
         else:
-            enthalpy_rise = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
-        ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - enthalpy_rise
+            removed_power = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
+        ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - removed_power
         # Error
         for i in range(len(ebal)):
             total_power = ebal[i, 0] + ebal[i, 1]
@@ -1113,8 +1113,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         numerator = np.sum(asm_ebal[:, 4] * asm_ebal[:, 5])
         denominator = np.sum(asm_ebal[:, 4])
         if r_obj.core.model == 'flow':
-            numerator = gap_ebal[4] * gap_ebal[5]
-            denominator = gap_ebal[4]
+            numerator += gap_ebal[4] * gap_ebal[5]
+            denominator += gap_ebal[4]
         core_tot[5] = numerator / denominator
 
         # Flow rate- and axial-average temperature change
