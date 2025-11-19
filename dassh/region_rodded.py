@@ -2113,76 +2113,41 @@ def calculate_ht_constants(rr, mixed=False):
 
     """
     # HEAT TRANSFER CONSTANTS - set up similarly to self.L
-    ht_consts = [[0.0] * 7 for i in range(7)]
+    ht_consts = [[0.0] * 7]
 
     # Conduction between coolant channels (units: s/kg)
     # [ Interior <- Interior, Interior <- Edge, 0                ]
     # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ]
     # [ 0               ,     Corner <- Edge,   Corner <- Corner ]
     # if self.n_pin > 1:
-    if mixed:
-        for i in range(3):
-            if rr.n_pin == 1:
-                continue
-            for j in range(3):
-                if rr.n_pin == 1:
-                    continue
-                if rr.L[i][j] != 0.0:  # excludes int <--> corner
-                    if i == 0 or j == 0:
-                        ht_consts[i][j] = \
-                            (rr.d['pin-pin']
-                            / rr.L[i][j])
-                    else:
-                        ht_consts[i][j] = \
-                            (rr.d['pin-wall']
-                            / rr.L[i][j])
-    else:
-        for i in range(3):
-            if rr.n_pin == 1:
-                continue
-            for j in range(3):
-                if rr.n_pin == 1:
-                    continue
-                if rr.L[i][j] != 0.0:  # excludes int <--> corner
-                    if i == 0 or j == 0:
-                        ht_consts[i][j] = \
-                            (rr.d['pin-pin']
-                            * rr.bundle_params['area']
-                            / rr.L[i][j] / rr.int_flow_rate
-                            / rr.params['area'][i])
-                    else:
-                        ht_consts[i][j] = \
-                            (rr.d['pin-wall']
-                            * rr.bundle_params['area']
-                            / rr.L[i][j] / rr.int_flow_rate
-                            / rr.params['area'][i])
 
+    for i in range(3): 
+        for j in range(3):  
+            if rr.L[i][j] != 0.0:  # excludes int <--> corner
+                ht_consts[i][j] = 1 / rr.L[i][j]
+                if i == 0 or j == 0:
+                    ht_consts[i][j] *= rr.d['pin-pin']
+                else:
+                    ht_consts[i][j] *= rr.d['pin-wall']
+                if not mixed:
+                    ht_consts[i][j] *= rr.bundle_params['area'] / \
+                        rr.L[i][j] / rr.int_flow_rate / \
+                            rr.params['area'][i]
     
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
     if rr.n_pin > 1:
-        if mixed:
-            ht_consts[1][3] = rr.L[1][1]
-            ht_consts[3][1] = ht_consts[1][3]
-        else:
-            ht_consts[1][3] = (rr.L[1][1]
-                            * rr.bundle_params['area']
-                            / rr.int_flow_rate
-                            / rr.params['area'][1])
-            ht_consts[3][1] = ht_consts[1][3]
+        ht_consts[1][3] = rr.L[1][1]
+        if not mixed:
+            ht_consts[1][3] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+                rr.params['area'][1]
+        ht_consts[3][1] = ht_consts[1][3]
 
     # Corner -> wall 1
-    if mixed:
-        ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
-    else:
-        ht_consts[2][4] = (2 * rr.d['wcorner'][0, 1]
-                        * rr.bundle_params['area']
-                        / rr.int_flow_rate
-                        / rr.params['area'][2])
-    # ht_consts[2][4] = (2 * self.d['wcorner_m'][0]
-    #                         * self.bundle_params['area']
-    #                         / self.int_flow_rate
-    #                         / self.params['area'][2])
+    ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
+    if not mixed:
+        ht_consts[2][4] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+            rr.params['area'][2]
     ht_consts[4][2] = ht_consts[2][4]
 
     # Bypass convection and conduction
