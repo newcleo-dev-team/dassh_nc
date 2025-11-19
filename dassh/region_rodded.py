@@ -882,7 +882,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     # UPDATE PROPERTIES
     ####################################################################
 
-    def _update_coolant_int_params(self, temp, use_mat_tracker=True) -> None:
+    def _update_coolant_int_params(self, temp, use_mat_tracker=True):
         """Update correlated bundle coolant parameters based
         on current average coolant temperature
 
@@ -2113,7 +2113,7 @@ def calculate_ht_constants(rr, mixed=False):
 
     """
     # HEAT TRANSFER CONSTANTS - set up similarly to self.L
-    ht_consts = [[0.0] * 7]
+    ht_consts = [[0.0] * 7 for i in range(7)]
 
     # Conduction between coolant channels (units: s/kg)
     # [ Interior <- Interior, Interior <- Edge, 0                ]
