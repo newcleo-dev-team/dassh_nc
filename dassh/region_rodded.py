@@ -2131,17 +2131,15 @@ def calculate_ht_constants(rr, mixed=False):
                     ht_consts[i][j] *= rr.d['pin-wall']
                 if not mixed:
                     ht_consts[i][j] *= rr.bundle_params['area'] / \
-                        rr.L[i][j] / rr.int_flow_rate / \
-                            rr.params['area'][i]
+                        rr.int_flow_rate / rr.params['area'][i]
     
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
-    if rr.n_pin > 1:
-        ht_consts[1][3] = rr.L[1][1]
-        if not mixed:
-            ht_consts[1][3] *= rr.bundle_params['area'] / rr.int_flow_rate / \
-                rr.params['area'][1]
-        ht_consts[3][1] = ht_consts[1][3]
+    ht_consts[1][3] = rr.L[1][1]
+    if not mixed:
+        ht_consts[1][3] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+            rr.params['area'][1]
+    ht_consts[3][1] = ht_consts[1][3]
 
     # Corner -> wall 1
     ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
@@ -2363,14 +2361,10 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn, mc):
     # Friction factor
     if friction is not None:
         friction = '-'.join(re.split('-| ', friction.lower()))
-        if mc and friction in ['ctd', 'uctd', 'eng']:
-            corr_names['ff'], corr['ff'], corr_const['ff'], \
-                corr['ff_i'] = \
-                    _import_friction_correlation(friction, bundle, warn, mc)
-        else:
-            corr_names['ff'], corr['ff'], corr_const['ff'] = \
+        
+        corr_names['ff'], corr['ff'], corr_const['ff'], \
+            corr['ff_i'] = \
                 _import_friction_correlation(friction, bundle, warn, mc)
-            corr['ff_i'] = None
     else:
         corr['ff'] = None
         corr_names['ff'] = None
@@ -2496,7 +2490,7 @@ def _import_friction_correlation(name, bundle, warn, mc):
                       'upgraded-cheng-todreas', 'engel', 'eng']:
         return nickname, ff.calculate_bundle_friction_factor, constants, \
             ff.calculate_subchannel_friction_factor
-    return nickname, ff.calculate_bundle_friction_factor, constants
+    return nickname, ff.calculate_bundle_friction_factor, constants, None
 
 
 def _import_flowsplit_correlation(name, bundle, warn):

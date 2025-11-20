@@ -247,6 +247,7 @@ class DASSH_Region(object):
             Change in coolant enthalpy (W)
         star_error : numpy.ndarray
             Error introduced in the energy balance by h_star approximation (W)
+            
         Returns
         -------
         None
