@@ -945,22 +945,39 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.coolant_int_params['ff_i'] = self.corr['ff_i'](self)
                     
         # Mixing params - these come dimensionless, need to adjust
-        self._calculate_mixing_params()
+        if self.corr['mix']:
+            mix = self.corr['mix'](self)   
+            vm_interior, vm_periphery = self._calc_average_velocities()
+            self.coolant_int_params['eddy'] = mix[0] * vm_interior
+            self.coolant_int_params['swirl'][1] = mix[1] * vm_periphery
+            self.coolant_int_params['swirl'][2] = mix[1] * vm_periphery
         
+    def _calc_average_velocities(self) -> tuple[float]:
+        """
+        Calculate average velocities in interior and periphery regions
+        of the rodded assembly
         
-    def _calculate_mixing_params(self) -> None:
+        Returns
+        -------
+        tuple[float]
+            Average velocity in interior and periphery regions
         """
-        Calculate mixing parameters for the coolant subchannels
-        """
-        if self.corr['mix'] is not None:
-            mix = self.corr['mix'](self)           
-            self.coolant_int_params['eddy'] = \
-                (mix[0] * self.coolant_int_params['fs'][0]
-                    * self.coolant_int_params['vel'])
-            swirl_vel = (mix[1] * self.coolant_int_params['vel']
-                    * self.coolant_int_params['fs'][1])
-            self.coolant_int_params['swirl'][1] = swirl_vel
-            self.coolant_int_params['swirl'][2] = swirl_vel
+        if self._mixed_convection:
+            nint = self.subchannel.n_sc['coolant']['interior']
+            ntot = self.subchannel.n_sc['coolant']['total'] 
+            vm_interior = np.sum(self.sc_mfr[:nint] * self._sc_vel[:nint]) / \
+                np.sum(self.sc_mfr[:nint])
+            vm_periphery = np.sum(self.sc_mfr[nint:ntot] * 
+                                  self._sc_vel[nint:ntot]) / \
+                                      np.sum(self.sc_mfr[nint:ntot])
+            return vm_interior, vm_periphery
+        
+        vm_interior = self.coolant_int_params['fs'][0] * \
+            self.coolant_int_params['vel']
+        vm_periphery = self.coolant_int_params['fs'][1] * \
+            self.coolant_int_params['vel']
+        return vm_interior, vm_periphery
+            
             
     def _calculate_htc(self) -> None:
         """
@@ -2362,8 +2379,7 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn, mc):
     if friction is not None:
         friction = '-'.join(re.split('-| ', friction.lower()))
         
-        corr_names['ff'], corr['ff'], corr_const['ff'], \
-            corr['ff_i'] = \
+        corr_names['ff'], corr['ff'], corr_const['ff'], corr['ff_i'] = \
                 _import_friction_correlation(friction, bundle, warn, mc)
     else:
         corr['ff'] = None
