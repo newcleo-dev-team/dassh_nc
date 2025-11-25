@@ -115,14 +115,14 @@ class TestBalances():
                 :mr.subchannel.n_sc['coolant']['total']]]
         # Friction losses
         friction = 0.5 * mr.coolant_int_params['ff_i'] * \
-            (mr._density - mr._delta_rho / 2) * \
+            (mr.sc_properties['density'] - mr._delta_rho / 2) * \
                 (mr._sc_vel - mr._delta_v/2)**2 / \
                     mr.params['de'][mr.subchannel.type[
                         :mr.subchannel.n_sc['coolant']['total']]] \
                             * rr_data.enthalpy['dz']
         # Gravity losses
         gravity = rr_data.enthalpy['gravity_const'] * \
-            rr_data.enthalpy['dz'] * (mr._density - mr._delta_rho / 2)
+            rr_data.enthalpy['dz'] * (mr.sc_properties['density'] - mr._delta_rho / 2)
         # Acceleration losses
         acceleration = (mfr_2 * v_2 - mfr_1 * v_1) / Ai
         # Error introduced by v_star, err = vstar * (m2 - m1) / A_i

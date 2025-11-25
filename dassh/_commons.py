@@ -69,3 +69,7 @@ MIX_CON_VERBOSE_OUTPUT: list[str] = [
 
 MC_MAX_ITER: int = 10
 """Maximum number of iterations for mixed convection region solver"""
+
+MIXED_CONV_PROP_TO_UPDATE: list[str] = ['viscosity', 'thermal_conductivity', 
+                                        'heat_capacity']
+"""Material properties to update in mixed convection solver"""
