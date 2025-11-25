@@ -8,7 +8,7 @@
     se2geo = boolean(default=False)
     debug = boolean(default=False)
     param_update_tol = float(min=0.0, max=1.0, default=0.0)
-    mixed_convection_tol = float(default=1e-3)
+    mixed_convection_rel_tol = float(default=1e-3)
     parallel = boolean(default=False)
     n_cpu = integer(min=1, default=None)
     include_gravity_head_loss = boolean(default=False)
