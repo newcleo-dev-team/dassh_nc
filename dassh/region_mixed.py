@@ -145,17 +145,12 @@ class MixedRegion(RoddedRegion):
                                           sf, se2, param_update_tol, 
                                           rad_isotropic=False)
 
-        # Variables of interest are:
-        # - SC velocities and their variation over dz
-        # - SC densities and their variation over dz
-        # - Bundle pressure drop and their variation over dz
-        
         self._pressure_drop: float = 0.0    # This overrides the attribute in RoddedRegion
-        self._delta_P: float = 1.0
+        self._delta_P: float = 1.0          # Guess on pressure drop
         self._delta_v: np.ndarray = 0.1 * \
-            np.ones(self.subchannel.n_sc['coolant']['total'])
+            np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on velocity variation
         self._delta_rho: np.ndarray = \
-            np.ones(self.subchannel.n_sc['coolant']['total'])
+            np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on density variation
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose: bool = verbose
         # Tolerance for mixed convection solver and star quantities calculation
@@ -690,6 +685,7 @@ class MixedRegion(RoddedRegion):
         -------
         RR : np.ndarray
             Enthalpy variation coefficient (J/kg/K)
+            RR = dh / drho = [h(rho + drho) - h(rho)] / drho
         """
         return (self.coolant.convert_properties(
             density=self.sc_properties['density']+drho) - 
