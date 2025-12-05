@@ -309,7 +309,8 @@ class MixedRegion(RoddedRegion):
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i, star_error)
             
             
-    def _copy_solution(self, drho, dv, dP) -> tuple[np.ndarray, float]:
+    def _copy_solution(self, drho: np.ndarray, dv: np.ndarray, 
+                       dP: float) -> tuple[np.ndarray, float]:
         """
         Copy solution deltas
         
@@ -643,6 +644,7 @@ class MixedRegion(RoddedRegion):
             Accurate star quantities
         """
         return (numerator[:, 0] + numerator[:, 1] + numerator[:, 2]) / denom
+        
         
     def _calc_momentum_coefficients(self, nn: int, dz: float, 
                                     delta_v: np.ndarray) -> tuple[np.ndarray]:
