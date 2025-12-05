@@ -1491,8 +1491,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) \
         -> float:
         """
-        Calculate the mass flow rate weighted average of a property between two
-        subchannels
+        Calculate average of a property between two subchannels weighted on 
+        the mass flow rate
         
         Parameters
         ----------
@@ -1750,19 +1750,15 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Linear power generation (W/m) for each duct cell
             (Array size: N_duct * N_sc['duct']['total'] x 1)
         t_gap : numpy.ndarray
-            Interassembly gap temperatures around the assembly at the
-            j+1 axial level (array length = n_sc['duct']['total'])
+            Interassembly gap temperatures around the assembly 
+            (array length = n_sc['duct']['total'])
         htc_gap : numpy.ndarray
             Heat transfer coefficient for convection between the gap
             coolant and outer duct wall based on core-average inter-
             assembly gap coolant temperature; len = # duct SC
         adiabatic : boolean
-            Indicate if outer duct wall outer BC is adiabatic
-
-        Returns
-        -------
-        None
-
+            Indicate if BC on the external surface of the outer duct is 
+            adiabatic
         """
         # Average duct temperatures (only want to have to get once)
         duct_avg_temps = self.avg_duct_mw_temp
@@ -1777,9 +1773,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             # Need to get inner and outer coolant temperatures and
             # heat transfer coeffs; Requires two material updates
             if i == 0:  # inner-most duct, inner htc is asm interior
-                t_in = self.temp['coolant_int']
                 # Get rid of interior temps, only want edge/corner
-                t_in = t_in[self.subchannel.n_sc['coolant']['interior']:]
+                t_in = self.temp['coolant_int'][
+                    self.subchannel.n_sc['coolant']['interior']:]
                 if not self._rad_isotropic:
                     htc_in = self.coolant_int_params['sc_htc'][
                         self.subchannel.n_sc['coolant']['interior']:]

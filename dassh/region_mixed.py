@@ -1,9 +1,8 @@
 ########################################################################
 """
-date: 2025-07-xx
+date: 2025-xx-xx
 author: fpepe
-Methods for mixed convection axial regions; to be used within
-Assembly objects
+Methods for mixed convection axial regions; to be used within Assembly objects
 """
 ########################################################################
 import numpy as np
@@ -145,8 +144,8 @@ class MixedRegion(RoddedRegion):
                                           sf, se2, param_update_tol, 
                                           rad_isotropic=False)
 
-        self._pressure_drop: float = 0.0    # This overrides the attribute in RoddedRegion
-        self._delta_P: float = 1.0          # Guess on pressure drop
+        self._pressure_drop: float = 0.0 # This overrides the attribute in RoddedRegion
+        self._delta_P: float = 1.0 # Guess on pressure drop
         self._delta_v: np.ndarray = 0.1 * \
             np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on velocity variation
         self._delta_rho: np.ndarray = \
@@ -178,12 +177,12 @@ class MixedRegion(RoddedRegion):
         dz : float
             Axial step size (m)
         z : float
-            Axial position (m)
+            Axial position of the cell center (m)
         q : dict
             Power (W/m) generated in pins, duct, and coolant
         t_gap : numpy.ndarray
-            Interassembly gap temperatures around the assembly at the
-            j+1 axial level (array length = n_sc['duct']['total'])
+            Interassembly gap temperatures around the assembly 
+            (array length = n_sc['duct']['total'])
         h_gap : float
             Heat transfer coefficient for convection between the gap
             coolant and outer duct wall based on core-average inter-
@@ -217,19 +216,19 @@ class MixedRegion(RoddedRegion):
         
         
     ####################################################################
-    # COOLANT TEMPERATURE  AND PRESSURE CALCULATION METHODS
+    # COOLANT TEMPERATURE AND PRESSURE CALCULATION METHODS
     ####################################################################
     def _solve_system(self, dz: float, z: float, q_pins: np.ndarray, 
                       q_cool: np.ndarray, ebal: bool) -> None:
         """
-        Method to solve the system
+        System builder and solver in terms of delta_v, delta_rho, and delta_P
         
         Parameters
         ----------
         dz : float
             Axial step size (m)
         z : float
-            Axial position (m)
+            Axial position of the cell center (m)
         q_pins : np.ndarray
             Power (W/m) generated in pins
         q_cool : np.ndarray
@@ -237,20 +236,21 @@ class MixedRegion(RoddedRegion):
         ebal : bool
             Indicate whether to track energy balance
         """
+        # Number of coolant subchannels
+        nn = self.subchannel.n_sc['coolant']['total']
         # Use previous step deltas as initial guesses
-        delta_v0 = self._delta_v.copy()
-        delta_rho0 = self._delta_rho.copy()
-        delta_P0 = self._delta_P
+        delta_rho0, delta_v0, delta_P0 = \
+            self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
         # Calculate power added to coolant
         qq = self._calc_int_sc_power(q_pins, q_cool)
         # Build known vector
-        bb = self._build_vector(qq, dz, z)
+        bb = self._build_vector(qq, dz, z, nn)
         # Calculate initial RR using guess `delta_rho0`
         RR = self._calc_RR(delta_rho0)  
         # Verbose output header
         if self._verbose:
-            self.log('info', MIX_CON_VERBOSE_OUTPUT[0])
-            self.log('info', MIX_CON_VERBOSE_OUTPUT[1])
+            for msg in MIX_CON_VERBOSE_OUTPUT[:2]:
+                self.log('info', msg)
         # Iterate to solve the non-linear system
         iter = 0
         err_vect = np.ones(3) # Max. errors on delta_rho and delta_v, and
@@ -258,35 +258,36 @@ class MixedRegion(RoddedRegion):
         while np.any(err_vect > self._mixed_convection_rel_tol) \
             and iter < MC_MAX_ITER:
             # Build matrix
-            AA = self._build_matrix(dz, delta_v0, delta_rho0, RR)
+            AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
             #AA = sp.csr_matrix(self._build_matrix(dz, delta_v0, delta_rho0, RR))
             # Solve system
             xx = np.linalg.solve(AA, bb)
             #xx = sp.linalg.spsolve(AA, bb)
             # Extract deltas from solution vector
-            delta_rho = xx[0:2*self.subchannel.n_sc['coolant']['total']:2]
-            delta_v = xx[1:2*self.subchannel.n_sc['coolant']['total']:2]
+            delta_rho = xx[0:2*nn:2]
+            delta_v = xx[1:2*nn:2]
             delta_P = xx[-1]
             # Calculate errors
-            err_vect[0] = np.max(np.abs((delta_rho - delta_rho0) / delta_rho0)) 
-            err_vect[1] = np.max(np.abs((delta_v - delta_v0) / delta_v0)) 
-            err_vect[2] = np.max(np.abs((delta_P - delta_P0) / delta_P0)) 
+            new_solution  = [delta_rho, delta_v, delta_P]
+            old_solution = [delta_rho0, delta_v0, delta_P0]
+            for i in range(3):
+                err = np.abs((new_solution[i] - old_solution[i]) 
+                             / old_solution[i])
+                err_vect[i] = np.max(err) if i < 2 else err
             # Verbose output iteration info
             if self._verbose:
                 self.log('info', f'{iter+1}       {err_vect[0]:.6e}' + \
                     f'       {err_vect[1]:.6e}       {err_vect[2]:.6e}')
             # Update guesses for next iteration
-            delta_v0 =    delta_v.copy()
-            delta_rho0 =  delta_rho.copy()
-            delta_P0 =    delta_P
+            delta_rho0, delta_v0, delta_P0 = \
+                self._copy_solution(delta_rho, delta_v, delta_P)
             # Recalculate RR
             RR = self._calc_RR(delta_rho)
             # Update iteration counter
             iter += 1
         # Update deltas with converged values
-        self._delta_v = delta_v.copy()
-        self._delta_rho = delta_rho.copy()
-        self._delta_P = delta_P
+        self._delta_rho, self._delta_v, self._delta_P = \
+            self._copy_solution(delta_rho, delta_v, delta_P)
         # Update state variables
         self._sc_vel += delta_v
         self.sc_properties['density'] += delta_rho
@@ -300,18 +301,39 @@ class MixedRegion(RoddedRegion):
             enthalpy_old = self._enthalpy - self._delta_h
             mfr_old = (self.sc_properties['density'] - self._delta_rho) * \
                 (self._sc_vel - self._delta_v) * \
-                self.params['area'][self.subchannel.type[
-                    :self.subchannel.n_sc['coolant']['total']]]
+                self.params['area'][self.subchannel.type[:nn]]
             mcpdT_i = self.sc_mfr * self._enthalpy - mfr_old * enthalpy_old
             # Error introduced in the energy balance by h_star approximation
             delta_m = self.sc_mfr - mfr_old
             star_error = self._hstar * delta_m
             self.update_ebal(dz*np.sum(qq), 0, mcpdT_i, star_error)
             
-
-    def _build_vector(self, qq: np.ndarray, dz: float, z: float) -> np.ndarray:
+            
+    def _copy_solution(self, drho, dv, dP) -> tuple[np.ndarray, float]:
         """
-        Build the known vector for the system of equations
+        Copy solution deltas
+        
+        Parameters
+        ----------
+        drho : np.ndarray
+            Density variation (kg/m^3)
+        dv : np.ndarray
+            Velocity variation (m/s)
+        dP : float
+            Pressure drop (Pa)
+            
+        Returns
+        -------
+        tuple[np.ndarray, float]
+            Copied density variation, velocity variation, and pressure drop
+        """
+        return drho.copy(), dv.copy(), dP
+    
+    
+    def _build_vector(self, qq: np.ndarray, dz: float, z: float, 
+                      nn: int) -> np.ndarray:
+        """
+        Build the vector of known terms
         
         Parameters
         ----------
@@ -320,15 +342,15 @@ class MixedRegion(RoddedRegion):
         dz : float
             Axial step size (m)
         z : float
-            Axial position (m)
+            Axial position of the cell center (m)
+        nn : int
+            Number of coolant subchannels
 
         Returns
         -------
         bb : np.ndarray
-            Known vector for the system of equations
+            Array of known terms
         """
-        # Number of coolant subchannels
-        nn = self.subchannel.n_sc['coolant']['total']
         # Calculate MEX, EEX and GG terms
         EEX, MEX = self._calc_EEX_MEX(dz)
         GG = - self.sc_properties['density'] * (GRAVITY_CONST * dz + dz * 
@@ -344,7 +366,7 @@ class MixedRegion(RoddedRegion):
         momentum_b = GG + MEX 
         if 'grid' in self.corr_constants.keys():
             momentum_b += self.params['area'][self.subchannel.type[:nn]] * \
-                          self.calculate_spacergrid_pressure_drop(z, dz)
+                self.calculate_spacergrid_pressure_drop(z, dz)
         # Assemble known vector
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
@@ -358,9 +380,8 @@ class MixedRegion(RoddedRegion):
         
         Returns
         -------
-        dT_conv_over_R : np.ndarray
-            Temperature difference over the resistance between coolant
-            and duct wall (K)
+        np.ndarray
+            Convection term for edge/corner subchannels
         """
         # CONVECTION BETWEEN EDGE/CORNER SUBCHANNELS AND DUCT WALL
         # Heat transfer coefficient
@@ -423,10 +444,7 @@ class MixedRegion(RoddedRegion):
                     'heat_capacity', i, j)
                 k_ij = self._calc_mass_flow_average_property(
                     'thermal_conductivity', i, j)
-                # Eddy diffusivity coefficient is given as adimensional 
-                # coefficient. It has to be multiplied by velocity to get 
-                # the correct units (m/s)
-                WW_ij = self.coolant_int_params['eddy'] *  rho_ij 
+                WW_ij = self.coolant_int_params['eddy'] * rho_ij 
                 # Calculate energy and momentum exchange terms
                 # Eddy diffusivity + conduction for energy exchange
                 ene_exchange[i][k] = \
@@ -471,7 +489,8 @@ class MixedRegion(RoddedRegion):
 
 
     def _build_matrix(self, dz: float, delta_v: np.ndarray,
-                      delta_rho: np.ndarray, RR: np.ndarray) -> np.ndarray:
+                      delta_rho: np.ndarray, RR: np.ndarray, 
+                      nn: int) -> np.ndarray:
         """
         Build the matrix for the system of equations
 
@@ -485,14 +504,15 @@ class MixedRegion(RoddedRegion):
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
             Enthalpy variation coefficient (J/kg/K)
+        nn : int
+            Number of coolant subchannels
 
         Returns
         -------
         AA : np.ndarray
             Coefficient matrix for the system of equations
         """
-        self._calc_h_v_star(delta_v, delta_rho, RR)
-        nn = self.subchannel.n_sc['coolant']['total']
+        self._calc_h_v_star(delta_v, delta_rho, RR, nn)
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
@@ -517,7 +537,7 @@ class MixedRegion(RoddedRegion):
 
 
     def _calc_h_v_star(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
-                      RR: np.ndarray):
+                       RR: np.ndarray, nn: int) -> None:
         """
         Update hstar and vstar
         
@@ -529,6 +549,8 @@ class MixedRegion(RoddedRegion):
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
             Enthalpy variation coefficient (J/kg/K)
+        nn : int
+            Number of coolant subchannels
             
         Notes
         -----
@@ -547,11 +569,9 @@ class MixedRegion(RoddedRegion):
             return
         # OPTION 2: Calculate hstar and vstar as mass-flow-weighted averages
         # Initialize arrays
-        nn = self.subchannel.n_sc['coolant']['total']
         numerator_h = np.zeros((nn, 3))
         numerator_v = np.zeros((nn, 3))
         denominator = np.zeros((nn, 3))
-        xij = np.zeros((nn, 3))
         # Calculate delta_m for each subchannel
         vrho_1 = self.sc_properties['density']*self._sc_vel 
         vrho_2 = (self.sc_properties['density'] + delta_rho) * \
@@ -566,23 +586,64 @@ class MixedRegion(RoddedRegion):
                     and k == 2:
                     continue
                 # Calculate delta_m difference between adjacent subchannel
-                xij[i][k] = delta_m[i] - delta_m[j] + 1e-15
+                xij = delta_m[i] - delta_m[j] + 1e-15
                 # Calculate numerators and denominators
-                numerator_h[i][k] = np.abs(xij[i][k]) * \
-                    (h_mid[i] + h_mid[j]) - xij[i][k] * (h_mid[i] - h_mid[j])
-                numerator_v[i][k] = np.abs(xij[i][k]) * \
-                    (v_mid[i] + v_mid[j]) - xij[i][k] * (v_mid[i] - v_mid[j])
-                denominator[i][k] = np.abs(xij[i][k])
+                numerator_h[i][k] = self._calc_star_quantity_numerator(
+                    h_mid[i], h_mid[j], xij)
+                numerator_v[i][k] = self._calc_star_quantity_numerator(
+                    v_mid[i], v_mid[j], xij)
+                denominator[i][k] = np.abs(xij)
         # Calculate hstar and vstar
         sum_den = 2 * (denominator[:, 0] + denominator[:, 1] + 
                        denominator[:, 2])
-        self._hstar = (numerator_h[:, 0] + numerator_h[:, 1] + 
-                       numerator_h[:, 2]) / sum_den
-        self._vstar = (numerator_v[:, 0] + numerator_v[:, 1] + 
-                       numerator_v[:, 2]) / sum_den
+        self._hstar = self._calc_accurate_star_quantities(numerator_h, sum_den)
+        self._vstar = self._calc_accurate_star_quantities(numerator_v, sum_den)
         
-
-
+        
+    def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,
+                                      xij: float) -> float:
+        """
+        Calculate the numerator for hstar and vstar calculation
+        
+        Parameters
+        ----------
+        var_mid_i : float
+            Midpoint value of the `variable` for subchannel i
+            `variable` can be enthalpy or velocity
+        var_mid_j : float
+            Midpoint value of the `variable` for subchannel j
+            `variable` can be enthalpy or velocity
+        xij : float
+            Difference in mass flow rate between subchannels i and j
+        
+        Returns
+        -------
+        float
+            Numerator for hstar and vstar calculation
+        """
+        return np.abs(xij) * (var_mid_i + var_mid_j) \
+            - xij * (var_mid_i - var_mid_j)
+        
+        
+    def _calc_accurate_star_quantities(self, numerator: np.ndarray,
+                                       denom: np.ndarray) -> np.ndarray:
+        """
+        Calculate accurate star quantities from numerator and denominator
+        
+        Parameters
+        ----------
+        numerator : np.ndarray
+            Numerator for hstar and vstar calculation
+        denom : np.ndarray
+            Denominator for hstar and vstar calculation
+            
+        Returns
+        -------
+        np.ndarray
+            Accurate star quantities
+        """
+        return (numerator[:, 0] + numerator[:, 1] + numerator[:, 2]) / denom
+        
     def _calc_momentum_coefficients(self, nn: int, dz: float, 
                                     delta_v: np.ndarray) -> tuple[np.ndarray]:
         """
@@ -749,6 +810,7 @@ class MixedRegion(RoddedRegion):
                 
         self.sc_properties['density'] = self.coolant.density * \
             np.ones(self.subchannel.n_sc['coolant']['total'])     
+    
     
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
         """

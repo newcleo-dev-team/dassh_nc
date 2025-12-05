@@ -63,7 +63,7 @@ GRAVITY_CONST: float = 9.81
 
 MIX_CON_VERBOSE_OUTPUT: list[str] = [
     '----------------------------------------------------------------',
-    'info', 'Iter.    Error density       Error velocity       Error pressure'
+    'Iter.   Error density      Error velocity     Error pressure'
 ]
 """Verbose output header for mixed convection region solver"""
 

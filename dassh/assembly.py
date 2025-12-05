@@ -71,7 +71,7 @@ class Assembly(LoggedClass):
 
     def __init__(self, name, loc, asm_input, mat_dict, inlet_temp,
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
-                 param_update_tol=0.0, mixed_convection_tol=1e-5,
+                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3,
                  gravity=False, rad_isotropic=True, solve_enthalpy = False,
                  mixed_convection=False):
         """Instantiate Assembly object."""
@@ -105,7 +105,7 @@ class Assembly(LoggedClass):
                                       flow_rate,
                                       se2geo,
                                       param_update_tol,
-                                      mixed_convection_tol)
+                                      mixed_convection_rel_tol)
             ]
             else:
                 asm_input['mixed_convection'] = mixed_convection
