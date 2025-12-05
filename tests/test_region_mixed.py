@@ -158,7 +158,9 @@ class TestBalances():
         The MEX term is the analogous term in the momentum equation. 
         """
         self._assign_parameters(simple_ctrl_rr_mixconv)
-        EEX, MEX = simple_ctrl_rr_mixconv._calc_EEX_MEX(rr_data.enthalpy['dz'])
+        EEX, MEX = simple_ctrl_rr_mixconv._calc_EEX_MEX(
+            rr_data.enthalpy['dz'], 
+            simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total'])
         assert np.sum(EEX * simple_ctrl_rr_mixconv.params['area'][
             simple_ctrl_rr_mixconv.subchannel.type[
                 :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]] \

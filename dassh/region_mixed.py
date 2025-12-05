@@ -353,11 +353,11 @@ class MixedRegion(RoddedRegion):
             Array of known terms
         """
         # Calculate MEX, EEX and GG terms
-        EEX, MEX = self._calc_EEX_MEX(dz)
-        GG = - self.sc_properties['density'] * (GRAVITY_CONST * dz + dz * 
-                                self.coolant_int_params['ff_i'] * 
-                                self._sc_vel**2 / 2 / 
-                                self.params['de'][self.subchannel.type[:nn]])
+        EEX, MEX = self._calc_EEX_MEX(dz, nn)
+        GG = - self.sc_properties['density'] * \
+            (GRAVITY_CONST * dz + dz * self.coolant_int_params['ff_i'] * 
+             self._sc_vel**2 / 2 / 
+             self.params['de'][self.subchannel.type[:nn]])
         # Build energy terms of the known vector
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
             + EEX
@@ -409,7 +409,7 @@ class MixedRegion(RoddedRegion):
         return self.ht['conv']['const'] * dT_conv_over_R
 
 
-    def _calc_EEX_MEX(self, dz: float) -> np.ndarray:
+    def _calc_EEX_MEX(self, dz: float, nn: int) -> np.ndarray:
         """
         Calculate the inter-channel energy and momentum exchange terms 
         
@@ -417,6 +417,8 @@ class MixedRegion(RoddedRegion):
         ----------
         dz : float
             Axial step size (m)
+        nn : int
+            Number of coolant subchannels
 
         Returns
         -------
@@ -426,11 +428,13 @@ class MixedRegion(RoddedRegion):
             Momentum exchange term between adjacent subchannels
         """
         # Instantiate exchange arrays
-        ene_exchange = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
-        mom_exchange = np.zeros((self.subchannel.n_sc['coolant']['total'], 3))
+        EEX = np.zeros(nn)
+        MEX = np.zeros(nn)
         # Iterate over subchannels and adjacent subchannels
-        for i in range(self.subchannel.n_sc['coolant']['total']):
+        for i in range(nn):
             # Loop over adjacent subchannels
+            ene_exchange = 0.0
+            mom_exchange = 0.0
             for k in range(3):
                 j = self.ht['cond']['adj'][i][k]
                 # If `i` is a corner subchannel and `j` is also a corner 
@@ -448,45 +452,51 @@ class MixedRegion(RoddedRegion):
                 WW_ij = self.coolant_int_params['eddy'] * rho_ij 
                 # Calculate energy and momentum exchange terms
                 # Eddy diffusivity + conduction for energy exchange
-                ene_exchange[i][k] = \
-                    (WW_ij + self._sf * k_ij / cp_ij) * \
-                        (self.ht['cond']['const'][i][k] 
-                            * (self._enthalpy[j] - self._enthalpy[i]))
+                ene_exchange += (WW_ij + self._sf * k_ij / cp_ij) * \
+                    (self.ht['cond']['const'][i][k] 
+                     * (self._enthalpy[j] - self._enthalpy[i]))
                 # Eddy diffusivity for momentum exchange
-                mom_exchange[i][k] = \
-                    WW_ij * (self.ht['cond']['const'][i][k]
-                                * (self._sc_vel[j] - self._sc_vel[i]))
-        # Sum over adjacent subchannels
-        EEX = (ene_exchange[:, 0] + ene_exchange[:, 1] + ene_exchange[:, 2])
-        MEX = (mom_exchange[:, 0] + mom_exchange[:, 1] + mom_exchange[:, 2])
-        
-        # Swirl mixing term
+                mom_exchange += WW_ij * (self.ht['cond']['const'][i][k] 
+                                         * (self._sc_vel[j] - self._sc_vel[i]))
+            # Sum over adjacent subchannels
+            EEX[i] = ene_exchange
+            MEX[i] = mom_exchange
+        # Swirl mixing term constants
         swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']
         swirl_consts = swirl_consts[self.ht['conv']['type']]
-        # Calculate swirl energy and momentum exchange terms
-        swirl_energy = swirl_consts * \
-                    (self.sc_properties['density'][self.subchannel.sc_adj[
-                        self.ht['conv']['ind'], self._adj_sw]] 
-                     * self._enthalpy[self.subchannel.sc_adj[
-                         self.ht['conv']['ind'], self._adj_sw]]
-                     - self.sc_properties['density'][self.ht['conv']['ind']]
-                     * self._enthalpy[self.ht['conv']['ind']])       
-        swirl_momentum = swirl_consts * \
-                    (self.sc_properties['density'][self.subchannel.sc_adj[
-                        self.ht['conv']['ind'], self._adj_sw]] 
-                     * self._sc_vel[self.subchannel.sc_adj[
-                         self.ht['conv']['ind'], self._adj_sw]]
-                     - self.sc_properties['density'][self.ht['conv']['ind']]
-                     * self._sc_vel[self.ht['conv']['ind']])
         # Add swirl terms to total exchange terms, and multiply by dz/area            
-        EEX[self.ht['conv']['ind']] += swirl_energy
-        EEX *= dz / self.params['area'][self.subchannel.type[
-            :self.subchannel.n_sc['coolant']['total']]]
+        EEX[self.ht['conv']['ind']] += self._calc_swirl_term(swirl_consts)
+        EEX *= dz / self.params['area'][self.subchannel.type[:nn]]
         
-        MEX[self.ht['conv']['ind']] += swirl_momentum
-        MEX *= dz/self.params['area'][self.subchannel.type[
-            :self.subchannel.n_sc['coolant']['total']]]
+        MEX[self.ht['conv']['ind']] += self._calc_swirl_term(swirl_consts, 
+                                                             is_mom=True)
+        MEX *= dz/self.params['area'][self.subchannel.type[:nn]]
         return EEX, MEX
+
+
+    def _calc_swirl_term(self, swirl_consts: np.ndarray, 
+                         is_mom: bool = False) -> np.ndarray:
+        """
+        Calculate swirl exchange term for energy or momentum equation
+        
+        Parameters
+        ----------
+        swirl_consts : np.ndarray
+            Swirl exchange constants for edge/corner subchannels
+        is_mom : bool
+            Indicate whether to calculate momentum (True) or energy (False)
+            
+        Returns
+        -------
+        np.ndarray
+            Swirl exchange term for energy or momentum equation
+        """
+        adj_ind = self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]
+        var = self._sc_vel if is_mom else self._enthalpy
+        return swirl_consts * \
+            (self.sc_properties['density'][adj_ind] * var[adj_ind] 
+             - self.sc_properties['density'][self.ht['conv']['ind']]
+             * var[self.ht['conv']['ind']])
 
 
     def _build_matrix(self, dz: float, delta_v: np.ndarray,
@@ -570,9 +580,9 @@ class MixedRegion(RoddedRegion):
             return
         # OPTION 2: Calculate hstar and vstar as mass-flow-weighted averages
         # Initialize arrays
-        numerator_h = np.zeros((nn, 3))
-        numerator_v = np.zeros((nn, 3))
-        denominator = np.zeros((nn, 3))
+        numerator_h = np.zeros(nn)
+        numerator_v = np.zeros(nn)
+        sum_den = np.zeros(nn)
         # Calculate delta_m for each subchannel
         vrho_1 = self.sc_properties['density']*self._sc_vel 
         vrho_2 = (self.sc_properties['density'] + delta_rho) * \
@@ -581,6 +591,9 @@ class MixedRegion(RoddedRegion):
             self.params['area'][self.subchannel.type[:nn]]
         # Iterate over subchannels and adjacent subchannels
         for i in range(nn):
+            denominator = 0.0
+            num_h = 0.0
+            num_v = 0.0
             for k in range(3):
                 j = self.ht['cond']['adj'][i][k]
                 if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] \
@@ -589,14 +602,16 @@ class MixedRegion(RoddedRegion):
                 # Calculate delta_m difference between adjacent subchannel
                 xij = delta_m[i] - delta_m[j] + 1e-15
                 # Calculate numerators and denominators
-                numerator_h[i][k] = self._calc_star_quantity_numerator(
+                num_h += self._calc_star_quantity_numerator(
                     h_mid[i], h_mid[j], xij)
-                numerator_v[i][k] = self._calc_star_quantity_numerator(
+                num_v += self._calc_star_quantity_numerator(
                     v_mid[i], v_mid[j], xij)
-                denominator[i][k] = np.abs(xij)
+                denominator += np.abs(xij)
+            numerator_h[i] = num_h
+            numerator_v[i] = num_v
+            sum_den[i] = denominator      
         # Calculate hstar and vstar
-        sum_den = 2 * (denominator[:, 0] + denominator[:, 1] + 
-                       denominator[:, 2])
+        sum_den = 2 * sum_den + 1e-15
         self._hstar = self._calc_accurate_star_quantities(numerator_h, sum_den)
         self._vstar = self._calc_accurate_star_quantities(numerator_v, sum_den)
         
@@ -643,7 +658,7 @@ class MixedRegion(RoddedRegion):
         np.ndarray
             Accurate star quantities
         """
-        return (numerator[:, 0] + numerator[:, 1] + numerator[:, 2]) / denom
+        return numerator / denom
         
         
     def _calc_momentum_coefficients(self, nn: int, dz: float, 
