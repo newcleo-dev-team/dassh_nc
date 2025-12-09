@@ -177,7 +177,7 @@ class MixedRegion(RoddedRegion):
         dz : float
             Axial step size (m)
         z : float
-            Axial position of the cell center (m)
+            Axial position of the cell outlet (m)
         q : dict
             Power (W/m) generated in pins, duct, and coolant
         t_gap : numpy.ndarray
@@ -228,7 +228,7 @@ class MixedRegion(RoddedRegion):
         dz : float
             Axial step size (m)
         z : float
-            Axial position of the cell center (m)
+            Axial position of the cell outlet (m)
         q_pins : np.ndarray
             Power (W/m) generated in pins
         q_cool : np.ndarray
@@ -343,7 +343,7 @@ class MixedRegion(RoddedRegion):
         dz : float
             Axial step size (m)
         z : float
-            Axial position of the cell center (m)
+            Axial position of the cell outlet (m)
         nn : int
             Number of coolant subchannels
 
@@ -354,8 +354,8 @@ class MixedRegion(RoddedRegion):
         """
         # Calculate MEX, EEX and GG terms
         EEX, MEX = self._calc_EEX_MEX(dz, nn)
-        GG = - self.sc_properties['density'] * \
-            (GRAVITY_CONST * dz + dz * self.coolant_int_params['ff_i'] * 
+        GG = - self.sc_properties['density'] * dz * \
+            (GRAVITY_CONST + self.coolant_int_params['ff_i'] * 
              self._sc_vel**2 / 2 / 
              self.params['de'][self.subchannel.type[:nn]])
         # Build energy terms of the known vector
@@ -450,34 +450,53 @@ class MixedRegion(RoddedRegion):
                 k_ij = self._calc_mass_flow_average_property(
                     'thermal_conductivity', i, j)
                 WW_ij = self.coolant_int_params['eddy'] * rho_ij 
-                # Calculate energy and momentum exchange terms
-                # Eddy diffusivity + conduction for energy exchange
+                # Eddy diffusivity + conduction for energy exchange 
+                # summed up over adj SCs
                 ene_exchange += (WW_ij + self._sf * k_ij / cp_ij) * \
                     (self.ht['cond']['const'][i][k] 
                      * (self._enthalpy[j] - self._enthalpy[i]))
-                # Eddy diffusivity for momentum exchange
+                # Eddy diffusivity for momentum exchange summed up over adj SCs
                 mom_exchange += WW_ij * (self.ht['cond']['const'][i][k] 
                                          * (self._sc_vel[j] - self._sc_vel[i]))
-            # Sum over adjacent subchannels
             EEX[i] = ene_exchange
             MEX[i] = mom_exchange
         # Swirl mixing term constants
-        swirl_consts = self.d['pin-wall'] * self.coolant_int_params['swirl']
-        swirl_consts = swirl_consts[self.ht['conv']['type']]
-        # Add swirl terms to total exchange terms, and multiply by dz/area            
-        EEX[self.ht['conv']['ind']] += self._calc_swirl_term(swirl_consts)
-        EEX *= dz / self.params['area'][self.subchannel.type[:nn]]
-        
-        MEX[self.ht['conv']['ind']] += self._calc_swirl_term(swirl_consts, 
-                                                             is_mom=True)
-        MEX *= dz/self.params['area'][self.subchannel.type[:nn]]
+        swirl_consts = self.d['pin-wall'] * \
+            self.coolant_int_params['swirl'][self.ht['conv']['type']]
+        # Add swirl terms to total exchange terms, and multiply by dz/area   
+        self._finalize(EEX, swirl_consts, nn, dz)
+        self._finalize(MEX, swirl_consts, nn, dz, is_mom=True)
         return EEX, MEX
 
 
+    def _finalize(self, EX: np.ndarray, swirl_consts: np.ndarray, 
+                  nn: int, dz: float, is_mom: bool = False):
+        """
+        Finalize either energy or momentum exchange term by adding swirl term
+        and multiplying by dz/area
+        
+        Parameters
+        ----------
+        EX : np.ndarray
+            Energy or momentum exchange term between adjacent subchannels
+        swirl_consts : np.ndarray
+            Swirl exchange constants for edge/corner subchannels
+        nn : int
+            Number of coolant subchannels
+        dz : float 
+            Axial step size (m)
+        is_mom : bool
+            Indicate whether to calculate momentum (True) or energy (False)
+        """
+        EX[self.ht['conv']['ind']] += self._calc_swirl_term(swirl_consts, 
+                                                            is_mom)
+        EX *= dz / self.params['area'][self.subchannel.type[:nn]]
+
+    
     def _calc_swirl_term(self, swirl_consts: np.ndarray, 
                          is_mom: bool = False) -> np.ndarray:
         """
-        Calculate swirl exchange term for energy or momentum equation
+        Calculate swirl exchange term for either energy or momentum equation
         
         Parameters
         ----------

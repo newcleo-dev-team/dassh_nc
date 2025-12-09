@@ -1180,8 +1180,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 * self.coolant.density \
                 * self.coolant_int_params['vel']**2 \
                 / 2.0
-        else:
-            return 0.0
+        return 0.0
 
     def calculate_gravity_pressure_drop(self, dz):
         """Calculate head losses associated with vertical upward flow"""
