@@ -621,7 +621,7 @@ class Material(LoggedClass):
             self.log("error", "Density-enthalpy coefficients not yet"
                      " assigned")
         return self._coeffs_rho2h
-    
+
 
 class _MatInterp(object):
     """Interpolation object for material properties"""

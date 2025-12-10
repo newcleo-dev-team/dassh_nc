@@ -158,10 +158,11 @@ class MixedRegion(RoddedRegion):
         # Initialize star quantities
         self._hstar: np.ndarray = np.zeros_like(self._delta_v)
         self._vstar: np.ndarray = np.zeros_like(self._delta_v)
+        self.sc_properties['density'] = self.coolant.density * \
+            np.ones(self.subchannel.n_sc['coolant']['total']) 
         # Initialize enthalpy array
-        self._enthalpy: np.ndarray = \
-            self.coolant.enthalpy_from_temp(self.coolant.temperature) * \
-                np.ones(self.subchannel.n_sc['coolant']['total'])
+        self._enthalpy: np.ndarray = self.coolant.convert_properties(
+            density=self.sc_properties['density'])
 
 
     ####################################################################
@@ -603,7 +604,7 @@ class MixedRegion(RoddedRegion):
         numerator_v = np.zeros(nn)
         sum_den = np.zeros(nn)
         # Calculate delta_m for each subchannel
-        vrho_1 = self.sc_properties['density']*self._sc_vel 
+        vrho_1 = self.sc_properties['density'] * self._sc_vel 
         vrho_2 = (self.sc_properties['density'] + delta_rho) * \
             (self._sc_vel + delta_v) 
         delta_m = (vrho_2 - vrho_1) * \
@@ -619,7 +620,7 @@ class MixedRegion(RoddedRegion):
                     and k == 2:
                     continue
                 # Calculate delta_m difference between adjacent subchannel
-                xij = delta_m[i] - delta_m[j] + 1e-15
+                xij = delta_m[i] - delta_m[j]
                 # Calculate numerators and denominators
                 num_h += self._calc_star_quantity_numerator(
                     h_mid[i], h_mid[j], xij)
@@ -633,6 +634,7 @@ class MixedRegion(RoddedRegion):
         sum_den = 2 * sum_den + 1e-15
         self._hstar = self._calc_accurate_star_quantities(numerator_h, sum_den)
         self._vstar = self._calc_accurate_star_quantities(numerator_v, sum_den)
+        print(self._hstar, self._vstar)
         
         
     def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,
@@ -771,7 +773,8 @@ class MixedRegion(RoddedRegion):
     
     def _calc_RR(self, drho: np.ndarray) -> np.ndarray:
         """
-        Calculate the RR coefficient.
+        Calculate the derivative of enthalpy w.r.t. density at constant 
+        pressure, that is the RR coefficient
         
         Parameters
         ----------
@@ -781,14 +784,13 @@ class MixedRegion(RoddedRegion):
         Returns
         -------
         RR : np.ndarray
-            Enthalpy variation coefficient (J/kg/K)
+            Enthalpy variation coefficient (J*m^3/kg^2)
             RR = dh / drho = [h(rho + drho) - h(rho)] / drho
         """
         return (self.coolant.convert_properties(
-            density=self.sc_properties['density']+drho) - 
-                self.coolant.convert_properties(
-                    density=self.sc_properties['density'])) / drho
-
+            density=self.sc_properties['density']+drho) 
+                - self._enthalpy) / drho
+        
 
     def _init_static_correlated_params(self, t: float) -> None:
         """Calculate bundle friction factor and flowsplit parameters
@@ -842,10 +844,7 @@ class MixedRegion(RoddedRegion):
         #Initialize subchannel velocities and densities
         self._sc_vel: np.ndarray = self.coolant_int_params['vel'] * \
             self.coolant_int_params['fs'][self.subchannel.type[
-                :self.subchannel.n_sc['coolant']['total']]]
-                
-        self.sc_properties['density'] = self.coolant.density * \
-            np.ones(self.subchannel.n_sc['coolant']['total'])     
+                :self.subchannel.n_sc['coolant']['total']]]     
     
     
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
