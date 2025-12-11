@@ -250,9 +250,9 @@ class MixedRegion(RoddedRegion):
         RR = self._calc_RR(delta_rho0)  
         # Verbose output header
         if self._verbose:
-            for msg in MIX_CON_VERBOSE_OUTPUT[:2]:
+            for msg in MIX_CON_VERBOSE_OUTPUT:
                 self.log('info', msg)
-        # Iterate to solve the non-linear system
+        # Iterate to solve the system
         iter = 0
         err_vect = np.ones(3) # Max. errors on delta_rho and delta_v, and
                               # error on delta_P
@@ -269,12 +269,11 @@ class MixedRegion(RoddedRegion):
             delta_v = xx[1:2*nn:2]
             delta_P = xx[-1]
             # Calculate errors
-            new_solution  = [delta_rho, delta_v, delta_P]
-            old_solution = [delta_rho0, delta_v0, delta_P0]
-            for i in range(3):
-                err = np.abs((new_solution[i] - old_solution[i]) 
-                             / old_solution[i])
-                err_vect[i] = np.max(err) if i < 2 else err
+            new_solution = np.dstack((delta_rho, delta_v))
+            old_solution = np.dstack((delta_rho0, delta_v0))
+            err_vect[:2] = np.max(np.abs((new_solution - old_solution) 
+                                         / old_solution), axis=1)
+            err_vect[2] = np.abs((delta_P - delta_P0) / delta_P0)
             # Verbose output iteration info
             if self._verbose:
                 self.log('info', f'{iter+1}       {err_vect[0]:.6e}' + \
@@ -289,21 +288,24 @@ class MixedRegion(RoddedRegion):
         # Update deltas with converged values
         self._delta_rho, self._delta_v, self._delta_P = \
             self._copy_solution(delta_rho, delta_v, delta_P)
-        # Update state variables
+        # Update velocity, density, and pressure drop adding converged deltas
         self._sc_vel += delta_v
         self.sc_properties['density'] += delta_rho
         self._pressure_drop -= delta_P
-        self._delta_h = RR * self._delta_rho
-        self._enthalpy += self._delta_h
+        # Store old enthalpy and update enthalpy converting density
+        old_enthalpy = self._enthalpy.copy()
+        self._enthalpy = self.coolant.convert_properties(
+            density=self.sc_properties['density'])
+        # Update delta_h
+        self._delta_h = self._enthalpy - old_enthalpy
         # Update energy balance if requested
         # Calculated as:
         # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
         if ebal:                          
-            enthalpy_old = self._enthalpy - self._delta_h
             mfr_old = (self.sc_properties['density'] - self._delta_rho) * \
                 (self._sc_vel - self._delta_v) * \
                 self.params['area'][self.subchannel.type[:nn]]
-            mcpdT_i = self.sc_mfr * self._enthalpy - mfr_old * enthalpy_old
+            mcpdT_i = self.sc_mfr * self._enthalpy - mfr_old * old_enthalpy
             # Error introduced in the energy balance by h_star approximation
             delta_m = self.sc_mfr - mfr_old
             star_error = self._hstar * delta_m
@@ -523,7 +525,7 @@ class MixedRegion(RoddedRegion):
                       delta_rho: np.ndarray, RR: np.ndarray, 
                       nn: int) -> np.ndarray:
         """
-        Build the matrix for the system of equations
+        Build the matrix for the system to solve
 
         Parameters
         ----------
@@ -534,14 +536,14 @@ class MixedRegion(RoddedRegion):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Enthalpy variation coefficient (J/kg/K)
+            Enthalpy variation coefficient (J*m^3/kg^2)
         nn : int
             Number of coolant subchannels
 
         Returns
         -------
         AA : np.ndarray
-            Coefficient matrix for the system of equations
+            Coefficient matrix for the system to solve
         """
         self._calc_h_v_star(delta_v, delta_rho, RR, nn)
         # Calculate coefficients for the matrix
@@ -579,7 +581,7 @@ class MixedRegion(RoddedRegion):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Enthalpy variation coefficient (J/kg/K)
+            Enthalpy variation coefficient (J*m^3/kg^2)
         nn : int
             Number of coolant subchannels
             
@@ -634,7 +636,6 @@ class MixedRegion(RoddedRegion):
         sum_den = 2 * sum_den + 1e-15
         self._hstar = self._calc_accurate_star_quantities(numerator_h, sum_den)
         self._vstar = self._calc_accurate_star_quantities(numerator_v, sum_den)
-        print(self._hstar, self._vstar)
         
         
     def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,
@@ -730,7 +731,7 @@ class MixedRegion(RoddedRegion):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Enthalpy variation coefficient (J/kg/K)
+            Enthalpy variation coefficient (J*m^3/kg^2)
             
         Returns
         -------
