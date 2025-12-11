@@ -309,7 +309,8 @@ class MixedRegion(RoddedRegion):
             # Error introduced in the energy balance by h_star approximation
             delta_m = self.sc_mfr - mfr_old
             star_error = self._hstar * delta_m
-            self.update_ebal(dz*np.sum(qq), 0, mcpdT_i, star_error)
+            # Power added to the coolant through the duct
+            self.update_ebal(dz*np.sum(qq), self._qw, mcpdT_i, star_error)
             
             
     def _copy_solution(self, drho: np.ndarray, dv: np.ndarray, 
@@ -365,7 +366,9 @@ class MixedRegion(RoddedRegion):
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
             + EEX
         # Wall convection term
-        energy_b[self.ht['conv']['ind']] += self._wall_convection()
+        self._qw = self._wall_convection()
+        energy_b[self.ht['conv']['ind']] += self._qw / self.params['area'][
+            self.subchannel.type[:nn][self.ht['conv']['ind']]]
         # Build momentum terms of the known vector
         momentum_b = GG + MEX 
         if 'grid' in self.corr_constants.keys():
