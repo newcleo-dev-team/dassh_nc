@@ -11,7 +11,7 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
         specify_region_details
 from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
     MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE
-    
+import sys
 import scipy.sparse as sp
 
 
@@ -288,28 +288,25 @@ class MixedRegion(RoddedRegion):
         # Update deltas with converged values
         self._delta_rho, self._delta_v, self._delta_P = \
             self._copy_solution(delta_rho, delta_v, delta_P)
+        # Store old mass flow rate and enthalpy if energy balance is tracked
+        if ebal: 
+            old_mfr = self.sc_mfr.copy()
+            mdh_old = old_mfr * self._enthalpy.copy()
         # Update velocity, density, and pressure drop adding converged deltas
         self._sc_vel += delta_v
         self.sc_properties['density'] += delta_rho
         self._pressure_drop -= delta_P
-        # Store old enthalpy and update enthalpy converting density
-        old_enthalpy = self._enthalpy.copy()
+        # Update enthalpy converting density
         self._enthalpy = self.coolant.convert_properties(
             density=self.sc_properties['density'])
-        # Update delta_h
-        self._delta_h = self._enthalpy - old_enthalpy
         # Update energy balance if requested
         # Calculated as:
         # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
-        if ebal:                          
-            mfr_old = (self.sc_properties['density'] - self._delta_rho) * \
-                (self._sc_vel - self._delta_v) * \
-                self.params['area'][self.subchannel.type[:nn]]
-            mcpdT_i = self.sc_mfr * self._enthalpy - mfr_old * old_enthalpy
+        if ebal:
+            mcpdT_i = self.sc_mfr * self._enthalpy - mdh_old
             # Error introduced in the energy balance by h_star approximation
-            delta_m = self.sc_mfr - mfr_old
+            delta_m = self.sc_mfr - old_mfr
             star_error = self._hstar * delta_m
-            # Power added to the coolant through the duct
             self.update_ebal(dz*np.sum(qq), self._qw, mcpdT_i, star_error)
             
             
@@ -566,9 +563,9 @@ class MixedRegion(RoddedRegion):
         sub_diag[0:2*nn:2] = SS
             
         AA += np.diag(diag) + np.diag(sup_diag, k=1) + np.diag(sub_diag, k=-1)
-        AA[0:-2:2, -1] = 1
-        AA[-1, 0:2*nn:2] = C_rho
-        AA[-1, 1:2*nn:2] = C_v
+        AA[0:-2:2,-1] = 1
+        AA[-1,0:2*nn:2] = C_rho
+        AA[-1,1:2*nn:2] = C_v
         return AA
 
 
@@ -591,10 +588,11 @@ class MixedRegion(RoddedRegion):
         Notes
         -----
         Two options are available:
-        1) Approximate hstar and vstar as the midpoint values of enthalpy
+        1) Approximate hstar and vstar as the midpoint value of enthalpy
            and velocity (i.e., at z + dz/2) `h_mid` and `v_mid`
-        2) Calculate hstar and vstar as the mass-flow-weighted average
-           of enthalpy and velocity from adjacent subchannels
+        2) Calculate hstar and vstar as per "Cheng, S.K., 1984. Constitutive 
+           Correlations for wire-wrapped subchannel analysis under forced and
+           mixed convection conditions (Ph.D. thesis). MIT."
         """
         h_mid = self._enthalpy + RR * delta_rho / 2
         v_mid = self._sc_vel + delta_v / 2
@@ -603,8 +601,7 @@ class MixedRegion(RoddedRegion):
             self._hstar = h_mid
             self._vstar = v_mid
             return
-        # OPTION 2: Calculate hstar and vstar as mass-flow-weighted averages
-        # Initialize arrays
+        # OPTION 2: Calculate hstar and vstar as per Cheng 
         numerator_h = np.zeros(nn)
         numerator_v = np.zeros(nn)
         sum_den = np.zeros(nn)
@@ -636,9 +633,9 @@ class MixedRegion(RoddedRegion):
             numerator_v[i] = num_v
             sum_den[i] = denominator      
         # Calculate hstar and vstar
-        sum_den = 2 * sum_den + 1e-15
-        self._hstar = self._calc_accurate_star_quantities(numerator_h, sum_den)
-        self._vstar = self._calc_accurate_star_quantities(numerator_v, sum_den)
+        sum_den = 2 * sum_den + sys.float_info.epsilon 
+        self._hstar = numerator_h / sum_den
+        self._vstar = numerator_v / sum_den
         
         
     def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,
@@ -649,11 +646,11 @@ class MixedRegion(RoddedRegion):
         Parameters
         ----------
         var_mid_i : float
-            Midpoint value of the `variable` for subchannel i
-            `variable` can be enthalpy or velocity
+            Midpoint value of the `var_mid_i` for subchannel i
+            `var_mid_j` can be enthalpy or velocity
         var_mid_j : float
-            Midpoint value of the `variable` for subchannel j
-            `variable` can be enthalpy or velocity
+            Midpoint value of the `var_mid_j` for subchannel j
+            `var_mid_j` can be enthalpy or velocity
         xij : float
             Difference in mass flow rate between subchannels i and j
         
@@ -664,26 +661,6 @@ class MixedRegion(RoddedRegion):
         """
         return np.abs(xij) * (var_mid_i + var_mid_j) \
             - xij * (var_mid_i - var_mid_j)
-        
-        
-    def _calc_accurate_star_quantities(self, numerator: np.ndarray,
-                                       denom: np.ndarray) -> np.ndarray:
-        """
-        Calculate accurate star quantities from numerator and denominator
-        
-        Parameters
-        ----------
-        numerator : np.ndarray
-            Numerator for hstar and vstar calculation
-        denom : np.ndarray
-            Denominator for hstar and vstar calculation
-            
-        Returns
-        -------
-        np.ndarray
-            Accurate star quantities
-        """
-        return numerator / denom
         
         
     def _calc_momentum_coefficients(self, nn: int, dz: float, 
