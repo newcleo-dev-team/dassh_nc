@@ -754,12 +754,30 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         # Update coolant material properties
         t_inlet = self.coolant.temperature
+        self._init_params_partial(t)
+        # Friction factor
+        if self.corr['ff'] is not None:
+            self.coolant_int_params['ff'] = self.corr['ff'](self)
+
+        # Reset inlet temperature
+        self.coolant.temperature = t_inlet
+        
+        
+    def _init_params_partial(self, t: float) -> None:
+        """Initialize velocity, Reynolds number, and flow split parameters
+        
+        Parameters
+        ----------
+        t : float
+            Coolant temperature (K)
+        """
+        # Update coolant material properties
         self._update_coolant(t)
         # Coolant axial velocity, bundle Reynolds number
         mfr_over_area = self.int_flow_rate / self.bundle_params['area']
         self.coolant_int_params['vel'] = mfr_over_area / self.coolant.density
-        self.coolant_int_params['Re'] = \
-            mfr_over_area * self.bundle_params['de'] / self.coolant.viscosity
+        self.coolant_int_params['Re'] = mfr_over_area * \
+            self.bundle_params['de'] / self.coolant.viscosity
         # Spacer grid, if present
         if 'grid' in self.corr_constants.keys():
             try:
@@ -771,7 +789,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         self.coolant_int_params['Re'],
                         self.corr_constants['grid']['solidity'],
                         self.corr_constants['grid']['corr_coeff'])
-
         # Flow split parameters
         if self.corr['fs'] is not None:
             if 'grid' in self.corr.keys():
@@ -780,13 +797,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             else:
                 self.coolant_int_params['fs'] = \
                     self.corr['fs'](self)
-
-        # Friction factor
-        if self.corr['ff'] is not None:
-            self.coolant_int_params['ff'] = self.corr['ff'](self)
-
-        # Reset inlet temperature
-        self.coolant.temperature = t_inlet
+                    
 
     def clone(self, new_flowrate=None, new_avg_temp=None):
         """Clone the rodded region into another assembly object;

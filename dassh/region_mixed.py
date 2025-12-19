@@ -679,10 +679,11 @@ class MixedRegion(RoddedRegion):
             
         Returns
         -------
-        EE : np.ndarray
-            Coefficients for the momentum equation
-        FF : np.ndarray
-            Coefficients for the momentum equation
+        Tuple[np.ndarray]
+            Container of the two following np.ndarrays:
+            
+            - EE coefficients 
+            - FF coefficients
         """
         EE = (self._sc_vel + delta_v) * \
             (self._sc_vel + delta_v - self._vstar) + GRAVITY_CONST * dz / 2 + \
@@ -715,10 +716,11 @@ class MixedRegion(RoddedRegion):
             
         Returns
         -------
-        SS : np.ndarray
-            Coefficients for the energy equation
-        TT : np.ndarray
-            Coefficients for the energy equation
+        Tuple[np.ndarray]
+            Container of the two following np.ndarrays:
+            
+            - SS coefficients 
+            - TT coefficients
         """
         SS = (self._sc_vel + delta_v) * \
             (self._enthalpy - self._hstar + 
@@ -741,11 +743,11 @@ class MixedRegion(RoddedRegion):
             
         Returns
         -------
-        tuple[np.ndarray]
-            C_rho : np.ndarray
-                Coefficients for the continuity equation
-            C_v : np.ndarray
-                Coefficients for the continuity equation
+        Tuple[np.ndarray]
+            Container of the two following np.ndarrays:
+            
+            - C_rho coefficients 
+            - C_v coefficients
         """
         areas = self.params['area'][self.subchannel.type[:nn]]
         return areas * (self._sc_vel + delta_v), \
@@ -779,34 +781,10 @@ class MixedRegion(RoddedRegion):
         Parameters
         ----------
         t : float
-            Bundle axial average temperature ((T_in + T_out) / 2)
+            Inlet coolant temperature (K)
         """
-        # Update coolant material properties
-        self._update_coolant(t)
-        # Coolant axial velocity, bundle Reynolds number
-        mfr_over_area = self.int_flow_rate / self.bundle_params['area']
-        self.coolant_int_params['vel'] = mfr_over_area / self.coolant.density
-        self.coolant_int_params['Re'] = mfr_over_area * \
-            self.bundle_params['de'] / self.coolant.viscosity
-        # Spacer grid, if present
-        if 'grid' in self.corr_constants.keys():
-            try:
-                self.coolant_int_params['grid_loss_coeff'] = \
-                    self.corr_constants['grid']['loss_coeff']
-            except (KeyError, TypeError):
-                self.coolant_int_params['grid_loss_coeff'] = \
-                    self.corr['grid'](
-                        self.coolant_int_params['Re'],
-                        self.corr_constants['grid']['solidity'],
-                        self.corr_constants['grid']['corr_coeff'])
-        # Flow split parameters
-        if self.corr['fs'] is not None:
-            if 'grid' in self.corr.keys():
-                self.coolant_int_params['fs'] = \
-                    self.corr['fs'](self, grid=True)
-            else:
-                self.coolant_int_params['fs'] = \
-                    self.corr['fs'](self)  
+        self._init_params_partial(t)  
+        # Reynolds number in each subchannel          
         self.coolant_int_params['Re_all_sc'] = \
             self.coolant_int_params['Re'] * self.coolant_int_params['fs'][
                 self.subchannel.type[
@@ -826,8 +804,8 @@ class MixedRegion(RoddedRegion):
         self._sc_vel: np.ndarray = self.coolant_int_params['vel'] * \
             self.coolant_int_params['fs'][self.subchannel.type[
                 :self.subchannel.n_sc['coolant']['total']]]     
-    
-    
+
+
     def _update_subchannels_properties(self, temp: np.ndarray) -> None:
         """
         Update subchannel properties based on temperature
@@ -846,7 +824,6 @@ class MixedRegion(RoddedRegion):
     def _setup_ht_constants(self):
         """Setup heat transfer constants in numpy arrays"""
         const = calculate_ht_constants(self, mixed=True)
-        # self.ht_consts = const
         self.ht = {}
         self.ht['old'] = const
         self.ht['cond'] = setup_conduction_constants(self, const)
