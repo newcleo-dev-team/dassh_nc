@@ -73,3 +73,16 @@ MC_MAX_ITER: int = 10
 MIXED_CONV_PROP_TO_UPDATE: list[str] = ['viscosity', 'thermal_conductivity', 
                                         'heat_capacity']
 """Material properties to update in mixed convection solver"""
+RHO2H_LBH15_COEFFS: dict[str, list[float]] = {
+    'lead': [11441.0, 1.2795, 176.2, -2.4615e-2, 5.147e-6, 1.524e6, 600.6],
+    'lbe': [11065.0, 1.293, 164.8, -1.97e-2, 4.167e-6, 4.56e5, 398.0],
+    'bismuth': [10725, 1.22, 118.2, 2.967e-3, 0, -7.183e6, 544.6]
+}
+"""Coefficients for density to enthalpy conversion correlation functions for
+lead, lbe, and bismuth. Format: [a0, a1, b0, b1, b2, b3, Tm] for the equations:
+
+    density = a0 - a1*T 
+    enthalpy = b0*(T-Tm) + b1*(T^2 - Tm^2) + b2*(T^3 - Tm^3) + b3*(1/T - 1/Tm)
+ 
+ where Tm is the melting temperature of the material in K.
+"""

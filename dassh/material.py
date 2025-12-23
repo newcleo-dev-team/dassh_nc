@@ -31,7 +31,8 @@ import warnings
 from typing import Union, Callable, Any, Dict, Tuple, List, Type
 from ._commons import ROOT, DATA_FOLDER, h2T_COEFF_FILE, MATERIAL_LBH, \
     PROP_LBH15, PROPS_NAME, AMBIENT_TEMPERATURE, PROPS_NAME_FULL, \
-        BUILTIN_COOLANTS, MATERIAL_NAMES, LBH15_PROPERTIES, rho2h_COEFF_FILE 
+        BUILTIN_COOLANTS, MATERIAL_NAMES, LBH15_PROPERTIES, rho2h_COEFF_FILE, \
+            RHO2H_LBH15_COEFFS
     
 def update_lbh15_material(logger: Callable[[str, str], None], temp: float, 
                           cool: Union[Lead, LBE, Bismuth] = None,
@@ -152,7 +153,7 @@ class Material(LoggedClass):
         if (solve_enthalpy or mixed_convection) \
             and self.name in BUILTIN_COOLANTS :
             self._coeffs_h2T = self._read_coefficients(h2T_COEFF_FILE)
-            if mixed_convection:
+            if mixed_convection and self.name not in MATERIAL_LBH.keys():
                 self._coeffs_rho2h = self._read_coefficients(rho2h_COEFF_FILE)
         
         
@@ -545,6 +546,11 @@ class Material(LoggedClass):
             corresponding to `density` (J/kg)
         """  
         if density is not None:
+            if self.name in MATERIAL_LBH:
+                a0, a1, b0, b1, b2, b3, Tm = RHO2H_LBH15_COEFFS[self.name]
+                T = (-density + a0) / a1
+                return b0 * (T - Tm) + b1 * (T**2 - Tm**2) + \
+                    b2 * (T**3 - Tm**3) + b3 * (T**(-1) - Tm**(-1))
             return np.polyval(self._coeffs_rho2h, density)
         if enthalpy is not None:
             return np.polyval(self._coeffs_h2T, enthalpy)

@@ -161,7 +161,7 @@ class MixedRegion(RoddedRegion):
         self.sc_properties['density'] = self.coolant.density * \
             np.ones(self.subchannel.n_sc['coolant']['total']) 
         # Initialize enthalpy array
-        self._enthalpy: np.ndarray = self.coolant.convert_properties(
+        self._enthalpy = self.coolant.convert_properties(
             density=self.sc_properties['density'])
 
 

@@ -984,7 +984,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         F - Power removed by the coolant (W)"""
             if r_obj._options['mixed_convection']:
                 self.notes += """
-        G - Error introduced by approximation on H*
+        G - Error introduced by approximation on H* (W)
         SUM - Assembly energy balance: A + C + D - F (W)
         ERROR - SUM / (A + B)\n"""
             else: 
@@ -1073,7 +1073,7 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                if r_obj._options['solve_enthalpy']:
+                if r_obj._options['solve_enthalpy'] :
                     ebal_asm[5] = reg.ebal['mcpdT_i']
                     if r_obj._options['mixed_convection']:
                         ebal_asm[6] = reg.ebal['star_error']
