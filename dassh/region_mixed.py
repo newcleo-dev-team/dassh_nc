@@ -124,6 +124,13 @@ class MixedRegion(RoddedRegion):
     mixed_convection_rel_tol (optional) : float
         Tolerance for the mixed convection region solver
     """
+    _enthalpy: np.ndarray
+    _delta_P: float
+    _delta_v: np.ndarray
+    _delta_rho: np.ndarray
+    _hstar: np.ndarray
+    _vstar: np.ndarray
+
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
                  wire_diam, clad_thickness, duct_ftf, verbose, 
                  accurate_star_quantities, flow_rate,
@@ -144,20 +151,19 @@ class MixedRegion(RoddedRegion):
                                           sf, se2, param_update_tol, 
                                           rad_isotropic=False)
 
-        self._pressure_drop: float = 0.0 # This overrides the attribute in RoddedRegion
-        self._delta_P: float = 1.0 # Guess on pressure drop
-        self._delta_v: np.ndarray = 0.1 * \
+        self._pressure_drop = 0.0 # This overrides the attribute in RoddedRegion
+        self._delta_P = 1.0 # Guess on pressure drop
+        self._delta_v = 0.1 * \
             np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on velocity variation
-        self._delta_rho: np.ndarray = \
-            np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on density variation
+        self._delta_rho = np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on density variation
         # Flag to indicate whether to track iteration convergence or not 
-        self._verbose: bool = verbose
+        self._verbose = verbose
         # Tolerance for mixed convection solver and star quantities calculation
-        self._mixed_convection_rel_tol: float = mixed_convection_rel_tol
-        self._accurate_star_quantities: bool = accurate_star_quantities
+        self._mixed_convection_rel_tol = mixed_convection_rel_tol
+        self._accurate_star_quantities = accurate_star_quantities
         # Initialize star quantities
-        self._hstar: np.ndarray = np.zeros_like(self._delta_v)
-        self._vstar: np.ndarray = np.zeros_like(self._delta_v)
+        self._hstar = np.zeros_like(self._delta_v)
+        self._vstar = np.zeros_like(self._delta_v)
         self.sc_properties['density'] = self.coolant.density * \
             np.ones(self.subchannel.n_sc['coolant']['total']) 
         # Initialize enthalpy array
