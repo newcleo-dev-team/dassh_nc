@@ -159,8 +159,8 @@ class TestBalances():
         The EEX term represents the exchange of energy between the subchannels
         that does not involve a net exchange of mass. It is due to conduction,
         turbulence and swirl velocity (if wire-wrapped). Since these phenomena 
-        are all in the radial plane, the sum of all contributions should return 
-        zero to conserve energy. 
+        are all modelled as confined in the radial plane, the sum of all 
+        contributions should return zero to conserve energy. 
         The MEX term is the analogous term in the momentum equation. 
         """
         _assign_parameters(simple_ctrl_rr_mixconv)
@@ -169,13 +169,13 @@ class TestBalances():
             simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total'])
         assert np.sum(EEX * simple_ctrl_rr_mixconv.params['area'][
             simple_ctrl_rr_mixconv.subchannel.type[
-                :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]] \
-                / rr_data.enthalpy['dz']) \
+                :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]]) \
+                / rr_data.enthalpy['dz'] \
             == pytest.approx(0.0, abs=rr_data.enthalpy['tol_balance'])
         assert np.sum(MEX * simple_ctrl_rr_mixconv.params['area'][
             simple_ctrl_rr_mixconv.subchannel.type[
-                :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]] \
-                / rr_data.enthalpy['dz']) \
+                :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]]) \
+                / rr_data.enthalpy['dz'] \
             == pytest.approx(0.0, abs=rr_data.enthalpy['tol_balance'])
 
 
@@ -241,11 +241,6 @@ class TestMethodsMixedRegion():
             The expected hstar values
         expected_vstar : np.ndarray
             The expected vstar values
-            
-        Returns
-        -------
-        tuple[np.ndarray]
-            The calculated hstar and vstar quantities
         """                              
         rm._calc_h_v_star(dv, drho, RR, rm.subchannel.n_sc['coolant']['total'])
         assert rm._hstar == pytest.approx(expected_hstar, 
