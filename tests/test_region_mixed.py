@@ -34,8 +34,9 @@ def _assign_parameters(rm: dassh.MixedRegion):
         # Update subchannel properties and initialize coolant parameters
         rm._update_subchannels_properties(temps)
         rm._init_static_correlated_params(np.mean(temps))
-        rm.coolant_int_params['eddy'] = 1e-7
-        rm.coolant_int_params['swirl'] = np.array([0, 1e-5, 1e-5])
+        rm.coolant_int_params['eddy'] = rr_data.mixed['eddy']
+        rm.coolant_int_params['swirl'] = np.array([0, rr_data.mixed['swirl'],
+                                                   rr_data.mixed['swirl']])
         
 class TestBalances():
     """
@@ -74,7 +75,7 @@ class TestBalances():
         print('Q_in: ', Q_in)
         print('Error introduced by h_star: ', error_hstar)
         assert np.sum(delta_mh - error_hstar) == \
-            pytest.approx(Q_in, abs=rr_data.enthalpy['tol'])
+            pytest.approx(Q_in, abs=rr_data.mixed['tol'])
 
 
     def _assert_mass_balance(self, mfr_1: np.ndarray, mfr_2: np.ndarray):
@@ -91,7 +92,7 @@ class TestBalances():
         print('mfr1: ', np.sum(mfr_1))
         print('mfr2: ', np.sum(mfr_2))
         assert np.sum(mfr_1) - np.sum(mfr_2) \
-            == pytest.approx(0, abs=rr_data.enthalpy['tol'])
+            == pytest.approx(0, abs=rr_data.mixed['tol'])
     
     
     def _assert_momentum_balance(self, v_1: np.ndarray, v_2: np.ndarray, 
@@ -139,9 +140,9 @@ class TestBalances():
         print('friction: ', friction)
         print('acceleration: ', acceleration)
         print('delta_P: ', mr._delta_P)
-        assert np.allclose(mr._delta_P + 
-                           (gravity + friction + acceleration - error_vstar), 
-                           0, atol=rr_data.enthalpy['tol'])
+        assert np.allclose(mr._delta_P,
+                           - gravity - friction - acceleration + error_vstar, 
+                           atol=rr_data.mixed['tol'])
         
         
     def test_EEX_MEX_balance(self, simple_ctrl_rr_mixconv: dassh.MixedRegion):
@@ -181,7 +182,8 @@ class TestBalances():
     def test_axial_step_balance(self, 
                                 simple_ctrl_rr_mixconv: dassh.MixedRegion):
         """
-        Test that the axial step energy and mass balances are satisfied
+        Test that the axial step energy, momentum and mass balances are
+        satisfied
         
         Parameters
         ----------
@@ -247,9 +249,9 @@ class TestMethodsMixedRegion():
         """                              
         rm._calc_h_v_star(dv, drho, RR, rm.subchannel.n_sc['coolant']['total'])
         assert rm._hstar == pytest.approx(expected_hstar, 
-                                         rel=rr_data.enthalpy['tol'])
+                                         abs=rr_data.mixed['tol'])
         assert rm._vstar == pytest.approx(expected_vstar, 
-                                         rel=rr_data.enthalpy['tol'])
+                                         abs=rr_data.mixed['tol'])
     
     
     def test_calc_RR(self, simple_ctrl_rr_mixconv: dassh.MixedRegion):
@@ -280,7 +282,7 @@ class TestMethodsMixedRegion():
             assert simple_ctrl_rr_mixconv._calc_RR(
                 rr_data.mixed['drho'][mat] * np.ones(nn)) == \
                     pytest.approx(rr_data.mixed['RR'][mat], 
-                                  rel=rr_data.enthalpy['tol'])
+                                  rel=rr_data.mixed['tol'])
     
     def test_calc_star_quantities(self, 
                                   simple_ctrl_rr_mixconv: dassh.MixedRegion):

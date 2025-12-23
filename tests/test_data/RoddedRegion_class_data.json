@@ -214,6 +214,9 @@
         "gravity_const": 9.81
     },
     "mixed": {
+        "eddy": 1e-5,
+        "swirl": 1e-7,
+        "tol": 1e-3,
         "drho": {
             "sodium": -4.61,
             "lead": -25.59,
@@ -226,7 +229,7 @@
             "lead": -114.11254,
             "lbe": -109.994973,
             "bismuth": -112.0210,
-            "nak": -3675.8271
+            "nak": -3695.5633
         },
         "deltav": 0.005,
         "deltarho": -1,
