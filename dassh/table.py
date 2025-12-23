@@ -1073,7 +1073,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                if r_obj._options['solve_enthalpy'] :
+                if r_obj._options['solve_enthalpy'] or \
+                    r_obj._options['mixed_convection']:
                     ebal_asm[5] = reg.ebal['mcpdT_i']
                     if r_obj._options['mixed_convection']:
                         ebal_asm[6] = reg.ebal['star_error']

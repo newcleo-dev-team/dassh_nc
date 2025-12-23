@@ -71,9 +71,9 @@ class Assembly(LoggedClass):
 
     def __init__(self, name, loc, asm_input, mat_dict, inlet_temp,
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
-                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3,
-                 gravity=False, rad_isotropic=True, solve_enthalpy = False,
-                 mixed_convection=False):
+                 param_update_tol=0.0, gravity=False, rad_isotropic=True, 
+                 solve_enthalpy = False, mixed_convection=False, 
+                 mixed_convection_rel_tol=1e-3):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')
@@ -108,7 +108,7 @@ class Assembly(LoggedClass):
                                       mixed_convection_rel_tol)
             ]
             else:
-                asm_input['mixed_convection'] = mixed_convection
+                asm_input['mixed_convection'] = False
                 self.region = [
                     region_rodded.make(asm_input,
                                        self.name,
@@ -486,7 +486,7 @@ class Assembly(LoggedClass):
 
     def calculate(self, dz, t_gap, h_gap, z=None, adiabatic=False, ebal=False,
                   mixed_convection=False):
-        """Calculate coolant and temperatures at axial level j+1 based
+        """Calculate coolant temperatures at axial level j+1 based
         on coolant and duct wall temperatures at axial level j
 
         Parameters
@@ -529,15 +529,12 @@ class Assembly(LoggedClass):
 
         # Calculate coolant and duct temperatures, pressure drop
         
-        if self.active_region.is_rodded:
-            if not mixed_convection:
-                self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
-                self.active_region.calculate_pressure_drop(self.z, dz)
-            else: 
-                self.active_region.calculate(dz, self._z, pow_j, t_gap, h_gap, 
+        if mixed_convection:
+            self.active_region.calculate(dz, self._z, pow_j, t_gap, h_gap, 
                                              adiabatic, ebal)
         else:
-            self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic, ebal)
+            self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic,
+                                         ebal)
             self.active_region.calculate_pressure_drop(self.z, dz)
             
         # Update peak coolant and duct temperatures
