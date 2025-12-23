@@ -155,6 +155,7 @@ class RRData:
     clone_data: Dict[str, Any]
     non_isotropic: Dict[str, Union[float, int]]
     enthalpy: Dict[str, float]
+    mixed: Dict[str, Dict[str, float]]
     
 def pytest_configure(config):
     """
@@ -245,7 +246,8 @@ def pytest_configure(config):
         acc_met = file_data["acc_met"],
         clone_data = file_data["clone_data"],
         non_isotropic = file_data["non_isotropic"],
-        enthalpy = file_data["enthalpy"]
+        enthalpy = file_data["enthalpy"],
+        mixed = file_data["mixed"]
     )
     
 # def pytest_configure(config):
