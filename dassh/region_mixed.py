@@ -273,13 +273,10 @@ class MixedRegion(RoddedRegion):
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
             if self._solver == 'numpy':       
-                print('Solving with numpy.linalg.solve')
                 xx = np.linalg.solve(AA, bb)
             elif self._solver == 'scipy':
-                print('Solving with scipy.sparse.linalg.spsolve')
                 xx = sp.linalg.spsolve(sp.csr_matrix(AA), bb)
             elif self._solver == 'greene':
-                print('Solving with Greene algorithm')
                 xx = self._solve_greene(AA, bb)
             # Extract deltas from solution vector
             delta_rho = xx[0:2*nn:2]

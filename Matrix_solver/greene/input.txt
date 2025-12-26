@@ -1,0 +1,75 @@
+########################################################################
+# author: Francesco Pepe
+# date: 
+# comment: KALLA 
+########################################################################
+# SETUP: Problem setup, user options, etc
+
+[Setup]
+    log_progress        = 100
+    calc_energy_balance = True
+    mixed_convection = True
+    solver = greene
+    [[Dump]]
+        coolant = True
+
+
+########################################################################
+
+[Power]
+    user_power  = ../power.csv
+    total_power = 197e3    # Normalize power to this value
+
+
+########################################################################
+# CORE DETAILS: Describe characteristics of the reactor core
+
+[Core]
+    coolant_inlet_temp = 473.25     # (K); based on 200.1˚C inlet temp
+    coolant_material   = lbe
+    length             = 0.870      # (m); only model pin bundle length
+    assembly_pitch     = 0.2   # (m)
+    gap_model          = none
+    bypass_fraction    = 0.0        # no inter-asm gap bypass
+
+
+########################################################################
+# ASSEMBLY DETAILS: Describe a group of assemblies
+# NAME identifies a group of assemblies (e.g. "INNER_DRIVER")
+# Can be repeated for as many assemblies as required by the user.
+
+[Assembly]
+    [[xx09]]
+        num_rings       = 3
+        pin_pitch       = 0.0105                                  
+        pin_diameter    = 0.0082                                  
+        clad_thickness  = 0.00082                                
+        wire_pitch      = 0.328                                  
+        wire_diameter   = 0.0022                                 
+        wire_direction  = counterclockwise
+        duct_ftf        = 0.04933306695894643, 0.052
+        duct_material   = ss304                                   
+        corr_mixing     = CTD
+        corr_friction     = CTD
+        corr_flowsplit     = CTD
+        corr_nusselt    = DB
+        htc_params_duct = 0.025, 0.8, 0.8, 7.0
+        bypass_gap_flow_fraction = 0.00
+        [[[FuelModel]]]
+            clad_material   = ss316                       
+            gap_material    = lbe                     
+            fcgap_thickness = 0.00 
+            htc_params_clad = 0.0308, 0.77, 0.77, 7.703          
+            r_frac   =   0.0, 0.33333, 0.66667
+            pu_frac  = 0.000,   0.000,   0.000
+            zr_frac  = 0.001,   0.001,   0.001	          
+            porosity = 0.000,   0.000,   0.000
+
+
+########################################################################
+
+[Assignment]
+    [[ByPosition]]
+        xx09 = 1, 1, 1, FLOWRATE=15.97
+
+########################################################################
