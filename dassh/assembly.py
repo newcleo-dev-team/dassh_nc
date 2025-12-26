@@ -73,7 +73,7 @@ class Assembly(LoggedClass):
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
                  param_update_tol=0.0, gravity=False, rad_isotropic=True, 
                  solve_enthalpy = False, mixed_convection=False, 
-                 mixed_convection_rel_tol=1e-3):
+                 mixed_convection_rel_tol=1e-3, solver='numpy'):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')
@@ -105,7 +105,8 @@ class Assembly(LoggedClass):
                                       flow_rate,
                                       se2geo,
                                       param_update_tol,
-                                      mixed_convection_rel_tol)
+                                      mixed_convection_rel_tol,
+                                      solver)
             ]
             else:
                 asm_input['mixed_convection'] = False

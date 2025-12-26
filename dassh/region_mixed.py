@@ -16,7 +16,7 @@ import scipy.sparse as sp
 
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, 
-         mixed_convection_rel_tol=1e-3):
+         mixed_convection_rel_tol=1e-3, solver='numpy'):
     """Create MixeddRegion object within DASSH Assembly
 
     Parameters
@@ -57,7 +57,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
                      inp['SpacerGrid'], inp['bypass_gap_flow_fraction'],
                      inp['bypass_gap_loss_coeff'], inp['wire_direction'], 
                      inp['shape_factor'], se2geo, update_tol,
-                     mixed_convection_rel_tol)
+                     mixed_convection_rel_tol, solver)
     return specify_region_details(rr, inp, mat)
 
 
@@ -123,6 +123,8 @@ class MixedRegion(RoddedRegion):
         correlation recalculation
     mixed_convection_rel_tol (optional) : float
         Tolerance for the mixed convection region solver
+    solver : str {'numpy', 'scipy', 'greene'}
+        Matrix solver to use for the mixed convection system
     """
     _enthalpy: np.ndarray
     _delta_P: float
@@ -130,6 +132,7 @@ class MixedRegion(RoddedRegion):
     _delta_rho: np.ndarray
     _hstar: np.ndarray
     _vstar: np.ndarray
+    _solver: str
 
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
                  wire_diam, clad_thickness, duct_ftf, verbose, 
@@ -138,7 +141,8 @@ class MixedRegion(RoddedRegion):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3):
+                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3,
+                 solver='numpy'):
         # Instantiate RoddedRegion object
         super(MixedRegion, self).__init__(name, n_ring, pin_pitch, pin_diam,
                                           wire_pitch, wire_diam, 
@@ -161,6 +165,8 @@ class MixedRegion(RoddedRegion):
         # Tolerance for mixed convection solver and star quantities calculation
         self._mixed_convection_rel_tol = mixed_convection_rel_tol
         self._accurate_star_quantities = accurate_star_quantities
+        # Matrix solver option
+        self._solver = solver
         # Initialize star quantities
         self._hstar = np.zeros_like(self._delta_v)
         self._vstar = np.zeros_like(self._delta_v)
@@ -266,10 +272,15 @@ class MixedRegion(RoddedRegion):
             and iter < MC_MAX_ITER:
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
-            #AA = sp.csr_matrix(self._build_matrix(dz, delta_v0, delta_rho0, RR))
-            # Solve system
-            xx = np.linalg.solve(AA, bb)
-            #xx = sp.linalg.spsolve(AA, bb)
+            if self._solver == 'numpy':       
+                print('Solving with numpy.linalg.solve')
+                xx = np.linalg.solve(AA, bb)
+            elif self._solver == 'scipy':
+                print('Solving with scipy.sparse.linalg.spsolve')
+                xx = sp.linalg.spsolve(sp.csr_matrix(AA), bb)
+            elif self._solver == 'greene':
+                print('Solving with Greene algorithm')
+                xx = self._solve_greene(AA, bb)
             # Extract deltas from solution vector
             delta_rho = xx[0:2*nn:2]
             delta_v = xx[1:2*nn:2]
@@ -379,8 +390,8 @@ class MixedRegion(RoddedRegion):
                 self.calculate_spacergrid_pressure_drop(z, dz)
         # Assemble known vector
         bb = np.zeros(2*nn + 1)
-        bb[1:2*nn:2] = energy_b
-        bb[0:2*nn:2] = momentum_b
+        bb[1:2*nn:2] = momentum_b
+        bb[0:2*nn:2] = energy_b
         return bb
 
 
@@ -563,13 +574,13 @@ class MixedRegion(RoddedRegion):
         sup_diag = np.zeros(2*nn)
         sub_diag = np.zeros(2*nn)
     
-        diag[0:2*nn:2] = EE
-        diag[1:2*nn:2] = TT
-        sup_diag[0:2*nn:2] = FF
-        sub_diag[0:2*nn:2] = SS
+        diag[0:2*nn:2] = SS
+        diag[1:2*nn:2] = FF
+        sup_diag[0:2*nn:2] = TT
+        sub_diag[0:2*nn:2] = EE
             
         AA += np.diag(diag) + np.diag(sup_diag, k=1) + np.diag(sub_diag, k=-1)
-        AA[0:-2:2,-1] = 1
+        AA[1:-1:2,-1] = 1
         AA[-1,0:2*nn:2] = C_rho
         AA[-1,1:2*nn:2] = C_v
         return AA
@@ -835,7 +846,55 @@ class MixedRegion(RoddedRegion):
         self.ht['cond'] = setup_conduction_constants(self, const)
         self.ht['conv'] = setup_convection_constants(self, const)
         
-    
+        
+    def _solve_greene(self, AA: np.ndarray, bb: np.ndarray) -> np.ndarray:
+        """
+        Solve a linear system using Greene's algorithm
+
+        Parameters
+        ----------
+        AA : np.ndarray
+            Coefficient matrix
+        bb : np.ndarray
+            Vector
+
+        Returns
+        -------
+        np.ndarray
+            Solution vector xx s.t. AA x = bb
+        """
+        A = AA.copy()
+        b = bb.copy()
+
+        n = b.shape[0]
+
+        # Pairwise elimination
+        for i in range(0, n - 1, 2):
+
+            m = A[i+1, i] / A[i, i]
+            A[i+1] -= m * A[i]
+            b[i+1] -= m * b[i]
+
+            m = A[i, i+1] / A[i+1, i+1]
+            A[i] -= m * A[i+1]
+            b[i] -= m * b[i+1]
+
+            m = A[-1, i] / A[i, i]
+            A[-1] -= m * A[i]
+            b[-1] -= m * b[i]
+
+            m = A[-1, i+1] / A[i+1, i+1]
+            A[-1] -= m * A[i+1]
+            b[-1] -= m * b[i+1]
+
+        m = A[:-1, -1] / A[-1, -1]
+        A[:-1] -= m.reshape(-1, 1) * A[-1]
+        b[:-1] -= m * b[-1]
+
+        # Back substitution (diagonal system)
+        return b / np.diag(A)
+
+        
     @property
     def pressure_drop(self):
         return self._pressure_drop

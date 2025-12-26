@@ -205,6 +205,7 @@ class Reactor(LoggedClass):
             inp.data['Setup']['param_update_tol']
         self._options['mixed_convection_rel_tol'] = \
             inp.data['Setup']['mixed_convection_rel_tol']
+        self._options['solver'] = inp.data['Setup']['solver']
         self._options['include_gravity'] = \
             inp.data['Setup']['include_gravity_head_loss']
         self._options['rad_isotropic'] = \
@@ -412,7 +413,8 @@ class Reactor(LoggedClass):
                 gravity=self._options['include_gravity'],
                 rad_isotropic=self._options['rad_isotropic'],
                 solve_enthalpy=self._options['solve_enthalpy'],
-                mixed_convection=self._options['mixed_convection'])
+                mixed_convection=self._options['mixed_convection'],
+                solver=self._options['solver'])
 
         # Store as attribute b/c used later to write summary output
         self.asm_templates = asm_templates
