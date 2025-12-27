@@ -13,7 +13,7 @@ TIME_MAXITER: int = 1e5
 """Maximum number of iterations for the time evaluation"""
 TIME_MINITER: int = 300
 """Minimum number of iterations for the time evaluation"""
-TOL: float = 1e-3
+TOL: float = 1e-4
 """Tolerance for the time evaluation convergence"""
 SC_ID: np.ndarray = np.array([1, 8, 7, 26, 27])
 """IDs of subchannels used for the test cases"""
