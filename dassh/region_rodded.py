@@ -42,7 +42,7 @@ module_logger = logging.getLogger('dassh.region_rodded')
 
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, 
-         rad_isotropic=True, solve_enthalpy=False):
+         rad_isotropic=True, solve_enthalpy=False, ff_variable=False):
     """Create RoddedRegion object within DASSH Assembly
 
     Parameters
@@ -98,7 +98,8 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False,
                       update_tol,
                       gravity, 
                       rad_isotropic,
-                      solve_enthalpy)
+                      solve_enthalpy,
+                      ff_variable)
 
     # Add z lower/upper boundaries
     rr.z = [inp['AxialRegion']['rods']['z_lo'],
@@ -288,7 +289,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
                  param_update_tol=0.0, gravity=False, rad_isotropic=True,
-                 solve_enthalpy=False):
+                 solve_enthalpy=False, ff_variable=False):
         """Instantiate RoddedRegion object"""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
@@ -296,6 +297,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self._rad_isotropic = rad_isotropic
         # Flag for enthalpy calculation
         self._ent = solve_enthalpy
+        self._ff_var = ff_variable
         # Check that the energy equation is solved for enthalpy only in case of 
         # radially non-uniform properties
         if self._rad_isotropic and self._ent:
@@ -936,8 +938,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # start of the calculation, based on bundle-average coolant
         # temperature.
         # Friction factor
-        # if self.corr['ff'] is not None:
-        #     self.coolant_int_params['ff'] = self.corr['ff'](self)
+        if self._ff_var and self.corr['ff'] is not None:
+            self.coolant_int_params['ff'] = self.corr['ff'](self)
                     
         # Mixing params - these come dimensionless, need to adjust
         if self.corr['mix'] is not None:

@@ -13,6 +13,7 @@
     include_gravity_head_loss = boolean(default=False)
     radially_isotropic_properties = boolean(default=True)
     solve_enthalpy = boolean(default=False)
+    ff_variable = boolean(default=False)
     [[Dump]]
         all = boolean(default=False)
         coolant = boolean(default=False)

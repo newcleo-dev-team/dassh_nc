@@ -209,6 +209,8 @@ class Reactor(LoggedClass):
             inp.data['Setup']['radially_isotropic_properties']
         self._options['solve_enthalpy'] = \
             inp.data['Setup']['solve_enthalpy']
+        self._options['ff_variable'] = \
+            inp.data['Setup']['ff_variable']
         if 'AssemblyTables' in inp.data['Setup'].keys():
             self._options['AssemblyTables'] = \
                 inp.data['Setup']['AssemblyTables']
@@ -406,7 +408,8 @@ class Reactor(LoggedClass):
                 param_update_tol=self._options['param_update_tol'],
                 gravity=self._options['include_gravity'],
                 rad_isotropic=self._options['rad_isotropic'],
-                solve_enthalpy=self._options['solve_enthalpy'])
+                solve_enthalpy=self._options['solve_enthalpy'],
+                ff_variable=self._options['ff_variable'])
 
         # Store as attribute b/c used later to write summary output
         self.asm_templates = asm_templates
