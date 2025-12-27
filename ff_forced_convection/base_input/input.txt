@@ -1,0 +1,66 @@
+########################################################################
+# author: Francesco Pepe
+# date: 27/12/2025
+# comment: test case for pressure drop
+########################################################################
+# SETUP: Problem setup, user options, etc
+
+[Setup]
+    log_progress        = 100
+    calc_energy_balance = True
+    ff_variable = False
+
+########################################################################
+
+[Power]
+    user_power  = power.csv
+    total_power = 1e5   # Normalize power to this value
+
+########################################################################
+# CORE DETAILS: Describe characteristics of the reactor core
+
+[Core]
+    coolant_inlet_temp = 588.71        
+    coolant_material   = sodium
+    length             = 1.016   
+    assembly_pitch     = 0.3  
+    gap_model          = none
+    bypass_fraction    = 0.0        
+
+
+########################################################################
+# ASSEMBLY DETAILS: Describe a group of assemblies
+# NAME identifies a group of assemblies (e.g. "INNER_DRIVER")
+# Can be repeated for as many assemblies as required by the user.
+
+[Assembly]
+    [[xx09]]
+        mixed_convection = True
+        num_rings       = 3
+        pin_pitch       = 0.007262                          
+        pin_diameter    = 0.00584                                 
+        clad_thickness  = 0.00082                                 
+        wire_pitch      = 0.3048                                
+        wire_diameter   = 0.00142                                 
+        wire_direction  = counterclockwise
+        duct_ftf        = 0.03384, 0.04
+        duct_material   = HT9_se2anl_425                                   
+        corr_mixing     = CTD
+        corr_friction   = CTD
+        corr_flowsplit  = CTD
+        corr_nusselt    = DB
+        bypass_gap_flow_fraction = 0.00
+        [[[FuelModel]]]
+            clad_material   = HT9                      
+            gap_material    = LBE                    
+            fcgap_thickness = 0.00                   
+            r_frac   =   0.0, 0.33333, 0.66667
+            pu_frac  = 0.000,   0.000,   0.000
+            zr_frac  = 0.001,   0.001,   0.001	          
+            porosity = 0.000,   0.000,   0.000
+
+########################################################################
+
+[Assignment]
+    [[ByPosition]]
+        xx09 = 1, 1, 1, FLOWRATE=13.88
