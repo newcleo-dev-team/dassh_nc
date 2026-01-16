@@ -1659,8 +1659,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                              - self.temp['coolant_byp'][i]))
 
             dT[i] += dT_in + dT_out
-            if ebal:
-                self.update_ebal_byp(i, dz * dT_in, dz * dT_out)
 
             # Get the flow rate component
             dT[i] *= byp_fr_const
@@ -1681,7 +1679,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                              * (self.temp['coolant_byp'][i, sc_adj]
                                 - self.temp['coolant_byp'][i, sci]))
 
-            # Divide by average heat capacity
+            
+            if ebal:
+                self.update_ebal_byp(i, dz * dT_in, dz * dT_out)
+                mcpdT_i_bp = dT[i] * dz / byp_fr_const 
+                self.update_ebal(mcpdT_i = mcpdT_i_bp)
+                
             dT[i] /= self.coolant.heat_capacity
         return dT * dz
 

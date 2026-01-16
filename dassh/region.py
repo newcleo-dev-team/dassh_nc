@@ -233,7 +233,8 @@ class DASSH_Region(object):
             self.temp['duct_mw'][d] *= avg_cool_int_temp
             self.temp['duct_surf'][d] *= avg_cool_int_temp
 
-    def update_ebal(self, q_in, q_from_duct, mcpdT_i = 0, star_error = 0):
+    def update_ebal(self, q_in = 0, q_from_duct = 0, mcpdT_i = 0, 
+                    star_error = 0):
         """Update the region energy-balance tallies
 
         Parameters
