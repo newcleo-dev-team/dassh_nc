@@ -815,7 +815,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             clone._coolant_tracker = copy.deepcopy(self._coolant_tracker)
         if hasattr(self, 'pin_temps'):
             clone.pin_temps = copy.deepcopy(self.pin_temps)
-
+        if hasattr(self, '_enthalpy'):
+            clone._enthalpy = copy.deepcopy(self._enthalpy)
+        if hasattr(self, 'sc_properties'):
+            clone.sc_properties = copy.deepcopy(self.sc_properties)
+        if hasattr(self, '_sc_vel'):
+            clone._sc_vel = copy.deepcopy(self._sc_vel)
+        
         clone._setup_correlations(self.corr_names['ff'],
                                   self.corr_names['fs'],
                                   self.corr_names['mix'],

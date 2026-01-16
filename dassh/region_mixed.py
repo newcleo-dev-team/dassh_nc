@@ -12,7 +12,6 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
 from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
     MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE
 import sys
-import scipy.sparse as sp
 
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, 
@@ -266,10 +265,8 @@ class MixedRegion(RoddedRegion):
             and iter < MC_MAX_ITER:
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
-            #AA = sp.csr_matrix(self._build_matrix(dz, delta_v0, delta_rho0, RR))
             # Solve system
             xx = np.linalg.solve(AA, bb)
-            #xx = sp.linalg.spsolve(AA, bb)
             # Extract deltas from solution vector
             delta_rho = xx[0:2*nn:2]
             delta_v = xx[1:2*nn:2]
@@ -313,7 +310,7 @@ class MixedRegion(RoddedRegion):
             # Error introduced in the energy balance by h_star approximation
             delta_m = self.sc_mfr - old_mfr
             star_error = self._hstar * delta_m
-            self.update_ebal(dz*np.sum(qq), self._qw, mcpdT_i, star_error)
+            self.update_ebal(dz*np.sum(qq), self._qw * dz, mcpdT_i, star_error)
             
             
     def _copy_solution(self, drho: np.ndarray, dv: np.ndarray, 
@@ -369,8 +366,8 @@ class MixedRegion(RoddedRegion):
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
             + EEX
         # Wall convection term
-        self._qw = self._wall_convection()
-        energy_b[self.ht['conv']['ind']] += self._qw / self.params['area'][
+        self._qw = self._wall_convection() # [W/m]
+        energy_b[self.ht['conv']['ind']] += self._qw * dz / self.params['area'][
             self.subchannel.type[:nn][self.ht['conv']['ind']]]
         # Build momentum terms of the known vector
         momentum_b = GG + MEX 
