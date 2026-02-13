@@ -166,6 +166,10 @@
     pressure_drop_limit = float(min=0.0, default=None)
     recycle_results = boolean(default=False)
 
+[JFNK]
+    jfnk = boolean(default=False)
+    m_ref = float(default=0.5)
+    dp_ref = float(default=1000)
 
 [Plot]
     [[__many__]]

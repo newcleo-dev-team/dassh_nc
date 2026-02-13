@@ -90,8 +90,8 @@ class Reactor(LoggedClass):
     - oriface method to iteratively call sweep method
 
     """
-    def __init__(self, dassh_input, path=None, calc_power=True,
-                 timestep=0, **kwargs):
+    def __init__(self, dassh_input, sc_mfr_guess0 = None, path=None, 
+                 calc_power=True, timestep=0, **kwargs):
         """Initialize Reactor object for DASSH simulation
 
         Parameters
@@ -118,7 +118,8 @@ class Reactor(LoggedClass):
         else:
             self.path = path
             os.makedirs(path, exist_ok=True)
-
+        
+        self._sc_mfr_guess0 = sc_mfr_guess0
         # Store user options from input/invocation
         self.units = dassh_input.data['Setup']['Units']
         self._setup_options(dassh_input, **kwargs)
@@ -412,7 +413,8 @@ class Reactor(LoggedClass):
                 gravity=self._options['include_gravity'],
                 rad_isotropic=self._options['rad_isotropic'],
                 solve_enthalpy=self._options['solve_enthalpy'],
-                mixed_convection=self._options['mixed_convection'])
+                mixed_convection=self._options['mixed_convection'],
+                sc_mfr_guess=self._sc_mfr_guess0)
 
         # Store as attribute b/c used later to write summary output
         self.asm_templates = asm_templates
@@ -1089,7 +1091,22 @@ class Reactor(LoggedClass):
                 self._stepcount += 1
                 if self._options['log_interval'] <= self._stepcount:
                     self._print_log_msg(i)
+        for a in self.assemblies:
+            if hasattr(a.active_region, '_sc_mfr'):
+                print(a.active_region.pressure_drop)
+                np.savetxt('dp_i.csv', a.active_region.pressure_drop, 
+                           delimiter=',')
+                idx_sc_type = a.active_region.subchannel.type
+                print(idx_sc_type)
 
+                np.savetxt('mfr_interior.csv', a.active_region.sc_mfr[np.where(idx_sc_type==0)[0]], delimiter=',')
+                np.savetxt('mfr_edge.csv', a.active_region.sc_mfr[np.where(idx_sc_type==1)[0]], delimiter=',')
+                np.savetxt('mfr_corner.csv', a.active_region.sc_mfr[np.where(idx_sc_type==2)[0]], delimiter=',')
+            else:
+                idx_sc_type = a.active_region.subchannel.type
+                np.savetxt('mfr_isc.csv', [a.active_region.sc_mfr[np.where(idx_sc_type==0)[0][0]],
+                                           a.active_region.sc_mfr[np.where(idx_sc_type==1)[0][0]],
+                                           a.active_region.sc_mfr[np.where(idx_sc_type==2)[0][0]]], delimiter=',')
         # Once the sweep is done close the CSV data files, if open
         try:
             self._data_close()

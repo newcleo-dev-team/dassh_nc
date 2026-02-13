@@ -73,7 +73,7 @@ class Assembly(LoggedClass):
                  flow_rate, origin=(0.0, 0.0), se2geo=False,
                  param_update_tol=0.0, gravity=False, rad_isotropic=True, 
                  solve_enthalpy = False, mixed_convection=False, 
-                 mixed_convection_rel_tol=1e-3):
+                 mixed_convection_rel_tol=1e-3, sc_mfr_guess = None):
         """Instantiate Assembly object."""
         # Instantiate Logger
         LoggedClass.__init__(self, 4, 'dassh.Assembly')
@@ -118,7 +118,8 @@ class Assembly(LoggedClass):
                                        param_update_tol,
                                        gravity,
                                        rad_isotropic,
-                                       solve_enthalpy)
+                                       solve_enthalpy,
+                                       sc_mfr_guess)
                 ]
 
         # Create other requested unrodded regions

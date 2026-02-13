@@ -818,19 +818,30 @@ Notes
             a = reactor_obj.assemblies[i]
             if a.has_rodded:
                 ar = a.rodded
-                params = [a.name,
-                          _fmt_pos(a.loc),
-                          self._ffmt3.format(
-                              l_conv(ar.coolant_int_params['vel'])),
-                          self._ffmt3.format(
-                              l_conv(ar.coolant_int_params['vel']
-                                     * ar.coolant_int_params['fs'][0])),
-                          self._ffmt3.format(
-                              l_conv(ar.coolant_int_params['vel']
-                                     * ar.coolant_int_params['fs'][1])),
-                          self._ffmt3.format(
-                              l_conv(ar.coolant_int_params['vel']
-                                     * ar.coolant_int_params['fs'][2]))]
+                if hasattr(ar, '_sc_mfr'):
+                    v1, v2, v3 = ar._calc_average_velocities()
+                    params = [a.name,
+                              _fmt_pos(a.loc),
+                              self._ffmt3.format(
+                                l_conv(ar.coolant_int_params['vel'])),
+                              
+                              self._ffmt3.format(l_conv(v1)),
+                              self._ffmt3.format(l_conv(v2)),
+                              self._ffmt3.format(l_conv(v3))]
+                else:
+                    params = [a.name,
+                            _fmt_pos(a.loc),
+                            self._ffmt3.format(
+                                l_conv(ar.coolant_int_params['vel'])),
+                            self._ffmt3.format(
+                                l_conv(ar.coolant_int_params['vel']
+                                        * ar.coolant_int_params['fs'][0])),
+                            self._ffmt3.format(
+                                l_conv(ar.coolant_int_params['vel']
+                                        * ar.coolant_int_params['fs'][1])),
+                            self._ffmt3.format(
+                                l_conv(ar.coolant_int_params['vel']
+                                        * ar.coolant_int_params['fs'][2]))]
                 if hasattr(ar, 'coolant_byp_params'):
                     params.append(self._ffmt3.format(
                         l_conv(ar.coolant_byp_params['vel'][0])))
@@ -919,7 +930,7 @@ class PressureDropTable(LoggedClass, DASSH_Table):
             params = [a.name, _fmt_pos(a.loc)]
 
             # Include total pressure drop
-            params.append(self._ffmt4e.format(a.pressure_drop / 1e6))
+            params.append(self._ffmt4e.format(np.mean(a.pressure_drop) / 1e6))
 
             # Separate out pressure drop due to friction and losses
             # due to spacer grids, if applicable.
@@ -928,18 +939,19 @@ class PressureDropTable(LoggedClass, DASSH_Table):
                 spacer = a.rodded._pressure_drop['spacer_grid']
                 gravity = sum(x._pressure_drop['gravity'] for x in a.region)
                 friction = sum(x._pressure_drop['friction'] for x in a.region)
-                assert a.pressure_drop - spacer - gravity - friction < 1e-6
-                params[-3] = self._ffmt4e.format(friction / 1e6)
-                if spacer > 0.0:
-                    params[-2] = self._ffmt4e.format(spacer / 1e6)
+                assert np.abs(np.mean(a.pressure_drop) - np.mean(spacer) 
+                              - np.mean(gravity) - np.mean(friction)) < 1e-6
+                params[-3] = self._ffmt4e.format(np.mean(friction) / 1e6)
+                if np.mean(spacer) > 0.0:
+                    params[-2] = self._ffmt4e.format(np.mean(spacer) / 1e6)
                 if reactor_obj._options['include_gravity']:
-                    params[-1] = self._ffmt4e.format(gravity / 1e6)
+                    params[-1] = self._ffmt4e.format(np.mean(gravity) / 1e6)
 
             # Fill up the row with blanks; replace as applicable
             params += ['' for ri in range(n_reg)]
             for ri in range(len(a.region)):
                 params[ri + 6] = self._ffmt4e.format(
-                    a.region[ri].pressure_drop / 1e6)
+                    np.mean(a.region[ri].pressure_drop) / 1e6)
             # self.add_row(_fmt_idx(a.id), params)
             self.add_row(_fmt_idx(i), params)
 

@@ -26,6 +26,8 @@ import argparse
 import cProfile
 import logging
 import dassh
+from scipy.optimize import newton_krylov
+from functools import partial
 _log_info = 20  # logging levels must be int
 
 
@@ -70,18 +72,21 @@ def main(args=None):
     # check_version(dassh_input, dassh_logger, args.save_reactor)
 
     # DASSH calculation without orificing optimization
-    if dassh_input.data['Orificing'] is False:
+    if dassh_input.data['Orificing']:
+        # Orificing optimization with DASSH
+        orifice_obj = dassh.orificing.Orificing(dassh_input)
+        orifice_obj.optimize()
+    else:
         arg_dict = {
             'save_reactor': args.save_reactor,
             'verbose': args.verbose,
             'no_power_calc': args.no_power_calc
         }
-        run_dassh(dassh_input, arg_dict)
-
-    # Orificing optimization with DASSH
-    else:
-        orifice_obj = dassh.orificing.Orificing(dassh_input)
-        orifice_obj.optimize()
+        if dassh_input.data['JFNK']['jfnk']:
+            dassh_logger.log(_log_info, 'Running DASSH with JFNK solver')
+            run_JFNK(dassh_input, arg_dict)
+        else:
+            run_dassh(dassh_input, arg_dict)
 
     # Finish the calculation
     dassh_logger.log(_log_info, 'DASSH execution complete')
@@ -121,7 +126,7 @@ def check_version(dassh_inp, save_reactor):
         pass
 
 
-def run_dassh(dassh_input, rx_args):
+def run_dassh(dassh_input, rx_args, mfr_guess0=None):
     """Run DASSH without orificing optimization"""
     # For each timestep in the DASSH input, create the necessary DASSH
     # DASSH objects, run DASSH, and process the results
@@ -157,7 +162,8 @@ def run_dassh(dassh_input, rx_args):
                 )
             )
         else:
-            _run_dassh(dassh_input, rx_args, i, working_dir)
+            _run_dassh(dassh_input, rx_args, i, working_dir, 
+                       mfr_guess0=mfr_guess0)
 
     # Clean up from parallel execution, if applicable
     if dassh_input.data['Setup']['parallel']:
@@ -168,7 +174,7 @@ def run_dassh(dassh_input, rx_args):
         pool.join()
 
 
-def _run_dassh(dassh_inp, args, timestep, wdir, link=None):
+def _run_dassh(dassh_inp, args, timestep, wdir, link=None, mfr_guess0=None):
     """Run DASSH for a single timestep
 
     Parameters
@@ -210,6 +216,7 @@ def _run_dassh(dassh_inp, args, timestep, wdir, link=None):
 
     # Initialize the Reactor object
     reactor = dassh.Reactor(dassh_inp,
+                            sc_mfr_guess0=mfr_guess0,
                             calc_power=args['no_power_calc'],
                             path=wdir,
                             timestep=timestep,
@@ -341,5 +348,45 @@ def integrate_pin_power(args=None):
     dassh_logger.log(_log_info, 'DASSH_POWER execution complete')
 
 
+def run_JFNK(dassh_input: dassh.DASSH_Input, arg_dict: dict):
+    """Set up DASSH Reactor object, run with JFNK solver, and write output"""
+    m_ref = dassh_input.data['JFNK']['m_ref']
+    dp_ref = dassh_input.data['JFNK']['dp_ref']
+    
+    for asm in dassh_input.data['Assembly']:
+        n_ring = dassh_input.data['Assembly'][asm]['num_rings']
+    Nsc = 6 * (n_ring**2 - n_ring + 1)
+    
+    m = np.ones(Nsc) * m_ref / Nsc
+    u0 = np.zeros(Nsc+1)
+    for it in range(10):
+        print(m)
+        run_dassh(dassh_input, arg_dict, mfr_guess0=m)
+        dpi = np.genfromtxt('dp_i.csv', delimiter=',')
+        u0[:-1] = m / m_ref 
+        u0[-1] = 1.0
+        Ffun = partial(fun_eqs,dpi=dpi/m**2, m_ref=m_ref,dp_ref=dp_ref,mtot=m_ref)
+        sol = newton_krylov(Ffun,u0,method='gmres',f_tol=1e-12,maxiter=100)
+        m = sol[:-1] * m_ref
+        
+        
+def read_mfr_dpi():
+    """Read mass flow rate and pressure drop from DASSH output files"""
+    mfr = np.genfromtxt('mfr_i.csv', delimiter=',')
+    dpi = np.genfromtxt('dp_i.csv', delimiter=',')
+    return mfr, dpi
+
+def fun_eqs(u,dpi, m_ref, dp_ref, mtot):
+
+    m  = u[:-1] * m_ref
+    dp = u[-1] * dp_ref
+
+    F = np.zeros_like(u)
+    F[:-1] = (dpi*m**2 - dp) / dp_ref
+    F[-1]  = (np.sum(m) - mtot) / m_ref
+
+    return F
+    
+        
 if __name__ == '__main__':
     main()
