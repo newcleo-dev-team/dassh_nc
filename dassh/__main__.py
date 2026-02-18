@@ -84,7 +84,7 @@ def main(args=None):
         }
         if dassh_input.data['JFNK']['jfnk']:
             dassh_logger.log(_log_info, 'Running DASSH with JFNK solver')
-            run_JFNK(dassh_input, arg_dict)
+            run_mass_flow_optimization(dassh_input, arg_dict)
         else:
             run_dassh(dassh_input, arg_dict)
 
@@ -348,26 +348,20 @@ def integrate_pin_power(args=None):
     dassh_logger.log(_log_info, 'DASSH_POWER execution complete')
 
 
-def run_JFNK(dassh_input: dassh.DASSH_Input, arg_dict: dict):
+def run_mass_flow_optimization(dassh_input: dassh.DASSH_Input, arg_dict: dict):
     """Set up DASSH Reactor object, run with JFNK solver, and write output"""
     m_ref = dassh_input.data['JFNK']['m_ref']
     dp_ref = dassh_input.data['JFNK']['dp_ref']
-    
     for asm in dassh_input.data['Assembly']:
         n_ring = dassh_input.data['Assembly'][asm]['num_rings']
     Nsc = 6 * (n_ring**2 - n_ring + 1)
     
     m = np.ones(Nsc) * m_ref / Nsc
-    u0 = np.zeros(Nsc+1)
     for it in range(10):
-        print(m)
         run_dassh(dassh_input, arg_dict, mfr_guess0=m)
         dpi = np.genfromtxt('dp_i.csv', delimiter=',')
-        u0[:-1] = m / m_ref 
-        u0[-1] = 1.0
-        Ffun = partial(fun_eqs,dpi=dpi/m**2, m_ref=m_ref,dp_ref=dp_ref,mtot=m_ref)
-        sol = newton_krylov(Ffun,u0,method='gmres',f_tol=1e-12,maxiter=100)
-        m = sol[:-1] * m_ref
+        
+        m = np.sqrt(dp_ref / (dpi / m**2))
         
         
 def read_mfr_dpi():
@@ -375,6 +369,13 @@ def read_mfr_dpi():
     mfr = np.genfromtxt('mfr_i.csv', delimiter=',')
     dpi = np.genfromtxt('dp_i.csv', delimiter=',')
     return mfr, dpi
+
+def read_deltaPbundle():
+    """Read bundle pressure drop from DASSH output files"""
+    with open("dassh.out") as f:
+        lines = f.readlines()
+        parts = lines[129].strip().split()
+    return parts[5]
 
 def fun_eqs(u,dpi, m_ref, dp_ref, mtot):
 

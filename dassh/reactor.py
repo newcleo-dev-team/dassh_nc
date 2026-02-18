@@ -1093,11 +1093,9 @@ class Reactor(LoggedClass):
                     self._print_log_msg(i)
         for a in self.assemblies:
             if hasattr(a.active_region, '_sc_mfr'):
-                print(a.active_region.pressure_drop)
                 np.savetxt('dp_i.csv', a.active_region.pressure_drop, 
                            delimiter=',')
                 idx_sc_type = a.active_region.subchannel.type
-                print(idx_sc_type)
 
                 np.savetxt('mfr_interior.csv', a.active_region.sc_mfr[np.where(idx_sc_type==0)[0]], delimiter=',')
                 np.savetxt('mfr_edge.csv', a.active_region.sc_mfr[np.where(idx_sc_type==1)[0]], delimiter=',')
