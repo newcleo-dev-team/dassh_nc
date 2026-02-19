@@ -7,4 +7,4 @@ In detail, this folder contains the following items:
 - _solver_evaluation.ipynb_: computes average time effort for each method;
 - *_common.py*: contains common variables and functions;
 - *power.csv*: power distribution for the test case;
-- the subfolders *greene*, *numpy*, *scipy*, containing input files to be runned by dassh.
+- the subfolders *greene*, *numpy*, *scipy*, containing input files to be run by dassh.
