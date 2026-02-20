@@ -544,7 +544,7 @@ representation of the flow is not accurate.
         # Float formatting option
         self._ffmt = '{' + f':.{self.dp}E' + '}'
         # Inherit from DASSH_Table
-        DASSH_Table.__init__(self, 8, col_width, col0_width, sep)
+        DASSH_Table.__init__(self, 10, col_width, col0_width, sep)
 
     def make(self, r_obj):
         """Create the table
@@ -561,7 +561,7 @@ representation of the flow is not accurate.
         mfr_conv = self._get_mfr_conv(fr_unit)
         len_conv = self._get_len_conv(len_unit)
         self.add_row('', ['', '', 'Flow rate', 'Power', 'dz',
-                          'Limiting', '', 'Forced'])
+                          'Limiting', '', 'Forced', '', 'Natural'])
         self.add_row('Asm.', ['Name',
                               'Loc.',
                               f'({fr_unit})',
@@ -569,7 +569,9 @@ representation of the flow is not accurate.
                               f'({len_unit})',
                               'SC',
                               'Gr*',
-                              'Conv Repr'])
+                              'convection',
+                              'Y*',
+                              'convection'])
         self.add_horizontal_line()
         for i in range(len(r_obj.assemblies)):
             a = r_obj.assemblies[i]
@@ -578,15 +580,21 @@ representation of the flow is not accurate.
             # Calculate Gr_star
             if a.has_rodded:
                 try:
-                    gr_star, gr_star_crit = \
+                    gr_star, is_forced_conv, y_star, is_natural_conv = \
                         self._determine_applicability(
                             a, r_obj.inlet_temp, r_obj.core_length)
+                    
                 except (AttributeError, TypeError, AssertionError):
                     gr_star = _OMIT
-                    gr_star_crit = _OMIT
+                    is_forced_conv = _OMIT
+                    y_star = _OMIT
+                    is_natural_conv = _OMIT
             else:
                 gr_star = _OMIT
-                gr_star_crit = _OMIT
+                is_forced_conv = _OMIT
+                y_star = _OMIT
+                is_natural_conv = _OMIT
+                
             self.add_row(
                 # _fmt_idx(a.id),
                 _fmt_idx(i),
@@ -597,7 +605,9 @@ representation of the flow is not accurate.
                  self._ffmt.format(len_conv(r_obj.min_dz['dz'][i])),
                  str(r_obj.min_dz['sc'][i]),
                  gr_star,
-                 gr_star_crit]
+                 is_forced_conv,
+                 y_star,
+                 is_natural_conv]
             )
         if r_obj.core.model == 'flow':
             core_fr = mfr_conv(r_obj.core.gap_flow_rate)
@@ -609,24 +619,34 @@ representation of the flow is not accurate.
                                  self._ffmt.format(core_dz),
                                  str(r_obj.min_dz['sc'][-1]),
                                  _OMIT,
+                                 _OMIT,
+                                 _OMIT,
+                                 _OMIT,
                                  _OMIT])
 
     def _determine_applicability(self, asm, t_inlet, core_len):
         """x"""
         pin_power_skew = asm.power.calculate_pin_power_skew()
-        gr_star = self._calc_modified_gr(asm.rodded,
+        gr_star, y_star = self._calc_gr_star_and_y_star(asm.rodded,
                                          t_inlet,
                                          asm._estimated_T_out,
                                          pin_power_skew,
                                          core_len)
         if gr_star >= 0.02:
-            gr_star_crit = 'ERROR'
+            gr_star_crit = 'NO'
         else:
             gr_star_crit = str(u'\u2713')  # check mark
         gr_star = self._ffmt.format(gr_star)  # format for table
-        return gr_star, gr_star_crit
+        
+        if y_star < 100:
+            y_star_crit = 'NO'
+        else:
+            y_star_crit = str(u'\u2713')  # check mark
+        y_star = self._ffmt.format(y_star)  # format for table
+        return gr_star, gr_star_crit, y_star, y_star_crit
 
-    def _calc_modified_gr(self, rr, t_in, t_out, pskew, length):
+    def _calc_gr_star_and_y_star(self, rr, t_in, t_out, pskew, length) \
+        -> tuple[float]:
         """Calculate modified Grashof number to evaluate importance of
         buoyancy effects on flow distribution in bundle
 
@@ -645,9 +665,10 @@ representation of the flow is not accurate.
 
         Returns
         -------
-        float
+        tuple[float]
             Modified Grashof number to be evaluated against critical
             Grashof number (Gr*_C = 0.2)
+            Y* factor to be evaluated against critical Y* (Y*_C = 100)
 
         Notes
         -----
@@ -698,9 +719,11 @@ representation of the flow is not accurate.
         beta = rr.coolant.beta
         Gr = g0 * beta * (t_out - t_in) * rr.params['de'][0]**3 / kvisc**2
         Gr_star = Gr * chi / ff / Re**2
+        # Evaluate Y*
+        Y_star = Gr / Re
         # Re-update coolant properties at the inlet temperature
         rr._update_coolant_int_params(t_in)
-        return Gr_star
+        return Gr_star, Y_star
 
 
 ########################################################################
@@ -901,7 +924,7 @@ class PressureDropTable(LoggedClass, DASSH_Table):
             # Separate out pressure drop due to friction and losses
             # due to spacer grids, if applicable.
             params += ['---', '---', '---']
-            if a.has_rodded:
+            if a.has_rodded and not reactor_obj._options['mixed_convection']:
                 spacer = a.rodded._pressure_drop['spacer_grid']
                 gravity = sum(x._pressure_drop['gravity'] for x in a.region)
                 friction = sum(x._pressure_drop['friction'] for x in a.region)
@@ -954,22 +977,27 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         C - Heat transferred to assembly-interior coolant through duct wall (W)
         D - Heat transferred to double-duct bypass coolant through duct walls (W)
         E - Assembly coolant mass flow rate (kg/s)"""
-        
-        if r_obj._options['solve_enthalpy']:
+
+        if r_obj._options['solve_enthalpy'] or \
+            r_obj._options['mixed_convection']:
             self.notes += """
-        F - Heat received by the assembly coolant (W)
+        F - Power removed by the coolant (W)"""
+            if r_obj._options['mixed_convection']:
+                self.notes += """
+        G - Error introduced by approximation on H* (W)
+        SUM - Assembly energy balance: A + C + D - F (W)
+        ERROR - SUM / (A + B)\n"""
+            else: 
+                self.notes += """
         G - Assembly coolant temperature rise (K)
         SUM - Assembly energy balance: A + C + D - F (W)
-        """
-
+        ERROR - SUM / (A + B)\n"""
         else:
             self.notes += """
         F - Assembly axially averaged heat capacity (J/kg-K)
         G - Assembly coolant temperature rise (K)
         SUM - Assembly energy balance: A + C + D - E * F * G (W)
-        """
-        
-        self.notes += """ERROR - SUM / (A + B)""" + "\n"
+        ERROR - SUM / (A + B)\n"""
         
         self.add_row('Asm.', ['A', 'B', 'C', 'D', 'E', 'F', 'G',
                               'SUM', 'ERROR'])
@@ -981,12 +1009,12 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
 
         # Use numpy for the calculations based on the preceding data;
         # calculated energy from temp rise and the sum (ebal[:, 7])
-        if r_obj._options['solve_enthalpy']:
-            ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - ebal[:, 5]
+        if r_obj._options['mixed_convection'] \
+            or r_obj._options['solve_enthalpy']:
+            removed_power = ebal[:, 5]
         else:
-            ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - \
-                ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
-
+            removed_power = ebal[:, 4] * ebal[:, 5] * ebal[:, 6]
+        ebal[:, 7] = np.sum(ebal[:, (0, 2, 3)], axis=1) - removed_power
         # Error
         for i in range(len(ebal)):
             total_power = ebal[i, 0] + ebal[i, 1]
@@ -1045,8 +1073,11 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
                 if 'duct_byp_in' in reg.ebal:
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_in'])
                     ebal_asm[3] += np.sum(reg.ebal['duct_byp_out'])
-                if r_obj._options['solve_enthalpy']:
+                if r_obj._options['solve_enthalpy'] or \
+                    r_obj._options['mixed_convection']:
                     ebal_asm[5] = reg.ebal['mcpdT_i']
+                    if r_obj._options['mixed_convection']:
+                        ebal_asm[6] = reg.ebal['star_error']
                 else:
                     ebal_asm[5] = reg.ebal['mcpdT_i'] / asm.flow_rate / \
                         (asm.avg_coolant_temp - r_obj.inlet_temp)
@@ -1056,7 +1087,8 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         if ebal_asm[5] == 0:
             ebal_asm[5] = self._get_asm_avg_cp(asm, r_obj)
         # Temperature rise
-        ebal_asm[6] = asm.avg_coolant_temp - r_obj.inlet_temp
+        if ebal_asm[6] == 0:
+            ebal_asm[6] = asm.avg_coolant_temp - r_obj.inlet_temp
         return ebal_asm
 
     def _calc_gap_energy_balance(self, r_obj):
@@ -1095,15 +1127,15 @@ class AssemblyEnergyBalanceTable(LoggedClass, DASSH_Table):
         core_tot[6] = numerator / denominator
 
         # Calculate total energy change due to temp rise
-        if r_obj._options['solve_enthalpy']:
+        if r_obj._options['mixed_convection'] \
+            or r_obj._options['solve_enthalpy']:
             core_tot[7] = core_tot[0] + core_tot[1] - np.sum(asm_ebal[:, 5])
         else:
             core_tot[7] = (core_tot[0] + core_tot[1]
                            - core_tot[4] * core_tot[5] * core_tot[6])
-        
         if r_obj.core.model == 'flow':
             core_tot[7] -= gap_ebal[4] * gap_ebal[5] * gap_ebal[6]
-           
+    
         total_power = core_tot[0] + core_tot[1]
         if total_power == 0.0:
             core_tot[8] = np.nan

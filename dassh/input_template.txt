@@ -8,11 +8,13 @@
     se2geo = boolean(default=False)
     debug = boolean(default=False)
     param_update_tol = float(min=0.0, max=1.0, default=0.0)
+    mixed_convection_rel_tol = float(default=1e-3)
     parallel = boolean(default=False)
     n_cpu = integer(min=1, default=None)
     include_gravity_head_loss = boolean(default=False)
     radially_isotropic_properties = boolean(default=True)
     solve_enthalpy = boolean(default=False)
+    mixed_convection = boolean(default=False)
     [[Dump]]
         all = boolean(default=False)
         coolant = boolean(default=False)
@@ -101,6 +103,8 @@
         bypass_gap_loss_coeff = float(default=None)
         shape_factor = float(default=1.0)
         use_low_fidelity_model = boolean(default=False)
+        verbose = boolean(default=False)
+        accurate_star_quantities = boolean(default=False)
         low_fidelity_model = option(simple, 6node, default=simple)
         convection_factor = string(default="calculate")
         [[[AxialRegion]]]

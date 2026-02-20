@@ -203,12 +203,16 @@ class Reactor(LoggedClass):
         self._options['se2geo'] = inp.data['Setup']['se2geo']
         self._options['param_update_tol'] = \
             inp.data['Setup']['param_update_tol']
+        self._options['mixed_convection_rel_tol'] = \
+            inp.data['Setup']['mixed_convection_rel_tol']
         self._options['include_gravity'] = \
             inp.data['Setup']['include_gravity_head_loss']
         self._options['rad_isotropic'] = \
             inp.data['Setup']['radially_isotropic_properties']
         self._options['solve_enthalpy'] = \
             inp.data['Setup']['solve_enthalpy']
+        self._options['mixed_convection'] = \
+            inp.data['Setup']['mixed_convection']
         if 'AssemblyTables' in inp.data['Setup'].keys():
             self._options['AssemblyTables'] = \
                 inp.data['Setup']['AssemblyTables']
@@ -404,9 +408,11 @@ class Reactor(LoggedClass):
                 mfrx,
                 se2geo=self._options['se2geo'],
                 param_update_tol=self._options['param_update_tol'],
+                mixed_convection_rel_tol=self._options['mixed_convection_rel_tol'],
                 gravity=self._options['include_gravity'],
                 rad_isotropic=self._options['rad_isotropic'],
-                solve_enthalpy=self._options['solve_enthalpy'])
+                solve_enthalpy=self._options['solve_enthalpy'],
+                mixed_convection=self._options['mixed_convection'])
 
         # Store as attribute b/c used later to write summary output
         self.asm_templates = asm_templates
@@ -683,6 +689,9 @@ class Reactor(LoggedClass):
             # for each region at the assembly axial-average temperature
             t_avg = (self.inlet_temp + To[i]) / 2
             for reg in asm.region:
+                if self._options['mixed_convection']:
+                    reg._init_static_correlated_params(self.inlet_temp)
+                    continue
                 reg._init_static_correlated_params(t_avg)
 
             # Add the assembly to the list.
@@ -1233,7 +1242,8 @@ class Reactor(LoggedClass):
         # Perform the calculation, write the results to CSV
         asm.calculate(dz, gap_temp, gap_htc,
                       adiabatic=self._is_adiabatic,
-                      ebal=self._options['ebal'])
+                      ebal=self._options['ebal'],
+                      mixed_convection=self._options['mixed_convection'])
         if dump_step:
             asm.write(self._options['dump']['files'], gap_temp)
         return asm

@@ -416,8 +416,8 @@ class TestEnthalpyTemperatureConversion():
     """       
 
     mat_dict: dict[str, Material] = {
-        mat: Material(mat,temperature=mat_data.enthalpy['T1'], 
-                      solve_enthalpy=True) \
+        mat: Material(mat, temperature=mat_data.enthalpy['T1'], 
+                      solve_enthalpy=True, mixed_convection=True) \
                           for mat in mat_data.enthalpy['coeffs_h2T'].keys()}
     """Dictionary of Material objects with solve_enthalpy set to True"""
     
@@ -432,13 +432,14 @@ class TestEnthalpyTemperatureConversion():
 
     def test_temp_from_enthalpy(self):
         """
-        Test the temp_from_enthalpy method of the Material class
+        Test the enthalpy-temperature conversion method of the Material class
         """
         for mat in mat_data.enthalpy['h2'].keys():
             mm = self.mat_dict[mat]
-            assert mm.temp_from_enthalpy(mat_data.enthalpy['h2'][mat]) == \
-                pytest.approx(mat_data.enthalpy['T2'],
-                              abs=mat_data.enthalpy['tol'])
+            assert mm.convert_properties(
+                enthalpy=mat_data.enthalpy['h2'][mat]) == \
+                    pytest.approx(mat_data.enthalpy['T2'],
+                                  abs=mat_data.enthalpy['tol'])
                 
     def test_enthalpy_from_temp(self):
         """
@@ -448,3 +449,24 @@ class TestEnthalpyTemperatureConversion():
             mm = self.mat_dict[mat]
             assert mm.enthalpy_from_temp(mat_data.enthalpy['T2']) == \
                 pytest.approx(mat_data.enthalpy['h2'][mat])
+                
+    def test_read_rho2h_coefficients(self):
+        """
+        Test the _read_enthalpy_coefficients method of the Material class 
+        for density-enthalpy conversion
+        """
+        for mat in mat_data.enthalpy['coeffs_rho2h'].keys():
+            mm = self.mat_dict[mat]
+            assert mm.coeffs_rho2h == \
+                pytest.approx(mat_data.enthalpy['coeffs_rho2h'][mat])
+                
+    def test_enthalpy_from_density(self):
+        """
+        Test the density-enthalpy conversion method of the Material class
+        """
+        for mat in mat_data.enthalpy['h2'].keys():
+            mm = self.mat_dict[mat]
+            assert mm.convert_properties(
+                density=mat_data.enthalpy['density2'][mat]) == \
+                    pytest.approx(mat_data.enthalpy['h2'][mat],
+                                  rel=mat_data.enthalpy['tol'])

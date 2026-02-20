@@ -20,6 +20,7 @@ Methods to describe the components of hexagonal fuel typical of
 liquid metal fast reactors
 """
 ########################################################################
+from __future__ import annotations
 import re
 import sys
 import copy
@@ -32,13 +33,72 @@ from dassh.logged_class import LoggedClass
 from dassh.correlations import check_correlation
 from dassh.region import DASSH_Region
 from dassh.pin_model import PinModel
-from dassh.material import _MatTracker
+from dassh.material import _MatTracker, Material
 from typing import Union, Dict, List
-from ._commons import SQRT3, SQRT3OVER3, Q_P2SC, PROPS_NAME
+from dassh._commons import SQRT3, SQRT3OVER3, Q_P2SC, PROPS_NAME
 
+module_logger = logging.getLogger(__name__)
 
+def specify_region_details(rr: RoddedRegion, 
+                           inp: dict[str, dict[str, float]], 
+                           mat: dict[str, Material]) -> RoddedRegion:
+    """
+    Specify additional details of the RoddedRegion object within
+    an Assembly
+    
+    Parameters
+    ----------
+    rr : RoddedRegion
+        The RoddedRegion object to specify
+    inp : dict[str, dict[str, float]]
+        DASSH "Assembly" input dictionary
+        dassh_input.data['Assembly'][...]
+    mat : dict[str, Material]
+        Dictionary of DASSH material objects (coolant, duct, pin, clad)
+    Returns
+    -------
+    RoddedRegion
+        RoddedRegion object
+    """
+    # Add z lower/upper boundaries
+    rr.z = [inp['AxialRegion']['rods']['z_lo'],
+            inp['AxialRegion']['rods']['z_hi']]
 
-module_logger = logging.getLogger('dassh.region_rodded')
+    # Add fuel pin model, if requested
+    if 'FuelModel' in inp.keys():
+        if inp['FuelModel']['htc_params_clad'] is None:
+            p2d = inp['pin_pitch'] / inp['pin_diameter']
+            inp['FuelModel']['htc_params_clad'] = \
+                [p2d**3.8 * 0.01**0.86 / 3.0,
+                 0.86, 0.86, 4.0 + 0.16 * p2d**5]
+        rr.pin_model = PinModel(inp['pin_diameter'],
+                                inp['clad_thickness'],
+                                mat['clad'],
+                                fuel_params=inp['FuelModel'],
+                                gap_mat=mat['gap'])
+    elif 'PinModel' in inp.keys():
+        if inp['PinModel']['htc_params_clad'] is None:
+            p2d = inp['pin_pitch'] / inp['pin_diameter']
+            inp['PinModel']['htc_params_clad'] = \
+                [p2d**3.8 * 0.01**0.86 / 3.0,
+                 0.86, 0.86, 4.0 + 0.16 * p2d**5]
+        inp['PinModel']['pin_material'] = \
+            [x.clone() for x in mat['pin']]
+        rr.pin_model = PinModel(inp['pin_diameter'],
+                                inp['clad_thickness'],
+                                mat['clad'],
+                                pin_params=inp['PinModel'],
+                                gap_mat=mat['gap'])
+
+    if hasattr(rr, 'pin_model'):
+        # Only the last 6 columns are for data:
+        # (local avg coolant temp, clad OD/MW/ID, fuel OD/CL);
+        # The first 4 columns are for identifying stuff:
+        # (id, z (remains blank), pin number)
+        rr.pin_temps = np.zeros((rr.n_pin, 9))
+        # Fill with pin numbers
+        rr.pin_temps[:, 2] = np.arange(0, rr.n_pin, 1)
+    return rr
 
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False, 
@@ -81,6 +141,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False,
                       inp['clad_thickness'],
                       inp['duct_ftf'],
                       fr,
+                      inp['mixed_convection'],
                       mat['coolant'],
                       mat['duct'],
                       inp['htc_params_duct'],
@@ -99,48 +160,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False,
                       gravity, 
                       rad_isotropic,
                       solve_enthalpy)
-
-    # Add z lower/upper boundaries
-    rr.z = [inp['AxialRegion']['rods']['z_lo'],
-            inp['AxialRegion']['rods']['z_hi']]
-
-    # Add fuel pin model, if requested
-    if 'FuelModel' in inp.keys():
-        if inp['FuelModel']['htc_params_clad'] is None:
-            p2d = inp['pin_pitch'] / inp['pin_diameter']
-            inp['FuelModel']['htc_params_clad'] = \
-                [p2d**3.8 * 0.01**0.86 / 3.0,
-                 0.86, 0.86, 4.0 + 0.16 * p2d**5]
-        rr.pin_model = PinModel(inp['pin_diameter'],
-                                inp['clad_thickness'],
-                                mat['clad'],
-                                fuel_params=inp['FuelModel'],
-                                gap_mat=mat['gap'])
-    elif 'PinModel' in inp.keys():
-        if inp['PinModel']['htc_params_clad'] is None:
-            p2d = inp['pin_pitch'] / inp['pin_diameter']
-            inp['PinModel']['htc_params_clad'] = \
-                [p2d**3.8 * 0.01**0.86 / 3.0,
-                 0.86, 0.86, 4.0 + 0.16 * p2d**5]
-        inp['PinModel']['pin_material'] = \
-            [x.clone() for x in mat['pin']]
-        rr.pin_model = PinModel(inp['pin_diameter'],
-                                inp['clad_thickness'],
-                                mat['clad'],
-                                pin_params=inp['PinModel'],
-                                gap_mat=mat['gap'])
-    else:
-        pass
-
-    if hasattr(rr, 'pin_model'):
-        # Only the last 6 columns are for data:
-        # (local avg coolant temp, clad OD/MW/ID, fuel OD/CL);
-        # The first 4 columns are for identifying stuff:
-        # (id, z (remains blank), pin number)
-        rr.pin_temps = np.zeros((rr.n_pin, 9))
-        # Fill with pin numbers
-        rr.pin_temps[:, 2] = np.arange(0, rr.n_pin, 1)
-    return rr
+    return specify_region_details(rr, inp, mat)
 
 
 class RoddedRegion(LoggedClass, DASSH_Region):
@@ -282,18 +302,20 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     """
     def __init__(self, name, n_ring, pin_pitch, pin_diam, wire_pitch,
-                 wire_diam, clad_thickness, duct_ftf, flow_rate,
+                 wire_diam, clad_thickness, duct_ftf, flow_rate, mc,
                  coolant_mat, duct_mat, htc_params_duct, corr_friction,
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
                  param_update_tol=0.0, gravity=False, rad_isotropic=True,
                  solve_enthalpy=False):
-        """Instantiate RoddedRegion object"""
-        # Instantiate Logger
-        LoggedClass.__init__(self, 4, 'dassh.RoddedRegion')
+        """Instantiate RoddedRegion object"""        
         # Flag for non-isotropic coolant properties (radially)
         self._rad_isotropic = rad_isotropic
+        # Flag for mixed convection (used in tables)
+        self._mixed_convection = mc
+        # Instantiate logger
+        LoggedClass.__init__(self, 4, self.__module__)
         # Flag for enthalpy calculation
         self._ent = solve_enthalpy
         # Check that the energy equation is solved for enthalpy only in case of 
@@ -575,7 +597,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
     def _setup_ht_constants(self):
         """Setup heat transfer constants in numpy arrays"""
-        const = calculate_ht_constants(self)
+        const = calculate_ht_constants(self, mixed=False)
         # self.ht_consts = const
         self.ht = {}
         self.ht['old'] = const
@@ -591,8 +613,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                             * self.bundle_params['area']
                             / self.params['area']
                             / self.int_flow_rate)
-        self.ht['cond'] = _setup_conduction_constants(self, const)
-        self.ht['conv'] = _setup_convection_constants(self, const)
+        self.ht['cond'] = setup_conduction_constants(self, const)
+        self.ht['conv'] = setup_convection_constants(self, const)
 
     def _setup_correlations(self, ff, fs, mix, nu, sf, warn=True):
         """Import correlations and load any constants
@@ -615,7 +637,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 
         """
         self.corr, self.corr_names, self.corr_constants = \
-            import_corr(ff, fs, mix, nu, sf, self, warn)
+            import_corr(ff, fs, mix, nu, sf, self, warn, 
+                        self._mixed_convection)
         self.coolant_int_params = \
             {'Re': 0.0,  # bundle-average Reynolds number
              'Re_sc': np.zeros(3),  # subchannel Reynolds numbers
@@ -626,8 +649,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
              'swirl': np.zeros(3),  # swirl velocity.
              'htc': np.zeros(3)}  # heat transfer coefficient
         if not self._rad_isotropic:
-            self.coolant_int_params['sc_vel'] = \
-                np.zeros(self.subchannel.n_sc['coolant']['total'])
             self.coolant_int_params['sc_htc'] = \
                 np.zeros(self.subchannel.n_sc['coolant']['total'])            
         if self.n_bypass > 0:
@@ -733,12 +754,30 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         # Update coolant material properties
         t_inlet = self.coolant.temperature
+        self._init_params_partial(t)
+        # Friction factor
+        if self.corr['ff'] is not None:
+            self.coolant_int_params['ff'] = self.corr['ff'](self)
+
+        # Reset inlet temperature
+        self.coolant.temperature = t_inlet
+        
+        
+    def _init_params_partial(self, t: float) -> None:
+        """Initialize velocity, Reynolds number, and flow split parameters
+        
+        Parameters
+        ----------
+        t : float
+            Coolant temperature (K)
+        """
+        # Update coolant material properties
         self._update_coolant(t)
         # Coolant axial velocity, bundle Reynolds number
         mfr_over_area = self.int_flow_rate / self.bundle_params['area']
         self.coolant_int_params['vel'] = mfr_over_area / self.coolant.density
-        self.coolant_int_params['Re'] = \
-            mfr_over_area * self.bundle_params['de'] / self.coolant.viscosity
+        self.coolant_int_params['Re'] = mfr_over_area * \
+            self.bundle_params['de'] / self.coolant.viscosity
         # Spacer grid, if present
         if 'grid' in self.corr_constants.keys():
             try:
@@ -750,7 +789,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         self.coolant_int_params['Re'],
                         self.corr_constants['grid']['solidity'],
                         self.corr_constants['grid']['corr_coeff'])
-
         # Flow split parameters
         if self.corr['fs'] is not None:
             if 'grid' in self.corr.keys():
@@ -759,13 +797,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             else:
                 self.coolant_int_params['fs'] = \
                     self.corr['fs'](self)
-
-        # Friction factor
-        if self.corr['ff'] is not None:
-            self.coolant_int_params['ff'] = self.corr['ff'](self)
-
-        # Reset inlet temperature
-        self.coolant.temperature = t_inlet
+                    
 
     def clone(self, new_flowrate=None, new_avg_temp=None):
         """Clone the rodded region into another assembly object;
@@ -783,7 +815,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             clone._coolant_tracker = copy.deepcopy(self._coolant_tracker)
         if hasattr(self, 'pin_temps'):
             clone.pin_temps = copy.deepcopy(self.pin_temps)
-
+        if hasattr(self, '_enthalpy'):
+            clone._enthalpy = copy.deepcopy(self._enthalpy)
+        if hasattr(self, 'sc_properties'):
+            clone.sc_properties = copy.deepcopy(self.sc_properties)
+        if hasattr(self, '_sc_vel'):
+            clone._sc_vel = copy.deepcopy(self._sc_vel)
+        
         clone._setup_correlations(self.corr_names['ff'],
                                   self.corr_names['fs'],
                                   self.corr_names['mix'],
@@ -878,7 +916,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     # UPDATE PROPERTIES
     ####################################################################
 
-    def _update_coolant_int_params(self, temp, use_mat_tracker=True):
+    def _update_coolant_int_params(self, temp, use_mat_tracker=True, sc_vel=None):
         """Update correlated bundle coolant parameters based
         on current average coolant temperature
 
@@ -900,10 +938,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             'swirl': swirl velocity
 
         """
-        # self.coolant.update(temp)
-        self._update_coolant(temp)
         if not self._rad_isotropic:
             self._update_subchannels_properties(self.temp['coolant_int'])
+        self._update_coolant(temp)
         # Only reason you wouldn't update all correlated parameters is if
         # the coolant tracker object says not to. If it says not to, skip
         # the update. Otherwise, proceed.
@@ -930,7 +967,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # if self.corr['fs'] is not None:
         #     self.coolant_int_params['fs'] = self.corr['fs'](self)          
         # Heat transfer coefficient (via Nusselt number)
-        self._calculate_htc()
+        self._calculate_htc(sc_vel)
         # MODIFICATION 2022-11-29: No longer updating friction factor
         # during the sweep. It is now static and  determined at the
         # start of the calculation, based on bundle-average coolant
@@ -938,24 +975,55 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Friction factor
         # if self.corr['ff'] is not None:
         #     self.coolant_int_params['ff'] = self.corr['ff'](self)
+        if self._mixed_convection and self.corr['ff_i'] is not None:
+            self.coolant_int_params['ff_i'] = self.corr['ff_i'](self)
                     
         # Mixing params - these come dimensionless, need to adjust
-        if self.corr['mix'] is not None:
-            mix = self.corr['mix'](self)            
-            self.coolant_int_params['eddy'] = \
-                (mix[0] * self.coolant_int_params['fs'][0]
-                    * self.coolant_int_params['vel'])
-            swirl_vel = (mix[1] * self.coolant_int_params['vel']
-                    * self.coolant_int_params['fs'][1])
-            self.coolant_int_params['swirl'][1] = swirl_vel
-            self.coolant_int_params['swirl'][2] = swirl_vel
+        if self.corr['mix']:
+            mix = self.corr['mix'](self)   
+            vm_interior, vm_periphery = self._calc_average_velocities()
+            self.coolant_int_params['eddy'] = mix[0] * vm_interior
+            self.coolant_int_params['swirl'][1] = mix[1] * vm_periphery
+            self.coolant_int_params['swirl'][2] = mix[1] * vm_periphery
+        
+    def _calc_average_velocities(self) -> tuple[float]:
+        """
+        Calculate average velocities in interior and periphery regions
+        of the rodded assembly
+        
+        Returns
+        -------
+        tuple[float]
+            Average velocity in interior and periphery regions
+        """
+        if self._mixed_convection:
+            nint = self.subchannel.n_sc['coolant']['interior']
+            ntot = self.subchannel.n_sc['coolant']['total'] 
+            vm_interior = np.sum(self.sc_mfr[:nint] * self._sc_vel[:nint]) / \
+                np.sum(self.sc_mfr[:nint])
+            vm_periphery = np.sum(self.sc_mfr[nint:ntot] * 
+                                  self._sc_vel[nint:ntot]) / \
+                                      np.sum(self.sc_mfr[nint:ntot])
+            return vm_interior, vm_periphery
+        
+        vm_interior = self.coolant_int_params['fs'][0] * \
+            self.coolant_int_params['vel']
+        vm_periphery = self.coolant_int_params['fs'][1] * \
+            self.coolant_int_params['vel']
+        return vm_interior, vm_periphery
             
-    def _calculate_htc(self) -> None:
+            
+    def _calculate_htc(self, sc_vel: np.ndarray = None) -> None:
         """
         Calculate heat transfer coefficient for each subchannel in case of 
         non-isotropic properties or for each type of subchannel in case of 
         isotropic properties, based on Reynolds number
-
+        
+        Parameters
+        ----------
+        sc_vel : np.ndarray, optional
+            Array of subchannel velocities; if not provided, will be
+            calculated internally (default is None)
         """
         if self._rad_isotropic:
             self._calculate_sc_type_Re()
@@ -966,23 +1034,28 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.coolant_int_params['htc'] = \
                 self.coolant.thermal_conductivity * nu / self.params['de']
         else: 
-            if self.corr_names['mix'] in ['uctd', 'ctd']:
-                self._calculate_sc_type_Re()
-                        
-            self.coolant_int_params['sc_vel'] = \
+            self._update_sc_velocity_and_htc(sc_vel)
+            
+            
+    def _update_sc_velocity_and_htc(self, sc_vel: np.ndarray = None) -> None:
+        
+        if self.corr_names['mix'] in ['uctd', 'ctd']:
+            self._calculate_sc_type_Re()
+            
+        if sc_vel is None:            
+            sc_vel = \
                 self.sc_mfr \
                 / self.params['area'][self.subchannel.type[
                     :self.subchannel.n_sc['coolant']['total']]] \
                 / self.sc_properties['density']
-            Re_partial = (self.sc_properties['density'] * 
-                          self.coolant_int_params['sc_vel']
-                          / self.sc_properties['viscosity'])
-            self.coolant_int_params['Re_all_sc'] = \
-                Re_partial \
-                * self.params['de'][self.subchannel.type[
-                    :self.subchannel.n_sc['coolant']['total']]]
-            self.coolant_int_params['sc_htc'] = \
-                self._calculate_htc_rad_non_isotropic(self.htc_params['duct'])
+        Re_partial = (self.sc_properties['density'] * 
+                        sc_vel / self.sc_properties['viscosity'])
+        self.coolant_int_params['Re_all_sc'] = \
+            Re_partial \
+            * self.params['de'][self.subchannel.type[
+                :self.subchannel.n_sc['coolant']['total']]]
+        self.coolant_int_params['sc_htc'] = \
+            self._calculate_htc_rad_non_isotropic(self.htc_params['duct'])
             
     def _calculate_sc_type_Re(self) -> None:
         """
@@ -1124,8 +1197,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 * self.coolant.density \
                 * self.coolant_int_params['vel']**2 \
                 / 2.0
-        else:
-            return 0.0
+        return 0.0
 
     def calculate_gravity_pressure_drop(self, dz):
         """Calculate head losses associated with vertical upward flow"""
@@ -1368,7 +1440,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if self._ent:
             self._enthalpy += delta_T_or_h
             self.temp['coolant_int'] = \
-                self.coolant.temp_from_enthalpy(self._enthalpy)
+                self.coolant.convert_properties(enthalpy=self._enthalpy)
         else:
             self.temp['coolant_int'] += delta_T_or_h
 
@@ -1435,8 +1507,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     def _calc_mass_flow_average_property(self, prop: str, i:int, j: int) \
         -> float:
         """
-        Calculate the mass flow rate weighted average of a property between two
-        subchannels
+        Calculate average of a property between two subchannels weighted on 
+        the mass flow rate
         
         Parameters
         ----------
@@ -1458,7 +1530,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 / (self.sc_mfr[i] + self.sc_mfr[j])
 
 
-            
     def _calc_int_sc_power(self, pin_power, cool_power):
         """Determine power from pins and from direct heating in the
         coolant that gets put into each subchannel at the given axial
@@ -1588,8 +1659,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                              - self.temp['coolant_byp'][i]))
 
             dT[i] += dT_in + dT_out
-            if ebal:
-                self.update_ebal_byp(i, dz * dT_in, dz * dT_out)
 
             # Get the flow rate component
             dT[i] *= byp_fr_const
@@ -1610,7 +1679,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                              * (self.temp['coolant_byp'][i, sc_adj]
                                 - self.temp['coolant_byp'][i, sci]))
 
-            # Divide by average heat capacity
+            
+            if ebal:
+                self.update_ebal_byp(i, dz * dT_in, dz * dT_out)
+                mcpdT_i_bp = dT[i] * dz / byp_fr_const 
+                self.update_ebal(mcpdT_i = mcpdT_i_bp)
+                
             dT[i] /= self.coolant.heat_capacity
         return dT * dz
 
@@ -1695,19 +1769,15 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Linear power generation (W/m) for each duct cell
             (Array size: N_duct * N_sc['duct']['total'] x 1)
         t_gap : numpy.ndarray
-            Interassembly gap temperatures around the assembly at the
-            j+1 axial level (array length = n_sc['duct']['total'])
+            Interassembly gap temperatures around the assembly 
+            (array length = n_sc['duct']['total'])
         htc_gap : numpy.ndarray
             Heat transfer coefficient for convection between the gap
             coolant and outer duct wall based on core-average inter-
             assembly gap coolant temperature; len = # duct SC
         adiabatic : boolean
-            Indicate if outer duct wall outer BC is adiabatic
-
-        Returns
-        -------
-        None
-
+            Indicate if BC on the external surface of the outer duct is 
+            adiabatic
         """
         # Average duct temperatures (only want to have to get once)
         duct_avg_temps = self.avg_duct_mw_temp
@@ -1722,9 +1792,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             # Need to get inner and outer coolant temperatures and
             # heat transfer coeffs; Requires two material updates
             if i == 0:  # inner-most duct, inner htc is asm interior
-                t_in = self.temp['coolant_int']
                 # Get rid of interior temps, only want edge/corner
-                t_in = t_in[self.subchannel.n_sc['coolant']['interior']:]
+                t_in = self.temp['coolant_int'][
+                    self.subchannel.n_sc['coolant']['interior']:]
                 if not self._rad_isotropic:
                     htc_in = self.coolant_int_params['sc_htc'][
                         self.subchannel.n_sc['coolant']['interior']:]
@@ -2088,7 +2158,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
     return params
 
 
-def calculate_ht_constants(rr):
+def calculate_ht_constants(rr, mixed=False):
     """Setup method to define heat transfer constants
 
     Parameters
@@ -2109,44 +2179,32 @@ def calculate_ht_constants(rr):
     # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ]
     # [ 0               ,     Corner <- Edge,   Corner <- Corner ]
     # if self.n_pin > 1:
-    for i in range(3):
-        if rr.n_pin == 1:
-            continue
-        for j in range(3):
-            if rr.n_pin == 1:
-                continue
+
+    for i in range(3): 
+        for j in range(3):  
             if rr.L[i][j] != 0.0:  # excludes int <--> corner
+                ht_consts[i][j] = 1 / rr.L[i][j]
                 if i == 0 or j == 0:
-                    ht_consts[i][j] = \
-                        (rr.d['pin-pin']
-                         * rr.bundle_params['area']
-                         / rr.L[i][j] / rr.int_flow_rate
-                         / rr.params['area'][i])
+                    ht_consts[i][j] *= rr.d['pin-pin']
                 else:
-                    ht_consts[i][j] = \
-                        (rr.d['pin-wall']
-                         * rr.bundle_params['area']
-                         / rr.L[i][j] / rr.int_flow_rate
-                         / rr.params['area'][i])
-                        
+                    ht_consts[i][j] *= rr.d['pin-wall']
+                if not mixed:
+                    ht_consts[i][j] *= rr.bundle_params['area'] / \
+                        rr.int_flow_rate / rr.params['area'][i]
+    
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
-    if rr.n_pin > 1:
-        ht_consts[1][3] = (rr.L[1][1]
-                           * rr.bundle_params['area']
-                           / rr.int_flow_rate
-                           / rr.params['area'][1])
-        ht_consts[3][1] = ht_consts[1][3]
+    ht_consts[1][3] = rr.L[1][1]
+    if not mixed:
+        ht_consts[1][3] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+            rr.params['area'][1]
+    ht_consts[3][1] = ht_consts[1][3]
 
     # Corner -> wall 1
-    ht_consts[2][4] = (2 * rr.d['wcorner'][0, 1]
-                       * rr.bundle_params['area']
-                       / rr.int_flow_rate
-                       / rr.params['area'][2])
-    # ht_consts[2][4] = (2 * self.d['wcorner_m'][0]
-    #                         * self.bundle_params['area']
-    #                         / self.int_flow_rate
-    #                         / self.params['area'][2])
+    ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
+    if not mixed:
+        ht_consts[2][4] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+            rr.params['area'][2]
     ht_consts[4][2] = ht_consts[2][4]
 
     # Bypass convection and conduction
@@ -2226,7 +2284,7 @@ def calculate_ht_constants(rr):
     return ht_consts
 
 
-def _setup_conduction_constants(rr, ht_consts):
+def setup_conduction_constants(rr, ht_consts):
     """Set up numpy arrays to accelerate conduction calculation
 
     Notes
@@ -2283,7 +2341,7 @@ def _setup_conduction_constants(rr, ht_consts):
     return _cond
 
 
-def _setup_convection_constants(rr, ht_consts):
+def setup_convection_constants(rr, ht_consts):
     """Set up numpy arrays to accelerate convective heat xfer
     calculation between edge/corner subchannels and the wall"""
     _conv = {}
@@ -2318,7 +2376,7 @@ def _setup_convection_constants(rr, ht_consts):
 ########################################################################
 
 
-def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
+def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn, mc):
     """Import correlations to be used in a DASSH Assembly object
 
     Parameters
@@ -2341,6 +2399,8 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
     bundle : DASSH RoddedRegion object
     warn : bool
         Raise applicability warnings or no
+    mc : bool
+        Whether or not regime is mixed convection
 
     Returns
     -------
@@ -2360,8 +2420,9 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
     # Friction factor
     if friction is not None:
         friction = '-'.join(re.split('-| ', friction.lower()))
-        corr_names['ff'], corr['ff'], corr_const['ff'] = \
-            _import_friction_correlation(friction, bundle, warn)
+        
+        corr_names['ff'], corr['ff'], corr_const['ff'], corr['ff_i'] = \
+                _import_friction_correlation(friction, bundle, warn, mc)
     else:
         corr['ff'] = None
         corr_names['ff'] = None
@@ -2417,7 +2478,7 @@ def import_corr(friction, flowsplit, mix, nu, sf, bundle, warn):
     return corr, corr_names, corr_const
 
 
-def _import_friction_correlation(name, bundle, warn):
+def _import_friction_correlation(name, bundle, warn, mc):
     """Import friction factor correlation for DASSH Assembly object
 
     Parameters
@@ -2428,6 +2489,8 @@ def _import_friction_correlation(name, bundle, warn):
     bundle : DASSH RoddedRegion object
     warn : bool
         Raise applicability warnings
+    mc : bool
+        Whether or not regime is mixed convection
 
     Returns
     -------
@@ -2479,7 +2542,13 @@ def _import_friction_correlation(name, bundle, warn):
         sys.exit(1)
     if warn:
         check_correlation.check_application_range(bundle, ff)
-    return nickname, ff.calculate_bundle_friction_factor, constants
+    
+    if mc and name in ['ctd', 'cheng-todreas-detailed', 
+                      'uctd', 'upgraded-cheng-todreas-detailed',
+                      'upgraded-cheng-todreas', 'engel', 'eng']:
+        return nickname, ff.calculate_bundle_friction_factor, constants, \
+            ff.calculate_subchannel_friction_factor
+    return nickname, ff.calculate_bundle_friction_factor, constants, None
 
 
 def _import_flowsplit_correlation(name, bundle, warn):
