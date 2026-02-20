@@ -16,7 +16,7 @@ import sys
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, 
          mixed_convection_rel_tol=1e-3):
-    """Create MixeddRegion object within DASSH Assembly
+    """Create MixedRegion object within DASSH Assembly
 
     Parameters
     ----------
@@ -801,6 +801,9 @@ class MixedRegion(RoddedRegion):
         if self.corr['ff_i'] is not None:
             self.coolant_int_params['ff_i'] = self.corr['ff_i'](self)
         else:
+            self.log('warning', 'Selected friction factor correlation not' + \
+                'intended for subchannel-specific calculation.' +
+                'Its usage is discouraged in the mixed convection regime.')
             self.coolant_int_params['ff_i'] = self.coolant_int_params['ff']
         
         #Initialize subchannel velocities and densities
