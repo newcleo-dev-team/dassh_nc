@@ -83,7 +83,7 @@ def main(args=None):
             'no_power_calc': args.no_power_calc
         }
         if dassh_input.data['JFNK']['jfnk']:
-            dassh_logger.log(_log_info, 'Running DASSH with JFNK solver')
+            dassh_logger.log(_log_info, 'Running DASSH with mass flow optimization solver')
             run_mass_flow_optimization(dassh_input, arg_dict)
         else:
             run_dassh(dassh_input, arg_dict)
@@ -349,7 +349,8 @@ def integrate_pin_power(args=None):
 
 
 def run_mass_flow_optimization(dassh_input: dassh.DASSH_Input, arg_dict: dict):
-    """Set up DASSH Reactor object, run with JFNK solver, and write output"""
+    """Set up DASSH Reactor object, run with mass flow optimization solver, 
+    and write output"""
     m_ref = dassh_input.data['JFNK']['m_ref']
     dp_ref = dassh_input.data['JFNK']['dp_ref']
     for asm in dassh_input.data['Assembly']:
@@ -357,37 +358,15 @@ def run_mass_flow_optimization(dassh_input: dassh.DASSH_Input, arg_dict: dict):
     Nsc = 6 * (n_ring**2 - n_ring + 1)
     
     m = np.ones(Nsc) * m_ref / Nsc
-    for it in range(10):
+    err = 1
+    while err > 1e-12:
         run_dassh(dassh_input, arg_dict, mfr_guess0=m)
         dpi = np.genfromtxt('dp_i.csv', delimiter=',')
         
         m = np.sqrt(dp_ref / (dpi / m**2))
         
-        
-def read_mfr_dpi():
-    """Read mass flow rate and pressure drop from DASSH output files"""
-    mfr = np.genfromtxt('mfr_i.csv', delimiter=',')
-    dpi = np.genfromtxt('dp_i.csv', delimiter=',')
-    return mfr, dpi
-
-def read_deltaPbundle():
-    """Read bundle pressure drop from DASSH output files"""
-    with open("dassh.out") as f:
-        lines = f.readlines()
-        parts = lines[129].strip().split()
-    return parts[5]
-
-def fun_eqs(u,dpi, m_ref, dp_ref, mtot):
-
-    m  = u[:-1] * m_ref
-    dp = u[-1] * dp_ref
-
-    F = np.zeros_like(u)
-    F[:-1] = (dpi*m**2 - dp) / dp_ref
-    F[-1]  = (np.sum(m) - mtot) / m_ref
-
-    return F
-    
+        err = np.abs(np.mean(dpi) - dp_ref) / dp_ref
+        print(f'MFR: {np.sum(m):.2f} kg/s, err: {err:.2e}')
         
 if __name__ == '__main__':
     main()
