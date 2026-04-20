@@ -1102,9 +1102,7 @@ class Reactor(LoggedClass):
                 np.savetxt('mfr_corner.csv', a.active_region.sc_mfr[np.where(idx_sc_type==2)[0]], delimiter=',')
             else:
                 idx_sc_type = a.active_region.subchannel.type
-                np.savetxt('mfr_isc.csv', [a.active_region.sc_mfr[np.where(idx_sc_type==0)[0][0]],
-                                           a.active_region.sc_mfr[np.where(idx_sc_type==1)[0][0]],
-                                           a.active_region.sc_mfr[np.where(idx_sc_type==2)[0][0]]], delimiter=',')
+                np.savetxt('mfr_isc.csv', a.active_region.sc_mfr, delimiter=',')
         # Once the sweep is done close the CSV data files, if open
         try:
             self._data_close()

@@ -347,27 +347,25 @@ def integrate_pin_power(args=None):
     np.savetxt(outpath, arr_to_write, delimiter=',')
     dassh_logger.log(_log_info, 'DASSH_POWER execution complete')
 
-
+        
 def run_mass_flow_optimization(dassh_input: dassh.DASSH_Input, arg_dict: dict):
     """Set up DASSH Reactor object, run with mass flow optimization solver, 
     and write output"""
-    m_ref = dassh_input.data['OptimizeFlow']['m_ref']
-    dp_guess = dassh_input.data['OptimizeFlow']['dp_ref']
-    for asm in dassh_input.data['Assembly']:
-        n_ring = dassh_input.data['Assembly'][asm]['num_rings']
-    Nsc = 6 * (n_ring**2 - n_ring + 1)
-    
-    m = np.ones(Nsc) * m_ref / Nsc
-    err = 1
-    while err > 1e-16:
-        run_dassh(dassh_input, arg_dict, mfr_guess0=m)
+    for i in range(100):
+        if i == 0:
+             run_dassh(dassh_input, arg_dict)
+             m = np.genfromtxt('mfr_isc.csv', delimiter=',')
+             mtot = np.sum(m)
+        else:
+            run_dassh(dassh_input, arg_dict, mfr_guess0=m)
         dpi = np.genfromtxt('dp_i.csv', delimiter=',')
-        R = dpi / m**2
-        m = np.sqrt(dp_guess / R)
-        M = np.sum(m)
-        err = np.abs(M - m_ref) / m_ref
-        dp_guess = dp_guess * (m_ref / M)**2
-        print(f"MFR: {M:.6f} kg/s | mass err: {err:.3e} | dp_guess: {dp_guess:.6f}")
+        dp_guess = np.mean(dpi)
+        err = np.max(np.abs(1 - dpi / dp_guess))
+        print(f"iter {i}: dp err: {err:.3e} | dp_guess: {dp_guess:.6f}")
+        if err < 1e-15 and i > 0:
+            break
+        m = np.sqrt(dp_guess / (dpi / m**2)) 
+        m = m * mtot / np.sum(m)
 
 if __name__ == '__main__':
     main()
