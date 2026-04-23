@@ -1,3 +1,16 @@
+This is **newcleo's fork** of the original ANL DASSH repository (https://github.com/dassh-dev/dassh). 
+
+Compared to the original ANL repository, this fork adds the following features:
+- improved definition and update of coolant properties in the `Material` class;
+- introduction of radially varying properties and a local approach to calculating the heat transfer coefficient;
+- treatment of transverse mixing and mass exchange between subchannels.
+
+The _Codes and Methods_ Department at newcleo manages and maintains this fork in collaboration with Politecnico di Torino. 
+
+For information on this fork and how to contribute to it, please contact gabriele.ottino@newcleo.com.
+
+For information about the original repository, please follow the recommendations provided in the ANL DASSH repository.  
+
 # Ducted Assembly Steady State Heat Transfer Software (DASSH)
 
 [![Build](https://github.com/dassh-dev/dassh/actions/workflows/ci.yml/badge.svg)](https://github.com/dassh-dev/dassh/actions)
