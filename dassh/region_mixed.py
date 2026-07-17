@@ -372,8 +372,7 @@ class MixedRegion(RoddedRegion):
         # Build momentum terms of the known vector
         momentum_b = GG + MEX 
         if 'grid' in self.corr_constants.keys():
-            momentum_b += self.params['area'][self.subchannel.type[:nn]] * \
-                self.calculate_spacergrid_pressure_drop(z, dz)
+            momentum_b += self.calculate_spacergrid_pressure_drop(z, dz)
         # Assemble known vector
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
