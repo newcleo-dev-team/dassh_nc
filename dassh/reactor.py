@@ -1012,7 +1012,10 @@ class Reactor(LoggedClass):
         self._options['dump']['cols'] = {}
         self._options['dump']['cols']['average'] = 10
         self._options['dump']['cols']['maximum'] = 7
-        self._options['dump']['cols']['pressure_drop'] = 7
+        if self._options['mixed_convection']:
+            self._options['dump']['cols']['pressure_drop'] = 4
+        else:
+            self._options['dump']['cols']['pressure_drop'] = 7
         self._options['dump']['cols']['coolant_int'] = 3 + max(
             [a.rodded.subchannel.n_sc['coolant']['total']
              if a.has_rodded else 1 for a in self.assemblies])
