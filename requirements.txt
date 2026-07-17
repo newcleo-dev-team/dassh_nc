@@ -7,3 +7,4 @@ numpy>=1.18
 codecov==2.1.11
 dill==0.3.4
 packaging>=20.0
+sympy==1.13.3
