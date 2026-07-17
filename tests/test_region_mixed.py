@@ -217,10 +217,10 @@ class TestBalances():
 
 
     def test_axial_step_zero_power(self, 
-                                simple_ctrl_rr_mixconv: dassh.MixedRegion):
+                                   simple_ctrl_rr_mixconv: dassh.MixedRegion):
         """
-        Test that the axial step energy, momentum and mass balances are
-        satisfied
+        Test that the simulation runs with zero power and that the Delta(mh) 
+        term is equal to zero
         
         Parameters
         ----------
@@ -229,7 +229,7 @@ class TestBalances():
         """
         q = mock_ZeroAssemblyPower(simple_ctrl_rr_mixconv)
         _assign_parameters(simple_ctrl_rr_mixconv)
-        # Store mass flow rates, enthalpies and velocities at state 1
+        # Store mass flow rates and enthalpies at state 1
         mfr_1 = simple_ctrl_rr_mixconv.sc_mfr.copy()
         h_1 = simple_ctrl_rr_mixconv._enthalpy.copy()
         # Solve for state 2
@@ -238,12 +238,15 @@ class TestBalances():
                                              q['pins'],
                                              q['cool'],
                                              ebal=False)
-        # Store mass flow rates, enthalpies and velocities at state 2 
+        # Store mass flow rates and enthalpies at state 2 
         mfr_2 = simple_ctrl_rr_mixconv.sc_mfr.copy()
         h_2 = simple_ctrl_rr_mixconv._enthalpy.copy()
         # Conservation of energy
         self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
                                     simple_ctrl_rr_mixconv)
+        assert mfr_2 * h_2 - mfr_1 * h_1 == pytest.approx(
+            0, abs=rr_data.mixed['tol']
+            )
         
 class TestMethodsMixedRegion():
     """
