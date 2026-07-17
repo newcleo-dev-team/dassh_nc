@@ -31,12 +31,12 @@ applicability = ctd.applicability
 
 # MODULE-WIDE CONSTANTS
 _GAMMA = 1 / 3.0
-_M = ctd._m
+_M = ctd.MM
 _EXP1 = {}
 _EXP2 = {}
-for regime in ctd._m.keys():
-    _EXP1[regime] = (1 + ctd._m[regime]) / (2 - ctd._m[regime])
-    _EXP2[regime] = 1 / (2 - ctd._m[regime])
+for regime in ctd.MM.keys():
+    _EXP1[regime] = (1 + ctd.MM[regime]) / (2 - ctd.MM[regime])
+    _EXP2[regime] = 1 / (2 - ctd.MM[regime])
 
 
 ########################################################################

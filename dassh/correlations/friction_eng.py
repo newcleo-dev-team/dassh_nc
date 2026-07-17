@@ -20,7 +20,7 @@ Engel friction factor correlation (1979)
 """
 ########################################################################
 import numpy as np
-
+from dassh import RoddedRegion
 
 # Application ranges of friction factor correlations
 applicability = {}
@@ -37,12 +37,12 @@ applicability['bare rod'] = False
 ########################################################################
 
 
-def calculate_bundle_friction_factor(asm_obj):
+def calculate_bundle_friction_factor(asm_obj: RoddedRegion) -> float:
     """Calculate the bundle-average friction factor
 
     Parameters
     ----------
-    asm_obj : DASSH Assembly object
+    asm_obj : RoddedRegion
         Contains the assembly geometric details and bundle Re
 
     Returns
@@ -50,14 +50,47 @@ def calculate_bundle_friction_factor(asm_obj):
     float
         Bundle-average friction factor based on assembly geometry
         and flow regime
-
     """
-    if asm_obj.coolant_int_params['Re'] < 400.0:
-        f = 110 / asm_obj.coolant_int_params['Re']
-    elif asm_obj.coolant_int_params['Re'] > 5000.0:
-        f = 0.55 / asm_obj.coolant_int_params['Re']**0.25
-    else:  # transition
-        x = (asm_obj.coolant_int_params['Re'] - 400) / 4600
-        f = (110 * np.sqrt(1 - x) / asm_obj.coolant_int_params['Re']
-             + 0.55 * np.sqrt(x) / asm_obj.coolant_int_params['Re']**0.25)
-    return f
+    return _calculate_friction_factor(asm_obj.coolant_int_params['Re'])
+        
+
+def calculate_subchannel_friction_factor(asm_obj) -> np.ndarray:
+    """
+    Calculate the subchannel friction factors using the Engel correlation 
+    
+    Parameters
+    ----------
+    asm_obj : DASSH Assembly object
+        Contains the assembly geometric details and subchannel Reynolds numbers
+    
+    Returns
+    -------
+    np.ndarray
+        Subchannel friction factors at given flow conditions
+    """
+    f_sc = np.zeros_like(asm_obj.coolant_int_params['Re_all_sc'])
+    for i, Re_sc in enumerate(asm_obj.coolant_int_params['Re_all_sc']):
+        f_sc[i] = _calculate_friction_factor(Re_sc)
+    return f_sc
+
+
+def _calculate_friction_factor(Re: float) -> float:
+    """Calculate the friction factor based on Reynolds number
+    
+    Parameters
+    ----------
+    Re : float
+        Reynolds number 
+        
+    Returns
+    -------
+    float
+        Friction factor at given Reynolds number
+    """
+    if Re < 400.0:
+        return 110 / Re
+    elif Re > 5000.0:
+        return 0.55 / Re**0.25
+    x = (Re - 400) / 4600
+    return (110 * np.sqrt(1 - x) / Re 
+            + 0.55 * np.sqrt(x) / Re**0.25)

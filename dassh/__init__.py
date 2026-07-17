@@ -27,6 +27,7 @@ from dassh.logged_class import *
 from dassh.region import *
 from dassh.region_rodded import *
 from dassh.region_unrodded import *
+from dassh.region_mixed import *
 from dassh.assembly import *
 from dassh.core import *
 from dassh.material import *

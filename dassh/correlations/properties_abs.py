@@ -29,6 +29,10 @@ class PropertyClass(ABC):
         pass
     
     @abstractmethod
+    def enthalpy(self, T: float) -> float:
+        pass
+    
+    @abstractmethod
     def density_range(self) -> tuple[float]:
         pass
 
@@ -42,5 +46,9 @@ class PropertyClass(ABC):
 
     @abstractmethod
     def heat_capacity_range(self) -> tuple[float]:
+        pass
+    
+    @abstractmethod
+    def enthalpy_range(self) -> tuple[float]:
         pass
     

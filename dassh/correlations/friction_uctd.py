@@ -21,7 +21,11 @@ Upgraded Cheng-Todreas Detailed correlations (2018)
 ########################################################################
 import numpy as np
 from . import friction_ctd as ctd
+from dassh import RoddedRegion
 
+MM = {'laminar': 1.0, 'turbulent': 0.18}
+GAMMA = 1 / 3
+LAMBDA = 7.0  # Exponent for turbulent friction factor in transition regime
 
 # Application ranges of friction factor correlations
 applicability = {}
@@ -165,10 +169,6 @@ def calculate_bundle_friction_factor_const(asm_obj):
     ----------
     asm_obj : DASSH Assembly object
         Contains geometric and flow parameters
-    subchannel_cf : dict
-        dict (keys: ['laminar', 'turbulent']) of numpy.ndarray
-        (length = 3), each containing friction factor constants
-        for each coolant subchannel
 
     Notes
     -----
@@ -212,7 +212,7 @@ def calculate_bundle_friction_factor(asm_obj):
     f = {}
     # Calculate friction factor for laminar and turbulent regimes
     for r in cfb.keys():
-        f[r] = cfb[r] / asm_obj.coolant_int_params['Re']**ctd._m[r]
+        f[r] = cfb[r] / asm_obj.coolant_int_params['Re']**MM[r]
     # If transition region, combine laminar and turbulent friction
     # factors using intermittency fxn; otherwise, return value
     try:
@@ -228,5 +228,32 @@ def calculate_bundle_friction_factor(asm_obj):
         # Transition regime intermittency factor
         x = ctd.calc_intermittency_factor(asm_obj, Re_bl, Re_bt)
         # Different correlation for transition region than O.G. CTD
-        return (f['laminar'] * (1 - x)**(1 / 3.0) * (1 - x**7.0)
-                + f['turbulent'] * x**(1 / 3.0))
+        return (f['laminar'] * (1 - x)**GAMMA * (1 - x**LAMBDA)
+                + f['turbulent'] * x**GAMMA)
+
+
+########################################################################
+# SUBCHANNEL FRICTION FACTOR
+########################################################################
+def calculate_subchannel_friction_factor(asm_obj: RoddedRegion) -> np.ndarray:
+    """
+    Calculate the subchannel friction factors using the Upgraded Cheng–Todreas
+    Detailed correlation 
+    
+    Parameters
+    ----------
+    asm_obj : RoddedRegion
+        Contains the assembly geometric details and subchannel Reynolds numbers
+    
+    Returns
+    -------
+    np.ndarray
+        Subchannel friction factors at given flow conditions
+    """
+    if not asm_obj.corr_constants['ff']['Re_bnds']:
+        Re_bl, Re_bt = calculate_Re_bounds(asm_obj)
+        Cf_sc = calculate_subchannel_friction_factor_const(asm_obj)
+    else:
+        Re_bl, Re_bt = asm_obj.corr_constants['ff']['Re_bnds']
+        Cf_sc = asm_obj.corr_constants['ff']['Cf_sc']
+    return ctd._calc_sc_ff(asm_obj, Re_bl, Re_bt, Cf_sc)

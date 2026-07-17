@@ -31,7 +31,7 @@ from dassh.__main__ import main as dassh_main
 from dassh.__main__ import integrate_pin_power as dassh_power
 import json 
 import lbh15
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from dataclasses import dataclass
 
 def execute_dassh(args, entrypoint="dassh"):
@@ -124,6 +124,7 @@ class MaterialData:
     water_temperature: float
     conftest_temp_from_textbook: float
     three_asm_temperature: List[float]
+    enthalpy: dict[str, Union[float, Dict[str, List[float]]]]
 
 @dataclass
 class RRData:
@@ -152,7 +153,9 @@ class RRData:
     byp_val: float
     acc_met: Dict[str, Any]
     clone_data: Dict[str, Any]
-    non_isotropic: Dict[str, float]
+    non_isotropic: Dict[str, Union[float, int]]
+    enthalpy: Dict[str, float]
+    mixed: Dict[str, Dict[str, float]]
     
 def pytest_configure(config):
     """
@@ -208,7 +211,8 @@ def pytest_configure(config):
         corr_mid_range=file_data["corr_mid_range"],
         water_temperature=file_data["water_temperature"],
         conftest_temp_from_textbook=file_data["conftest_temp_from_textbook"],
-        three_asm_temperature=file_data["three_asm_temperature"]
+        three_asm_temperature=file_data["three_asm_temperature"],
+        enthalpy=file_data["enthalpy"]
     )
     ###############################################
     # Setup test data for RoddedRegion class tests
@@ -241,7 +245,9 @@ def pytest_configure(config):
         byp_val = file_data["byp_val"],
         acc_met = file_data["acc_met"],
         clone_data = file_data["clone_data"],
-        non_isotropic = file_data["non_isotropic"]
+        non_isotropic = file_data["non_isotropic"],
+        enthalpy = file_data["enthalpy"],
+        mixed = file_data["mixed"]
     )
     
 # def pytest_configure(config):
@@ -559,7 +565,7 @@ def activate_rodded_region(region_to_activate, avg_temp, base=True):
     return tmp
 
 
-def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True):
+def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True, solve_enthalpy=False):
     return dassh.RoddedRegion(name,
                               bundle_params['num_rings'],
                               bundle_params['pin_pitch'],
@@ -569,6 +575,7 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True
                               bundle_params['clad_thickness'],
                               bundle_params['duct_ftf'],
                               fr,
+                              bundle_params['mixed_convection'], 
                               mat_params['coolant'],
                               mat_params['duct'],
                               bundle_params['htc_params_duct'],
@@ -582,8 +589,35 @@ def make_rodded_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True
                               bundle_params['bypass_gap_loss_coeff'],
                               bundle_params['wire_direction'],
                               bundle_params['shape_factor'],
-                              rad_isotropic=rad_iso)
+                              rad_isotropic=rad_iso,
+                              solve_enthalpy=solve_enthalpy)
 
+def make_mixed_region_fixture(name, bundle_params, mat_params, fr, rad_iso=True):
+    return dassh.MixedRegion(name,
+                              bundle_params['num_rings'],
+                              bundle_params['pin_pitch'],
+                              bundle_params['pin_diameter'],
+                              bundle_params['wire_pitch'],
+                              bundle_params['wire_diameter'],
+                              bundle_params['clad_thickness'],
+                              bundle_params['duct_ftf'],
+                              bundle_params['mixed_convection'],
+                              bundle_params['verbose'],
+                              fr,
+                              mat_params['coolant'],
+                              mat_params['duct'],
+                              bundle_params['htc_params_duct'],
+                              bundle_params['corr_friction'],
+                              bundle_params['corr_flowsplit'],
+                              bundle_params['corr_mixing'],
+                              bundle_params['corr_nusselt'],
+                              bundle_params['corr_shapefactor'],
+                              bundle_params['SpacerGrid'],
+                              bundle_params['bypass_gap_flow_fraction'],
+                              bundle_params['bypass_gap_loss_coeff'],
+                              bundle_params['wire_direction'],
+                              bundle_params['shape_factor']
+                              )
 
 @pytest.fixture(scope='module')
 def assembly_default_params():
@@ -600,7 +634,10 @@ def assembly_default_params():
             'bypass_gap_loss_coeff': None,
             'wire_direction': 'counterclockwise',
             'shape_factor': 1.0,
-            'SpacerGrid': None}
+            'SpacerGrid': None,
+            'mixed_convection': False,
+            'verbose': False
+}
 
 
 @pytest.fixture(scope='module')
@@ -840,21 +877,85 @@ def simple_ctrl_params(assembly_default_params):
 
 
 @pytest.fixture
-def simple_ctrl_rr(simple_ctrl_params):
-    """DASSH RoddedRegion object: simple hexagonal bundle parameters
-    for double-ducted assembly"""
+def simple_ctrl_rr(simple_ctrl_params: tuple[dict, dict]):
+    """
+    DASSH RoddedRegion object: simple hexagonal bundle parameters
+    for double-ducted assembly with radially isotropic properties.
+    
+    Parameters
+    ----------
+    simple_ctrl_params : tuple[dict, dict]
+        Tuple containing assembly parameters and material parameters.
+        
+    Returns
+    -------
+    RoddedRegion
+        Activated RoddedRegion object with radially isotropic properties.
+    """
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
                                     simple_ctrl_params[1], flowrate)
     return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
 @pytest.fixture
-def simple_ctrl_rr_non_iso(simple_ctrl_params):
+def simple_ctrl_rr_non_iso(simple_ctrl_params: tuple[dict, dict]):
     """DASSH RoddedRegion object: simple hexagonal bundle parameters
-    for double-ducted assembly"""
+    for double-ducted assembly with radially non-isotropic properties.
+    
+    Parameters
+    ----------
+    simple_ctrl_params : tuple[dict, dict]
+        Tuple containing assembly parameters and material parameters.
+        
+    Returns
+    -------
+    RoddedRegion
+        Activated RoddedRegion object with radially non isotropic properties.
+    """
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
     rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
                                     simple_ctrl_params[1], flowrate, rad_iso=False)
+    return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
+
+@pytest.fixture
+def simple_ctrl_rr_ent(simple_ctrl_params: tuple[dict, dict]):
+    """DASSH RoddedRegion object: simple hexagonal bundle parameters
+    for double-ducted assembly. Used to test enthalpy solver.
+    
+    Parameters
+    ----------
+    simple_ctrl_params : tuple[dict, dict]
+        Tuple containing assembly parameters and material parameters.
+        
+    Returns
+    -------
+    RoddedRegion
+        Activated RoddedRegion object to be used in enthalpy solver tests.
+    """
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
+    mat = {'coolant': dassh.Material('sodium', 
+                                     temperature = \
+                                         pytest.rr_data.enthalpy['T1'],
+                                         solve_enthalpy=True),
+           'duct': dassh.Material('ss316')}
+    rr = make_rodded_region_fixture('simple_ctrl', simple_ctrl_params[0],
+                                    mat, flowrate, rad_iso=False,
+                                    solve_enthalpy=True)
+    return activate_rodded_region(rr, pytest.rr_data.enthalpy['T1'])
+
+@pytest.fixture
+def simple_ctrl_rr_mixconv(simple_ctrl_params):
+    """DASSH MixeddRegion object: simple hexagonal bundle parameters
+    for double-ducted assembly"""
+    flowrate = pytest.rr_data.non_isotropic['flow_rate']
+    mat = {'coolant': dassh.Material('sodium', 
+                                     temperature = \
+                                         pytest.rr_data.enthalpy['T1'],
+                                         solve_enthalpy=True,
+                                         mixed_convection=True),
+           'duct': dassh.Material('ss316')}
+    rr = make_mixed_region_fixture('simple_ctrl', simple_ctrl_params[0],
+                                    mat, flowrate, rad_iso=False)
     return activate_rodded_region(rr, pytest.rr_data.inlet_temp)
 
 @pytest.fixture
@@ -943,6 +1044,7 @@ def c_fuel_params(assembly_default_params):
     input['AxialRegion'] = {'rods': {'z_lo': 0.0, 'z_hi': 3.750}}
     input['htc_params_duct'] = [0.025, 0.8, 0.4, 7.0]
     input['wire_direction'] = 'clockwise'
+    input['mixed_convection'] = False
     mat = {'coolant': dassh.Material('sodium'),
            'duct': dassh.Material('ht9')}
     return input, mat
