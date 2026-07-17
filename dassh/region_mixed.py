@@ -12,6 +12,7 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
 from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
     MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE
 import sys
+from typing import Union
 
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, 
@@ -367,8 +368,9 @@ class MixedRegion(RoddedRegion):
         # Build energy terms of the known vector
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
             + EEX + self._hstar * ((self._sc_vel + self._delta_v)
-                                   *self._delta_rho + 
-                                   self.sc_properties['density']*self._delta_v)
+                                   * self._delta_rho + 
+                                   self.sc_properties['density'] * 
+                                   self._delta_v)
         # Wall convection term
         self._qw = self._wall_convection() * dz 
         energy_b[self.ht['conv']['ind']] += self._qw  / self.params['area'][
@@ -578,7 +580,7 @@ class MixedRegion(RoddedRegion):
 
     def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
                             nn: int, variable: str, 
-                            RR: np.ndarray = None) -> np.ndarray:
+                            RR: Union[np.ndarray, None] = None) -> np.ndarray:
         """
         Update hstar or vstar
         
@@ -593,15 +595,20 @@ class MixedRegion(RoddedRegion):
         variable : str
             Indicate whether to calculate hstar or vstar; 
             options are 'h' or 'v'
-        RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2);
-            Optional, only used for hstar calculation
+        RR : Union[np.ndarray, None], optional
+            Derivative of enthalpy with respect to density (J*m^3/kg^2);
+            Only used for hstar calculation
 
         Returns
         -------
         np.ndarray
             Calculated star quantity for each subchannel
 
+        Raises
+        ------
+        ValueError
+            If `variable` is not 'h' or 'v'
+            
         Notes
         -----
         Two options are available:
@@ -621,7 +628,7 @@ class MixedRegion(RoddedRegion):
         if not self._accurate_star_quantities:
             return star_mid
         # OPTION 2: Calculate hstar or vstar as per Cheng 
-        numerator_v = np.zeros(nn)
+        numerator = np.zeros(nn)
         sum_den = np.zeros(nn)
         # Calculate delta_m for each subchannel
         vrho_1 = self.sc_properties['density'] * self._sc_vel 
@@ -632,7 +639,7 @@ class MixedRegion(RoddedRegion):
         # Iterate over subchannels and adjacent subchannels
         for i in range(nn):
             denominator = 0.0
-            num_v = 0.0
+            num = 0.0
             for k in range(3):
                 j = self.ht['cond']['adj'][i][k]
                 if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] \
@@ -641,14 +648,14 @@ class MixedRegion(RoddedRegion):
                 # Calculate delta_m difference between adjacent subchannel
                 xij = delta_m[i] - delta_m[j]
                 # Calculate numerators and denominators
-                num_v += self._calc_star_quantity_numerator(
+                num += self._calc_star_quantity_numerator(
                     star_mid[i], star_mid[j], xij)
                 denominator += np.abs(xij)
-            numerator_v[i] = num_v
+            numerator[i] = num
             sum_den[i] = denominator      
         # Calculate hstar and vstar
         sum_den = 2 * sum_den + sys.float_info.epsilon 
-        return numerator_v / sum_den
+        return numerator / sum_den
         
         
     def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,

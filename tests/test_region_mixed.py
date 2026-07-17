@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import dassh
 from pytest import rr_data
-from tests.test_region_rodded import mock_AssemblyPower
+from tests.test_region_rodded import mock_AssemblyPower, mock_ZeroAssemblyPower
 from dassh._commons import rho2h_COEFF_FILE
 
 
@@ -216,6 +216,35 @@ class TestBalances():
                                       mfr_1, mfr_2)
 
 
+    def test_axial_step_zero_power(self, 
+                                simple_ctrl_rr_mixconv: dassh.MixedRegion):
+        """
+        Test that the axial step energy, momentum and mass balances are
+        satisfied
+        
+        Parameters
+        ----------
+        simple_ctrl_rr_mixconv : dassh.MixedRegion
+            The mixed region object to test
+        """
+        q = mock_ZeroAssemblyPower(simple_ctrl_rr_mixconv)
+        _assign_parameters(simple_ctrl_rr_mixconv)
+        # Store mass flow rates, enthalpies and velocities at state 1
+        mfr_1 = simple_ctrl_rr_mixconv.sc_mfr.copy()
+        h_1 = simple_ctrl_rr_mixconv._enthalpy.copy()
+        # Solve for state 2
+        simple_ctrl_rr_mixconv._solve_system(rr_data.enthalpy['dz'], 
+                                             rr_data.enthalpy['dz'], 
+                                             q['pins'],
+                                             q['cool'],
+                                             ebal=False)
+        # Store mass flow rates, enthalpies and velocities at state 2 
+        mfr_2 = simple_ctrl_rr_mixconv.sc_mfr.copy()
+        h_2 = simple_ctrl_rr_mixconv._enthalpy.copy()
+        # Conservation of energy
+        self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
+                                    simple_ctrl_rr_mixconv)
+        
 class TestMethodsMixedRegion():
     """
     Class to test methods in the MixedRegion class

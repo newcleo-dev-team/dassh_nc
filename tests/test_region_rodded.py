@@ -38,7 +38,17 @@ def mock_AssemblyPower(rregion):
             + rr_data.mock_AP['duct'][1],
             'cool': np.random.random(n_cool_sc) + rr_data.mock_AP['cool']}
     
-
+def mock_ZeroAssemblyPower(rregion):
+    """Fake a dictionary of zero linear power like that produced by the
+    DASSH AssemblyPower object"""
+    n_pin = rregion.n_pin
+    n_duct_sc = rregion.subchannel.n_sc['duct']['total']
+    n_cool_sc = rregion.subchannel.n_sc['coolant']['total']
+    return {'pins': np.zeros(n_pin),
+            'duct': np.zeros(n_duct_sc),
+            'cool': np.zeros(n_cool_sc)} 
+    
+    
 class TestMiscellaneous():
     """
     Class to test the flowsplit and the correlation assignment in the RoddedRegion
