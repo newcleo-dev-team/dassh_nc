@@ -1,6 +1,7 @@
 # Ducted Assembly Steady State Heat Transfer Software (DASSH_nc) - forked from ANL DASSH
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-DASSH_nc is a <em>new</em>cleo's fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh).
+**DASSH_nc** is the <em>new</em>cleo's fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh).
 
 
 |    <!-- -->    |        <!-- -->    |
@@ -10,7 +11,7 @@ DASSH_nc is a <em>new</em>cleo's fork of the ANL DASSH repository (https://githu
 
 ## Introduction
 
-The Ducted Assembly Steady State Heat Transfer Software (DASSH) is an open-source tool for calculating temperature and flow distributions in hexagonal, ducted assemblies comprised of wire-wrapped pin bundles. DASSH is intended for use during the design process to provide a rapid assessment of the flow and temperature distribution, especially when assembly designs are in their early stages and not fully developed.
+The Ducted Assembly Steady State Heat Transfer Software (**DASSH**) is an open-source tool for calculating temperature and flow distributions in hexagonal, ducted assemblies comprised of wire-wrapped pin bundles. DASSH is intended for use during the design process to provide a rapid assessment of the flow and temperature distribution, especially when assembly designs are in their early stages and not fully developed.
 
 Compared to the original ANL repository, this fork adds the following features:
 
@@ -30,8 +31,8 @@ The project is organized according to the following folder structure:
 ```text
 
 <dassh parent folder>
-├── dassh
-├── tests
+├── dassh/
+├── tests/
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
@@ -73,11 +74,7 @@ To run the code, the following dependencies must be satisfied:
 
 ## Installation
 
-To install DASSH_nc, clone its repo with the following command
-
-    git clone https://github.com/newcleo-dev-team/dassh_nc.git
-
-and execute the following command inside the base folder:
+To install **DASSH_nc**, clone its repo and execute the following command inside the base folder:
 
     pip install .
 
@@ -91,7 +88,7 @@ and execute the following command inside the base folder:
 
 ## How to cite
 
-If you use DASSH_nc in your research, please consider citing the following items:
+If you use **DASSH_nc** in your research, please consider citing the following items:
 
 * Milos Atz, Micheal A. Smith, Florent Heidet. “DASSH software for ducted assembly thermal hydraulics calculations – overview and benchmark”. Transactions of the American Nuclear Society 123 pp. 1673-1676 (2020). [URL](https://www.ans.org/pubs/transactions/article-49036/).
 
@@ -109,4 +106,4 @@ For information about the original repository, please follow the recommendations
 
 ## License
 
-DASSH is distributed under the [BSD-3](https://opensource.org/licenses/BSD-3-Clause) license.
+DASSH_nc is distributed under the [BSD-3](https://opensource.org/licenses/BSD-3-Clause) license.
