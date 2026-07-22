@@ -635,13 +635,13 @@ representation of the flow is not accurate.
         if gr_star >= 0.02:
             gr_star_crit = 'NO'
         else:
-            gr_star_crit = str(u'\u2713')  # check mark
+            gr_star_crit = 'YES'  
         gr_star = self._ffmt.format(gr_star)  # format for table
         
         if y_star < 100:
             y_star_crit = 'NO'
         else:
-            y_star_crit = str(u'\u2713')  # check mark
+            y_star_crit = 'YES'
         y_star = self._ffmt.format(y_star)  # format for table
         return gr_star, gr_star_crit, y_star, y_star_crit
 
