@@ -50,3 +50,35 @@ def test_dasshplot_filenaming(testdir):
     assert os.path.exists(os.path.join(outpath, fname))
     fname = 'CoreSubchannelPlot_z=200.0.png'
     assert os.path.exists(os.path.join(outpath, fname))
+
+
+def test_dasshplot_zero_power_file(testdir: str):
+    """
+    Test the plot creation in isothermal case (rods with zero power deposition).
+    
+    Parameters
+    ----------
+    testdir: str
+        Folder where tests are runned.
+    """
+    # Setup
+    inpath = os.path.join(testdir, 'test_inputs')
+    outpath = os.path.join(
+        testdir, 'test_results', 'test_dasshplot_filename')
+    if os.path.exists(outpath):
+        cleanup(outpath)
+    else:
+        os.mkdir(outpath)
+    # Load input
+    dassh_input = dassh.DASSH_Input(
+        os.path.join(inpath, 'input_zero_power.txt')
+        )
+    # Calculate solution
+    r = dassh.Reactor(dassh_input, path=outpath, write_output=True)
+    r.temperature_sweep()
+    r.path = outpath
+    # DASSHPlot execution
+    dassh.plot.plot_all(dassh_input, r)
+    # Check the results: should have a file in the output dir
+    fname = 'subchannel_temps_asm=1_z=0.9.png'
+    assert os.path.exists(os.path.join(outpath, fname))
