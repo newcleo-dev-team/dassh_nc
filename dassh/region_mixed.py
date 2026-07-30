@@ -6,6 +6,7 @@ Methods for mixed convection axial regions; to be used within Assembly objects
 """
 ########################################################################
 import numpy as np
+from dassh.mixed_class import MixedClass
 from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
     setup_conduction_constants, setup_convection_constants, \
         specify_region_details
@@ -60,7 +61,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
     return specify_region_details(rr, inp, mat)
 
 
-class MixedRegion(RoddedRegion):
+class MixedRegion(RoddedRegion, MixedClass):
     """Class to represent a rodded region with mixed convection
     
     Parameters
@@ -139,30 +140,23 @@ class MixedRegion(RoddedRegion):
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
                  param_update_tol=0.0, mixed_convection_rel_tol=1e-3):
         # Instantiate RoddedRegion object
-        super(MixedRegion, self).__init__(name, n_ring, pin_pitch, pin_diam,
-                                          wire_pitch, wire_diam, 
-                                          clad_thickness, duct_ftf, flow_rate, 
-                                          True, coolant_mat, duct_mat,
-                                          htc_params_duct, corr_friction, 
-                                          corr_flowsplit, corr_mixing, 
-                                          corr_nusselt, corr_shapefactor, 
-                                          spacer_grid, byp_ff, byp_k, wwdir, 
-                                          sf, se2, param_update_tol, 
-                                          rad_isotropic=False)
-
+        RoddedRegion.__init__(self, name, n_ring, pin_pitch, pin_diam,
+                              wire_pitch, wire_diam, clad_thickness, duct_ftf,
+                              flow_rate, True, coolant_mat, duct_mat, 
+                              htc_params_duct, corr_friction, corr_flowsplit, 
+                              corr_mixing, corr_nusselt, corr_shapefactor, 
+                              spacer_grid, byp_ff, byp_k, wwdir, sf, se2, 
+                              param_update_tol, rad_isotropic=False)
+        # Instantiate MixedClass object
+        MixedClass.__init__(self, self.subchannel.n_sc['coolant']['total'])
+        
         self._pressure_drop = 0.0 # This overrides the attribute in RoddedRegion
-        self._delta_P = 1.0 # Guess on pressure drop
-        self._delta_v = 0.1 * \
-            np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on velocity variation
-        self._delta_rho = np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on density variation
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose = verbose
         # Tolerance for mixed convection solver and star quantities calculation
         self._mixed_convection_rel_tol = mixed_convection_rel_tol
         self._accurate_star_quantities = accurate_star_quantities
-        # Initialize star quantities
-        self._hstar = np.zeros_like(self._delta_v)
-        self._vstar = np.zeros_like(self._delta_v)
+        # Initialize coolant density in subchannels
         self.sc_properties['density'] = self.coolant.density * \
             np.ones(self.subchannel.n_sc['coolant']['total']) 
         # Initialize enthalpy array
