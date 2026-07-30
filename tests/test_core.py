@@ -22,7 +22,7 @@ Test the mapping of assemblies and inter-assembly gap coolant
 import numpy as np
 import pytest
 import dassh
-from dassh import core
+from dassh import core, InterAssembly
 # np.set_printoptions(threshold=sys.maxsize)
 # np.set_printoptions(linewidth=500)
 
@@ -781,7 +781,7 @@ def test_accelerated_noflow_model(small_core_no_power_all_fuel):
         ans[sci] = ans[sci] / C
 
     # -----------------------------------------------------------------
-    res = c._noflow_model(t_duct)
+    res = InterAssembly.noflow_model(c, t_duct)
     diff = res - ans
     for i in range(len(diff)):
         if np.abs(diff[i]) > 1e-10:
@@ -806,7 +806,7 @@ def test_accelerated_ductavg_model(small_core_no_power_all_fuel):
             t_duct.append(approx_duct[asm[i]][loc[i]])
         ans[sci] = np.average(t_duct)
     # -----------------------------------------------------------------
-    res = c._duct_average_model(approx_duct)
+    res = InterAssembly.duct_average_model(c, approx_duct)
     assert np.allclose(ans, res)
 
 
@@ -894,7 +894,7 @@ def test_acc_flow_model_conv_only(small_core_no_power_all_fuel):
 
     approx_duct = np.random.random(c._asm_sc_adj.shape) * 10 + 623.15
     ans = _convection_model_OLD(c, 0.1, approx_duct, ht_consts, htc)
-    res = c._flow_model(0.1, approx_duct)
+    res = InterAssembly.flow_model(c, 0.1, approx_duct)
     diff = res - ans
     for i in range(diff.shape[0]):
         if np.abs(diff[i]) > 1e-10:
@@ -994,7 +994,7 @@ def test_acc_flow_model(small_core_no_power_all_fuel, c_fuel_asm):
 
     approx_duct = np.random.random(c._asm_sc_adj.shape) * 10 + 623.15
     ans = _convection_model_OLD(c, 0.1, approx_duct, ht_consts, htc)
-    res = c._flow_model(0.1, approx_duct)
+    res = InterAssembly.flow_model(c, 0.1, approx_duct)
     diff = res - ans
     for i in range(diff.shape[0]):
         if np.abs(diff[i]) > 1e-10:
