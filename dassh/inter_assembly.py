@@ -1,4 +1,10 @@
-
+########################################################################
+"""
+date: 2026-07-xx
+author: fpepe
+Class to handle the inter-assembly models
+"""
+########################################################################
 import numpy as np
 
 
@@ -68,9 +74,7 @@ class InterAssembly():
         
         if self._model in models:
             models[self._model]()
-            return self._coolant_gap_temp
-        else:
-            raise ValueError(f"Invalid inter-assembly model: {self._model}")
+        return self._coolant_gap_temp
         
         
     def _flow_model(self):
@@ -161,4 +165,4 @@ class InterAssembly():
 
         # Average nonzero values
         self._coolant_gap_temp = (np.sum((T0, T1, T2), axis=0)
-                                 / np.count_nonzero((T0, T1, T2), axis=0))
+                                  / np.count_nonzero((T0, T1, T2), axis=0))

@@ -1192,9 +1192,9 @@ class Core(LoggedClass):
         # have a neighbor, L=0 and can't be in the denominator. In
         # that case, we set the conduction constant to zero so that
         # heat transfer cannot occur.
-        self._Rcond = np.divide(self.d_gap, self.gap_params['L'],
-                                out=np.zeros_like(self.gap_params['L']),
-                                where=(self.gap_params['L'] != 0))
+        self.Rcond = np.divide(self.d_gap, self.gap_params['L'],
+                               out=np.zeros_like(self.gap_params['L']),
+                               where=(self.gap_params['L'] != 0))
 
     ####################################################################
     # TEMPERATURE PROPERTIES
@@ -1330,7 +1330,7 @@ class Core(LoggedClass):
         # Calculate new coolant gap temperatures
         IAobj = InterAssembly(self.model, dz, asm_duct_temps, 
                               self.coolant_gap_temp, 
-                              self.gap_coolant, self._Rcond, self.sc_adj, 
+                              self.gap_coolant, self.Rcond, self.sc_adj, 
                               self.conv_util, self.inv_sc_mfr, 
                               self.coolant_gap_params['htc'])
         
