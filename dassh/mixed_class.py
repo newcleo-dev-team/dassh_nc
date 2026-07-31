@@ -21,7 +21,7 @@ class MixedClass:
     """
     
     
-    def __init__(self, n_sc: int, coolant_obj):
+    def __init__(self, n_sc, coolant_obj):
         # Coolant object
         self.coolant = coolant_obj
         # Set initial guesses 
@@ -40,7 +40,7 @@ class MixedClass:
             density=self.sc_properties['density'])
         # Initialize subchannel velocities
         self._sc_vel = np.zeros(n_sc)
-        
+
         
     def _calc_momentum_coefficients(self, nn: int, dz: float, 
                                     ff: np.ndarray, dh: np.ndarray,
@@ -130,6 +130,7 @@ class MixedClass:
         return areas * (self._sc_vel + delta_v), \
             areas * self.sc_properties['density']
             
+            
     def _calc_h_v_star(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
                        RR: np.ndarray, nn: int) -> None:
         """
@@ -197,3 +198,23 @@ class MixedClass:
         sum_den = 2 * sum_den + sys.float_info.epsilon 
         self._hstar = numerator_h / sum_den
         self._vstar = numerator_v / sum_den
+        
+    def _calc_RR(self, drho: np.ndarray) -> np.ndarray:
+        """
+        Calculate the derivative of enthalpy w.r.t. density at constant 
+        pressure, that is the RR coefficient
+        
+        Parameters
+        ----------
+        drho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+            
+        Returns
+        -------
+        RR : np.ndarray
+            Enthalpy variation coefficient (J*m^3/kg^2)
+            RR = dh / drho = [h(rho + drho) - h(rho)] / drho
+        """
+        return (self.coolant.convert_properties(
+            density=self.sc_properties['density']+drho) 
+                - self._enthalpy) / drho

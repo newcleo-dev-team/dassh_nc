@@ -510,8 +510,8 @@ class MixedRegion(RoddedRegion, MixedClass):
             (self.sc_properties['density'][adj_ind] * var[adj_ind] 
              - self.sc_properties['density'][self.ht['conv']['ind']]
              * var[self.ht['conv']['ind']])
-
-
+        
+        
     def _build_matrix(self, dz: float, delta_v: np.ndarray,
                       delta_rho: np.ndarray, RR: np.ndarray, 
                       nn: int) -> np.ndarray:
@@ -564,8 +564,8 @@ class MixedRegion(RoddedRegion, MixedClass):
         AA[-1,0:2*nn:2] = C_rho
         AA[-1,1:2*nn:2] = C_v
         return AA
-        
-        
+    
+            
     def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,
                                       xij: float) -> float:
         """
@@ -590,27 +590,6 @@ class MixedRegion(RoddedRegion, MixedClass):
         return np.abs(xij) * (var_mid_i + var_mid_j) \
             - xij * (var_mid_i - var_mid_j)
     
-    
-    def _calc_RR(self, drho: np.ndarray) -> np.ndarray:
-        """
-        Calculate the derivative of enthalpy w.r.t. density at constant 
-        pressure, that is the RR coefficient
-        
-        Parameters
-        ----------
-        drho : np.ndarray
-            Variation of the SC densities (kg/m^3)
-            
-        Returns
-        -------
-        RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
-            RR = dh / drho = [h(rho + drho) - h(rho)] / drho
-        """
-        return (self.coolant.convert_properties(
-            density=self.sc_properties['density']+drho) 
-                - self._enthalpy) / drho
-        
 
     def _init_static_correlated_params(self, t: float) -> None:
         """Calculate bundle friction factor and flowsplit parameters
