@@ -26,7 +26,7 @@ from dassh import core, InterAssembly
 # np.set_printoptions(threshold=sys.maxsize)
 # np.set_printoptions(linewidth=500)
 
-def _get_inter_assembly_model_red(c: dassh.core.Core, model: str, 
+def _get_inter_assembly_model_res(c: dassh.core.Core, model: str, 
                                   t_duct: np.ndarray,
                                   dz: float = 0.0) -> np.ndarray:
     """Instantiate an InterAssembly object for testing and return 
@@ -43,10 +43,15 @@ def _get_inter_assembly_model_red(c: dassh.core.Core, model: str,
         Duct wall temperature array [K]
     dz : float
         Axial mesh [m]
+        
+    Returns
+    -------
+    numpy.ndarray
+        Temperature change dT or temperature in the inter-assembly gap
     """
     IAobj = InterAssembly(model, dz, t_duct, c.coolant_gap_temp,
-                          c.gap_coolant, c.Rcond, c.sc_adj,
-                          c.conv_util, c.inv_sc_mfr,
+                          c.gap_coolant, c._Rcond, c._sc_adj,
+                          c._conv_util, c._inv_sc_mfr,
                           c.coolant_gap_params['htc'])
     
     if model == 'flow':
@@ -770,7 +775,7 @@ def test_accelerated_noflow_model(small_core_no_power_all_fuel):
     # -----------------------------------------------------------------
     # OLD METHOD - get the answer against which to check new method
     # 2021-04-27 - modified to use new attributes
-    ans = np.zeros(len(c.sc_adj))
+    ans = np.zeros(len(c._sc_adj))
     # Convection resistance factor
     R_conv = np.array(
         [1 / (c.d_gap / 2 / (c.gap_params['wp'][0] * 0.5)
@@ -783,7 +788,7 @@ def test_accelerated_noflow_model(small_core_no_power_all_fuel):
     L[0, 0] = c.gap_params['L'][4, 0]
     L[0, 1] = c.gap_params['L'][0, 0]
     L[1, 0] = L[0, 1]
-    for sci in range(len(c.sc_adj)):
+    for sci in range(len(c._sc_adj)):
         type_i = c._sc_types[sci]
         C = 0.0
         # Collect adjacent duct wall temperatures - identify
@@ -795,7 +800,7 @@ def test_accelerated_noflow_model(small_core_no_power_all_fuel):
 
         # Conduction to/from adjacent coolant subchannels
         for j in range(3):
-            adj = c.sc_adj[sci, j]
+            adj = c._sc_adj[sci, j]
             if adj == 0:
                 continue
             sc_adj = adj - 1
@@ -807,7 +812,7 @@ def test_accelerated_noflow_model(small_core_no_power_all_fuel):
         ans[sci] = ans[sci] / C
 
     # -----------------------------------------------------------------
-    res = _get_inter_assembly_model_red(c, c.model, t_duct)
+    res = _get_inter_assembly_model_res(c, c.model, t_duct)
     diff = res - ans
     for i in range(len(diff)):
         if np.abs(diff[i]) > 1e-10:
@@ -832,7 +837,7 @@ def test_accelerated_ductavg_model(small_core_no_power_all_fuel):
             t_duct.append(approx_duct[asm[i]][loc[i]])
         ans[sci] = np.average(t_duct)
     # -----------------------------------------------------------------
-    res = _get_inter_assembly_model_red(c, 'duct_average', approx_duct)
+    res = _get_inter_assembly_model_res(c, 'duct_average', approx_duct)
     assert np.allclose(ans, res)
 
 
@@ -863,7 +868,7 @@ def test_acc_flow_model_conv_only(small_core_no_power_all_fuel):
                                / c.gap_flow_rate
                                / a[0])
             # Corner -> wall 1
-            ht_consts[1][2] = (c.conv_util['const'][8, 0]
+            ht_consts[1][2] = (c._conv_util['const'][8, 0]
                                * c.gap_params['total area']
                                / c.gap_flow_rate
                                / a[1])
@@ -888,8 +893,8 @@ def test_acc_flow_model_conv_only(small_core_no_power_all_fuel):
             Temperature change in the inter-assembly gap coolant
 
         """
-        dT = np.zeros(len(self.sc_adj))
-        for sci in range(len(self.sc_adj)):
+        dT = np.zeros(len(self._sc_adj))
+        for sci in range(len(self._sc_adj)):
             type_i = self._sc_types[sci]
 
             # Convection to/from duct wall
@@ -905,7 +910,7 @@ def test_acc_flow_model_conv_only(small_core_no_power_all_fuel):
                      / self.gap_coolant.heat_capacity)
 
             # Conduction to/from adjacent coolant subchannels
-            for adj in self.sc_adj[sci]:
+            for adj in self._sc_adj[sci]:
                 if adj == 0:
                     continue
                 sc_adj = adj - 1
@@ -920,7 +925,7 @@ def test_acc_flow_model_conv_only(small_core_no_power_all_fuel):
 
     approx_duct = np.random.random(c._asm_sc_adj.shape) * 10 + 623.15
     ans = _convection_model_OLD(c, 0.1, approx_duct, ht_consts, htc)
-    res = _get_inter_assembly_model_red(c, 'flow', approx_duct, 0.1)
+    res = _get_inter_assembly_model_res(c, 'flow', approx_duct, 0.1)
     diff = res - ans
     for i in range(diff.shape[0]):
         if np.abs(diff[i]) > 1e-10:
@@ -963,7 +968,7 @@ def test_acc_flow_model(small_core_no_power_all_fuel, c_fuel_asm):
                                / c.gap_flow_rate
                                / a[0])
             # Corner -> wall 1
-            ht_consts[1][2] = (c.conv_util['const'][8, 0]
+            ht_consts[1][2] = (c._conv_util['const'][8, 0]
                                * c.gap_params['total area']
                                / c.gap_flow_rate
                                / a[1])
@@ -988,8 +993,8 @@ def test_acc_flow_model(small_core_no_power_all_fuel, c_fuel_asm):
             Temperature change in the inter-assembly gap coolant
 
         """
-        dT = np.zeros(len(self.sc_adj))
-        for sci in range(len(self.sc_adj)):
+        dT = np.zeros(len(self._sc_adj))
+        for sci in range(len(self._sc_adj)):
             type_i = self._sc_types[sci]
 
             # Convection to/from duct wall
@@ -1005,7 +1010,7 @@ def test_acc_flow_model(small_core_no_power_all_fuel, c_fuel_asm):
                      / self.gap_coolant.heat_capacity)
 
             # Conduction to/from adjacent coolant subchannels
-            for adj in self.sc_adj[sci]:
+            for adj in self._sc_adj[sci]:
                 if adj == 0:
                     continue
                 sc_adj = adj - 1
@@ -1020,7 +1025,7 @@ def test_acc_flow_model(small_core_no_power_all_fuel, c_fuel_asm):
 
     approx_duct = np.random.random(c._asm_sc_adj.shape) * 10 + 623.15
     ans = _convection_model_OLD(c, 0.1, approx_duct, ht_consts, htc)
-    res = _get_inter_assembly_model_red(c, 'flow', approx_duct, 0.1)
+    res = _get_inter_assembly_model_res(c, 'flow', approx_duct, 0.1)
     diff = res - ans
     for i in range(diff.shape[0]):
         if np.abs(diff[i]) > 1e-10:

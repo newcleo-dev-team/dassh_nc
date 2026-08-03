@@ -6,7 +6,8 @@ Class to handle the inter-assembly models
 """
 ########################################################################
 import numpy as np
-
+from dassh.material import Material
+from typing import Union
 
 class InterAssembly():
     """Class to handle the inter-assembly models
@@ -15,7 +16,7 @@ class InterAssembly():
     ----------
     model : str
         Inter-assembly gap model to use
-        Options are: 'flow', 'noflow', 'duct_average'
+        Options are: 'flow', 'no_flow', 'duct_average'
     dz : float
         Axial mesh [m]
     t_duct : numpy.ndarray
@@ -35,55 +36,48 @@ class InterAssembly():
     htc : numpy.ndarray
         Heat transfer coefficient between the duct wall and the inter-assembly 
         gap coolant [W/m^2-K]
-    """
+    """    
     def __init__(self, model: str, dz: float, t_duct: np.ndarray, 
                  coolant_gap_temp: np.ndarray, 
-                 gap_coolant: object, Rcond: np.ndarray, 
-                 sc_adj: np.ndarray, conv_util: dict,
+                 gap_coolant: Material, Rcond: np.ndarray, 
+                 sc_adj: np.ndarray, 
+                 conv_util: dict[str, Union[np.ndarray, list]],
                  inv_sc_mfr: np.ndarray, htc: np.ndarray):
-        self._model = model
-        self._dz = dz
-        self._t_duct = t_duct
-        self._coolant_gap_temp = coolant_gap_temp
-        self._gap_coolant = gap_coolant
-        self._sc_adj = sc_adj
-        self._Rcond = Rcond
-        self._htc = htc
-        self._conv_util = conv_util
-        self._inv_sc_mfr = inv_sc_mfr
         
-    def gap_model(self):
-        """Selects the inter-assembly gap model to use based on the
-        user input
+        self._model: str = model
+        self._dz: float = dz
+        self._t_duct: np.ndarray = t_duct
+        self._coolant_gap_temp: np.ndarray = coolant_gap_temp
+        self._gap_coolant: Material = gap_coolant
+        self._sc_adj: np.ndarray = sc_adj
+        self._Rcond: np.ndarray = Rcond
+        self._htc: np.ndarray = htc
+        self._conv_util: dict[str, Union[np.ndarray, list]] = conv_util
+        self._inv_sc_mfr: np.ndarray = inv_sc_mfr
+        
+
+    def gap_model(self) -> np.ndarray:
+        """Run the selected inter-assembly gap model to calculate the 
+        temperature in the inter-assembly 
         
         Returns
         -------
         numpy.ndarray
-            Temperature change in the inter-assembly gap coolant
-            
-        Raises
-        ------
-        ValueError
-            If the input for the inter-assembly gap model is invalid
+            Temperature in the inter-assembly gap coolant
         """
-        models = {
-            "flow": self._flow_model,
-            "no_flow": self._noflow_model,
-            "duct_average": self._duct_average_model
-            }
-        
-        if self._model in models:
-            models[self._model]()
+        if self._model in self.available_models:
+            self.available_models[self._model]()
         return self._coolant_gap_temp
         
         
     def _flow_model(self):
         """Inter-assembly gap convection model
-        
-        Returns
-        -------
-        numpy.ndarray
-            Temperature change in the inter-assembly gap coolant
+            
+        Notes
+        -----
+        The contact resistance between the bulk liquid and the duct
+        wall is calculated using a heat transfer coefficient based on
+        the actual velocity of the interassembly gap flow
         """
         # CONVECTION TO/FROM DUCT WALL
         C = self._conv_util['const'] * self._htc[:, None]
@@ -113,20 +107,15 @@ class InterAssembly():
         low that the the axial mesh requirement is intractably small.
         Assumes no thermal contact resistance between the duct wall
         and the coolant.
-
-        The contact resistance between the bulk liquid and the duct
-        wall is calculated using a heat transfer coefficient based on
-        the actual velocity of the interassembly gap flow
-
         """
-        # CONVECTION TO/FROM DUCT WALL
+        # CONDUCTION TO/FROM DUCT WALL
         R_conv = self._conv_util['const']
 
         # Lookup temperatures and mask as necessary
         T = R_conv[:, 0] * self._t_duct[tuple(self._conv_util['inds'][0])]
         T += R_conv[:, 1] * self._t_duct[tuple(self._conv_util['inds'][1])]
         T += R_conv[:, 2] * self._t_duct[tuple(self._conv_util['inds'][2])]
-        # Get the total convection resistance, which will go in the
+        # Get the total conduction resistance, which will go in the
         # denominator at the end
         C_conv = R_conv[:, 0] + R_conv[:, 1] + R_conv[:, 2]
 
@@ -147,14 +136,9 @@ class InterAssembly():
         Notes
         -----
         Recommended for use when inter-assembly gap flow rate is so
-        low that the the axial mesh requirement is intractably small.
+        low that the axial mesh requirement is intractably small.
         Assumes no thermal contact resistance between the duct wall
-        and the coolant.
-
-        The contact resistance between the bulk liquid and the duct
-        wall is calculated using a heat transfer coefficient based on
-        the actual velocity of the interassembly gap flow
-
+        and the coolant
         """
         # Lookup temperatures and mask as necessary
         T0 = self._t_duct[tuple(self._conv_util['inds'][0])]
@@ -166,3 +150,12 @@ class InterAssembly():
         # Average nonzero values
         self._coolant_gap_temp = (np.sum((T0, T1, T2), axis=0)
                                   / np.count_nonzero((T0, T1, T2), axis=0))
+        
+    @property
+    def available_models(self):
+        """Dictionary of available inter-assembly gap models"""
+        return {
+            "flow": self._flow_model,
+            "no_flow": self._noflow_model,
+            "duct_average": self._duct_average_model
+            }

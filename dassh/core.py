@@ -185,7 +185,7 @@ class Core(LoggedClass):
         self._n_sc_per_asm = np.count_nonzero(self._asm_sc_adj, axis=1)
 
         # Global subchannel-subchannel adjacency
-        self.sc_adj = self._find_adjacent_sc(asm_adj_sc)
+        self._sc_adj = self._find_adjacent_sc(asm_adj_sc)
         # Subchannel area, hydraulic diameter, distances to neighbors
         self.gap_params = {}
         self.gap_params['wp'] = self._calculate_sc_wp()
@@ -208,9 +208,9 @@ class Core(LoggedClass):
         # Flow parameters
         self._sc_mfr = self.gap_flow_rate * self.gap_params['area frac']
         if self.model == 'flow':
-            self.inv_sc_mfr = 1 / self._sc_mfr
+            self._inv_sc_mfr = 1 / self._sc_mfr
         else:
-            self.inv_sc_mfr = None
+            self._inv_sc_mfr = None
 
         # Reynolds number constant
         self.coolant_gap_params['_Re_sc'] = \
@@ -592,7 +592,7 @@ class Core(LoggedClass):
                 side = np.count_nonzero(self._asm_sc_types[asm[0]][:loc[0]])
                 pp, dwc = self._geom_params['dims'][asm[0], side]
                 for j in range(3):
-                    sc_adj = self.sc_adj[i, j] - 1
+                    sc_adj = self._sc_adj[i, j] - 1
                     if sc_adj < 0:
                         continue
                     if self._sc_types[sc_adj] == 1:
@@ -602,11 +602,11 @@ class Core(LoggedClass):
             # Corner subchannels: look to neighbors
             else:
                 for j in range(3):
-                    sc_adj = self.sc_adj[i, j] - 1
+                    sc_adj = self._sc_adj[i, j] - 1
                     if sc_adj < 0:
                         continue
                     asm_adj, loc_adj = \
-                        np.where(self._asm_sc_adj == self.sc_adj[i, j])
+                        np.where(self._asm_sc_adj == self._sc_adj[i, j])
                     side_adj = np.count_nonzero(
                         self._asm_sc_types[asm_adj[0]][:loc_adj[0]])
                     pp, dwc = self._geom_params['dims'][asm_adj[0], side_adj]
@@ -1123,14 +1123,14 @@ class Core(LoggedClass):
         masks to ensure that they're only added if the adjacency exists
 
         """
-        self.conv_util = {}
+        self._conv_util = {}
         # Collect assembly, hex-side, and side-location indices for
         # each duct mesh; if no match, use -1 as a placeholder; this
         # is what we'll filter on later.
         a = [[], [], []]
         # Collect convection constants in array: need "wetted perimeter"
         # of subchannel connection with each adjacent assembly (up to 3)
-        self.conv_util['const'] = np.zeros((self.n_sc, 3))
+        self._conv_util['const'] = np.zeros((self.n_sc, 3))
         for sci in range(self.n_sc):
             asm, loc = np.where(self._asm_sc_adj == sci + 1)
 #            asm = [ai for ai in range(len(self._asm_sc_adj))
@@ -1150,7 +1150,7 @@ class Core(LoggedClass):
 
             # Calculate convection constant based on sc-duct connections
             for i in range(len(asm)):
-                self.conv_util['const'][sci, i] = \
+                self._conv_util['const'][sci, i] = \
                     self.gap_params['asm wp'][asm[i], loc[i]]
 
         # Now we're going to collect the indices where gap and duct
@@ -1163,18 +1163,18 @@ class Core(LoggedClass):
         inds = []
         for i in range(3):
             inds.append(np.moveaxis(np.array(a[i]), -1, 0))
-        self.conv_util['inds'] = inds
+        self._conv_util['inds'] = inds
 
         # Now let's create the masks. Anywhere that self._inds = -1,
         # we will set the mask equal to 0 so that any values captured
         # by that index are eliminated. There are only two masks bc
         # the first temperature returned is always valid (since there
         # is always at least one duct-gap connection)
-        self.conv_util['mask1'] = self.conv_util['inds'][1][0] >= 0
-        self.conv_util['mask2'] = self.conv_util['inds'][2][0] >= 0
+        self._conv_util['mask1'] = self._conv_util['inds'][1][0] >= 0
+        self._conv_util['mask2'] = self._conv_util['inds'][2][0] >= 0
 
         if self.model == 'no_flow':
-            self.conv_util['const'] *= (2 / self.d_gap)
+            self._conv_util['const'] *= (2 / self.d_gap)
 
     def _make_cond_mask(self):
         """Just like for the convection lookup, make a mask that can
@@ -1192,7 +1192,7 @@ class Core(LoggedClass):
         # have a neighbor, L=0 and can't be in the denominator. In
         # that case, we set the conduction constant to zero so that
         # heat transfer cannot occur.
-        self.Rcond = np.divide(self.d_gap, self.gap_params['L'],
+        self._Rcond = np.divide(self.d_gap, self.gap_params['L'],
                                out=np.zeros_like(self.gap_params['L']),
                                where=(self.gap_params['L'] != 0))
 
@@ -1330,8 +1330,8 @@ class Core(LoggedClass):
         # Calculate new coolant gap temperatures
         IAobj = InterAssembly(self.model, dz, asm_duct_temps, 
                               self.coolant_gap_temp, 
-                              self.gap_coolant, self.Rcond, self.sc_adj, 
-                              self.conv_util, self.inv_sc_mfr, 
+                              self.gap_coolant, self._Rcond, self._sc_adj, 
+                              self._conv_util, self._inv_sc_mfr, 
                               self.coolant_gap_params['htc'])
         
         self.coolant_gap_temp = IAobj.gap_model()
@@ -1730,12 +1730,12 @@ def calculate_min_dz(core_obj, temp_lo, temp_hi):
     for temp in [temp_lo, temp_hi]:
         core_obj._update_coolant_gap_params(temp)
         term1 = (core_obj.coolant_gap_params['htc']
-                 * np.sum(core_obj.conv_util['const'], axis=1)
-                 * core_obj.inv_sc_mfr
+                 * np.sum(core_obj._conv_util['const'], axis=1)
+                 * core_obj._inv_sc_mfr
                  / core_obj.gap_coolant.heat_capacity)
         term2 = (core_obj.gap_coolant.thermal_conductivity
                  * core_obj.d_gap
-                 * core_obj.inv_sc_mfr
+                 * core_obj._inv_sc_mfr
                  / core_obj.gap_coolant.heat_capacity
                  / np.sum(core_obj.gap_params['L'], axis=1))
         dz = 1 / (term1 + term2)
