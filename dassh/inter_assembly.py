@@ -29,7 +29,7 @@ class InterAssembly():
         Thermal contact resistance between subchannels [m^2-K/W]
     sc_adj : numpy.ndarray
         Subchannel adjacency matrix
-    conv_util : dict
+    conv_util : dict[str, Union[numpy.ndarray, list]]
         Dictionary of convection utility variables
     inv_sc_mfr : numpy.ndarray
         Inverse of the subchannel mass flow rate [s/kg]
@@ -63,7 +63,7 @@ class InterAssembly():
         Returns
         -------
         numpy.ndarray
-            Temperature in the inter-assembly gap coolant
+            Temperature calculated in the inter-assembly gap coolant
         """
         if self._model in self.available_models:
             self.available_models[self._model]()
@@ -153,7 +153,9 @@ class InterAssembly():
         
     @property
     def available_models(self):
-        """Dictionary of available inter-assembly gap models"""
+        """
+        dict[str, callable]: Dictionary of available inter-assembly gap models
+        """
         return {
             "flow": self._flow_model,
             "no_flow": self._noflow_model,
