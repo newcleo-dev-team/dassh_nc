@@ -755,13 +755,14 @@ class Assembly(LoggedClass):
         # Pressure drop update
         if 'pressure_drop' in dfiles.keys():
             write_step['pressure_drop'][0, 3] = self.pressure_drop
-            _dp = {'friction': 0.0, 'spacer_grid': 0.0, 'gravity': 0.0}
-            for reg in self.region:
-                for k in reg._pressure_drop.keys():
-                    _dp[k] += reg._pressure_drop[k]
-            write_step['pressure_drop'][0, 4] = _dp['friction']
-            write_step['pressure_drop'][0, 5] = _dp['spacer_grid']
-            write_step['pressure_drop'][0, 6] = _dp['gravity']
+            if write_step['pressure_drop'].shape[1] > 4:
+                _dp = {'friction': 0.0, 'spacer_grid': 0.0, 'gravity': 0.0}
+                for reg in self.region:
+                    for k in reg._pressure_drop.keys():
+                        _dp[k] += reg._pressure_drop[k]
+                write_step['pressure_drop'][0, 4] = _dp['friction']
+                write_step['pressure_drop'][0, 5] = _dp['spacer_grid']
+                write_step['pressure_drop'][0, 6] = _dp['gravity']
             np.savetxt(dfiles['pressure_drop'],
                        write_step['pressure_drop'],
                        delimiter=',')

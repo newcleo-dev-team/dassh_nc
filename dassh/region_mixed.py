@@ -13,6 +13,7 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
 from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
     MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE
 import sys
+from typing import Union
 
 
 def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, 
@@ -293,6 +294,8 @@ class MixedRegion(RoddedRegion, MixedClass):
         # Update energy balance if requested
         # Calculated as:
         # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
+        self._hstar = self._calc_star_quantity(delta_v0, delta_rho0, nn, 
+                                               'h', RR)
         if ebal:
             mcpdT_i = self.sc_mfr * self._enthalpy - mdh_old
             # Error introduced in the energy balance by h_star approximation
@@ -352,7 +355,10 @@ class MixedRegion(RoddedRegion, MixedClass):
              self.params['de'][self.subchannel.type[:nn]])
         # Build energy terms of the known vector
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
-            + EEX
+            + EEX + self._hstar * ((self._sc_vel + self._delta_v)
+                                   * self._delta_rho + 
+                                   self.sc_properties['density'] * 
+                                   self._delta_v)
         # Wall convection term
         self._qw = self._wall_convection() * dz 
         energy_b[self.ht['conv']['ind']] += self._qw  / self.params['area'][
@@ -360,15 +366,38 @@ class MixedRegion(RoddedRegion, MixedClass):
         # Build momentum terms of the known vector
         momentum_b = GG + MEX 
         if 'grid' in self.corr_constants.keys():
-            momentum_b += self.params['area'][self.subchannel.type[:nn]] * \
-                self.calculate_spacergrid_pressure_drop(z, dz)
+            momentum_b -= self._calculate_spacergrid_pressure_drop_mix(z, dz)
         # Assemble known vector
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
         bb[0:2*nn:2] = momentum_b
         return bb
 
+    def _calculate_spacergrid_pressure_drop_mix(self, z: float, 
+                                                dz: float) -> np.ndarray:
+        """Calculate pressure losses due to spacer grid specific for each 
+        subchannel if crossed in current step
+        
+        Parameters
+        ----------
+        z : float
+            Axial position of the cell (m)
+        dz : float
+            Axial step size (m)
 
+        Returns
+        -------
+        np.ndarray
+            Pressure drop due to spacer grid
+        """
+        if any(_z > z - dz and _z < z for _z in 
+               self.corr_constants['grid']['z']):
+            return self.coolant_int_params['grid_loss_coeff'] \
+                * self._sc_vel**2 * self.sc_properties['density'] \
+                / 2.0
+        return 0.0
+        
+        
     def _wall_convection(self) -> np.ndarray:
         """
         Calculate convection between edge/corner subchannels and duct wall
@@ -536,7 +565,7 @@ class MixedRegion(RoddedRegion, MixedClass):
         AA : np.ndarray
             Coefficient matrix for the system to solve
         """
-        self._calc_h_v_star(delta_v, delta_rho, RR, nn)
+        self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(
             nn, dz, self.coolant_int_params['ff_i'], 
@@ -564,8 +593,88 @@ class MixedRegion(RoddedRegion, MixedClass):
         AA[-1,0:2*nn:2] = C_rho
         AA[-1,1:2*nn:2] = C_v
         return AA
-    
+
+
+    def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
+                            nn: int, variable: str, 
+                            RR: Union[np.ndarray, None] = None) -> np.ndarray:
+        """
+        Update hstar or vstar
+        
+        Parameters
+        ----------
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+        delta_rho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+        nn : int
+            Number of coolant subchannels
+        variable : str
+            Indicate whether to calculate hstar or vstar; 
+            options are 'h' or 'v'
+        RR : Union[np.ndarray, None], optional
+            Derivative of enthalpy with respect to density (J*m^3/kg^2);
+            Only used for hstar calculation
+
+        Returns
+        -------
+        np.ndarray
+            Calculated star quantity for each subchannel
+
+        Raises
+        ------
+        ValueError
+            If `variable` is not 'h' or 'v'
             
+        Notes
+        -----
+        Two options are available:
+        1) Approximate hstar and vstar as the midpoint value of enthalpy
+           and velocity (i.e., at z + dz/2) `h_mid` and `v_mid`
+        2) Calculate hstar and vstar as per "Cheng, S.K., 1984. Constitutive 
+           Correlations for wire-wrapped subchannel analysis under forced and
+           mixed convection conditions (Ph.D. thesis). MIT."
+        """
+        if variable != 'h' and variable != 'v':
+            raise ValueError("Invalid variable for star quantity calculation.")
+        if variable == 'h':
+            star_mid = self._enthalpy + RR * delta_rho / 2
+        else:
+            star_mid = self._sc_vel + delta_v / 2
+        # OPTION 1: Approximate hstar or vstar as midpoints
+        if not self._accurate_star_quantities:
+            return star_mid
+        # OPTION 2: Calculate hstar or vstar as per Cheng 
+        numerator = np.zeros(nn)
+        sum_den = np.zeros(nn)
+        # Calculate delta_m for each subchannel
+        vrho_1 = self.sc_properties['density'] * self._sc_vel 
+        vrho_2 = (self.sc_properties['density'] + delta_rho) * \
+            (self._sc_vel + delta_v) 
+        delta_m = (vrho_2 - vrho_1) * \
+            self.params['area'][self.subchannel.type[:nn]]
+        # Iterate over subchannels and adjacent subchannels
+        for i in range(nn):
+            denominator = 0.0
+            num = 0.0
+            for k in range(3):
+                j = self.ht['cond']['adj'][i][k]
+                if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] \
+                    and k == 2:
+                    continue
+                # Calculate delta_m difference between adjacent subchannel
+                xij = delta_m[i] - delta_m[j]
+                # Calculate numerators and denominators
+                num += self._calc_star_quantity_numerator(
+                    star_mid[i], star_mid[j], xij)
+                denominator += np.abs(xij)
+            numerator[i] = num
+            sum_den[i] = denominator      
+        # Calculate hstar and vstar
+        sum_den = 2 * sum_den + sys.float_info.epsilon 
+        return numerator / sum_den
+        
+        
     def _calc_star_quantity_numerator(self, var_mid_i: float, var_mid_j: float,
                                       xij: float) -> float:
         """
@@ -589,6 +698,96 @@ class MixedRegion(RoddedRegion, MixedClass):
         """
         return np.abs(xij) * (var_mid_i + var_mid_j) \
             - xij * (var_mid_i - var_mid_j)
+        
+        
+    def _calc_momentum_coefficients(self, nn: int, dz: float, 
+                                    delta_v: np.ndarray) -> tuple[np.ndarray]:
+        """
+        Calculate Ei and Fi coefficients for the momentum equation
+        
+        Parameters
+        ----------
+        nn : int
+            Number of coolant subchannels
+        dz : float
+            Axial step size (m)
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+            
+        Returns
+        -------
+        Tuple[np.ndarray]
+            Container of the two following np.ndarrays:
+            
+            - EE coefficients 
+            - FF coefficients
+        """
+        EE = (self._sc_vel + delta_v) * \
+            (self._sc_vel + delta_v - self._vstar) + GRAVITY_CONST * dz / 2 + \
+                self.coolant_int_params['ff_i'] * dz / 16 / \
+                    self.params['de'][self.subchannel.type[:nn]] * \
+                        (2 * self._sc_vel + delta_v)**2 
+        FF = self.sc_properties['density'] * (
+            (2 + self.coolant_int_params['ff_i'] * dz / 2 / 
+             self.params['de'][self.subchannel.type[:nn]]) * self._sc_vel + 
+            (1 + self.coolant_int_params['ff_i'] * dz / 8 /
+             self.params['de'][self.subchannel.type[:nn]]) * delta_v 
+            - self._vstar)
+        return EE, FF
+
+
+    def _calc_energy_coefficients(self, delta_v: np.ndarray, 
+                                  delta_rho: np.ndarray, 
+                                  RR: np.ndarray) -> tuple[np.ndarray]:
+        """
+        Calculate coefficients for the energy equation.
+        
+        Parameters
+        ----------
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+        delta_rho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+        RR : np.ndarray
+            Enthalpy variation coefficient (J*m^3/kg^2)
+            
+        Returns
+        -------
+        Tuple[np.ndarray]
+            Container of the two following np.ndarrays:
+            
+            - SS coefficients 
+            - TT coefficients
+        """
+        SS = (self._sc_vel + delta_v) * (self._enthalpy  + 
+             RR * (self.sc_properties['density'] + delta_rho))
+        TT = self.sc_properties['density'] * self._enthalpy 
+        return SS, TT
+
+
+    def _calc_continuity_coefficients(self, nn: int, delta_v: np.ndarray) \
+        -> tuple[np.ndarray]:
+        """
+        Calculate coefficients for the continuity equation.
+        
+        Parameters
+        ----------
+        nn : int
+            Number of coolant subchannels
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+            
+        Returns
+        -------
+        Tuple[np.ndarray]
+            Container of the two following np.ndarrays:
+            
+            - C_rho coefficients 
+            - C_v coefficients
+        """
+        areas = self.params['area'][self.subchannel.type[:nn]]
+        return areas * (self._sc_vel + delta_v), \
+            areas * self.sc_properties['density']
     
 
     def _init_static_correlated_params(self, t: float) -> None:
