@@ -568,7 +568,7 @@ class MixedRegion(RoddedRegion, MixedClass):
         self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(
-            nn, dz, self.coolant_int_params['ff_i'], 
+            dz, self.coolant_int_params['ff_i'], 
             self.params['de'][self.subchannel.type[:nn]], 
             delta_v
             )
@@ -698,42 +698,6 @@ class MixedRegion(RoddedRegion, MixedClass):
         """
         return np.abs(xij) * (var_mid_i + var_mid_j) \
             - xij * (var_mid_i - var_mid_j)
-        
-        
-    def _calc_momentum_coefficients(self, nn: int, dz: float, 
-                                    delta_v: np.ndarray) -> tuple[np.ndarray]:
-        """
-        Calculate Ei and Fi coefficients for the momentum equation
-        
-        Parameters
-        ----------
-        nn : int
-            Number of coolant subchannels
-        dz : float
-            Axial step size (m)
-        delta_v : np.ndarray
-            Variation of the SC velocities (m/s)
-            
-        Returns
-        -------
-        Tuple[np.ndarray]
-            Container of the two following np.ndarrays:
-            
-            - EE coefficients 
-            - FF coefficients
-        """
-        EE = (self._sc_vel + delta_v) * \
-            (self._sc_vel + delta_v - self._vstar) + GRAVITY_CONST * dz / 2 + \
-                self.coolant_int_params['ff_i'] * dz / 16 / \
-                    self.params['de'][self.subchannel.type[:nn]] * \
-                        (2 * self._sc_vel + delta_v)**2 
-        FF = self.sc_properties['density'] * (
-            (2 + self.coolant_int_params['ff_i'] * dz / 2 / 
-             self.params['de'][self.subchannel.type[:nn]]) * self._sc_vel + 
-            (1 + self.coolant_int_params['ff_i'] * dz / 8 /
-             self.params['de'][self.subchannel.type[:nn]]) * delta_v 
-            - self._vstar)
-        return EE, FF
 
 
     def _calc_energy_coefficients(self, delta_v: np.ndarray, 
@@ -763,31 +727,6 @@ class MixedRegion(RoddedRegion, MixedClass):
              RR * (self.sc_properties['density'] + delta_rho))
         TT = self.sc_properties['density'] * self._enthalpy 
         return SS, TT
-
-
-    def _calc_continuity_coefficients(self, nn: int, delta_v: np.ndarray) \
-        -> tuple[np.ndarray]:
-        """
-        Calculate coefficients for the continuity equation.
-        
-        Parameters
-        ----------
-        nn : int
-            Number of coolant subchannels
-        delta_v : np.ndarray
-            Variation of the SC velocities (m/s)
-            
-        Returns
-        -------
-        Tuple[np.ndarray]
-            Container of the two following np.ndarrays:
-            
-            - C_rho coefficients 
-            - C_v coefficients
-        """
-        areas = self.params['area'][self.subchannel.type[:nn]]
-        return areas * (self._sc_vel + delta_v), \
-            areas * self.sc_properties['density']
     
 
     def _init_static_correlated_params(self, t: float) -> None:
