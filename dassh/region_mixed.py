@@ -378,14 +378,38 @@ class MixedRegion(RoddedRegion):
         # Build momentum terms of the known vector
         momentum_b = GG + MEX 
         if 'grid' in self.corr_constants.keys():
-            momentum_b += self.calculate_spacergrid_pressure_drop(z, dz)
+            momentum_b -= self._calculate_spacergrid_pressure_drop_mix(z, dz)
         # Assemble known vector
         bb = np.zeros(2*nn + 1)
         bb[1:2*nn:2] = energy_b
         bb[0:2*nn:2] = momentum_b
         return bb
 
+    def _calculate_spacergrid_pressure_drop_mix(self, z: float, 
+                                                dz: float) -> np.ndarray:
+        """Calculate pressure losses due to spacer grid specific for each 
+        subchannel if crossed in current step
+        
+        Parameters
+        ----------
+        z : float
+            Axial position of the cell (m)
+        dz : float
+            Axial step size (m)
 
+        Returns
+        -------
+        np.ndarray
+            Pressure drop due to spacer grid
+        """
+        if any(_z > z - dz and _z < z for _z in 
+               self.corr_constants['grid']['z']):
+            return self.coolant_int_params['grid_loss_coeff'] \
+                * self._sc_vel**2 * self.sc_properties['density'] \
+                / 2.0
+        return 0.0
+        
+        
     def _wall_convection(self) -> np.ndarray:
         """
         Calculate convection between edge/corner subchannels and duct wall
