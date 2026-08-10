@@ -247,7 +247,7 @@ class TestBalances():
                                     simple_ctrl_rr_mixconv)
         # Conservation of mass
         self._assert_mass_balance(mfr_1, mfr_2)
-        # preservation of enthalpy
+        # Conservation of enthalpy
         assert h_2 - h_1 == pytest.approx(
             0, abs=1.0, rel=rr_data.mixed['tol']
             )
