@@ -4,6 +4,7 @@ author: fpepe-polito
 Methods for mixed convection axial regions; to be used within Assembly objects
 """
 ########################################################################
+import os
 import numpy as np
 import pytest
 import dassh
@@ -244,8 +245,11 @@ class TestBalances():
         # Conservation of energy
         self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
                                     simple_ctrl_rr_mixconv)
-        assert mfr_2 * h_2 - mfr_1 * h_1 == pytest.approx(
-            0, abs=rr_data.mixed['tol']
+        # Conservation of mass
+        self._assert_mass_balance(mfr_1, mfr_2)
+        # Conservation of enthalpy
+        assert h_2 == pytest.approx(
+            h_1, abs=0.0, rel=rr_data.mixed['tol']
             )
         
 class TestMethodsMixedRegion():
@@ -348,4 +352,34 @@ class TestMethodsMixedRegion():
             simple_ctrl_rr_mixconv, rr_data.mixed['deltav'], 
             rr_data.mixed['deltarho'], rr_data.mixed['RR_star_test'], 
             expected_hstar, expected_vstar)
-        
+
+
+def test_zero_power_enthalpy_jump(testdir: str):
+    """
+    Test the mixed_convection solver in isothermal case (rods with zero
+    power deposition). Check that relative error in global enthalpy jump is
+    less than used tolerance.
+    
+    Parameters
+    ----------
+    testdir: str
+        Folder where tests are runned.
+    """
+    # Load input
+    inpath = os.path.join(testdir, 'test_inputs')
+    dassh_input = dassh.DASSH_Input(
+        os.path.join(inpath, 'input_zero_power.txt')
+        )
+    # Enable mixed_convection solver
+    dassh_input.data['Setup']['mixed_convection'] = True
+    dassh_input.data['Setup']['Dump']['coolant'] = False
+    dassh_input.data['Plot'] = {}
+    # Calculate solution
+    r = dassh.Reactor(dassh_input, write_output=False)
+    h_in = r.assemblies[0].region[0]._enthalpy.copy()
+    r.temperature_sweep()
+    h_out = r.assemblies[0].region[0]._enthalpy.copy()
+    # Global enthalpy check
+    assert h_out == pytest.approx(
+        h_in, abs=0.0, rel=rr_data.mixed['tol']
+        )
