@@ -248,8 +248,8 @@ class TestBalances():
         # Conservation of mass
         self._assert_mass_balance(mfr_1, mfr_2)
         # Conservation of enthalpy
-        assert h_2 - h_1 == pytest.approx(
-            0, abs=1.0, rel=rr_data.mixed['tol']
+        assert h_2 == pytest.approx(
+            h_1, abs=0.0, rel=rr_data.mixed['tol']
             )
         
 class TestMethodsMixedRegion():
@@ -380,6 +380,6 @@ def test_zero_power_enthalpy_jump(testdir: str):
     r.temperature_sweep()
     h_out = r.assemblies[0].region[0]._enthalpy.copy()
     # Global enthalpy check
-    assert h_out - h_in == pytest.approx(
-        0, abs=1.0, rel=rr_data.mixed['tol']
+    assert h_out == pytest.approx(
+        h_in, abs=0.0, rel=rr_data.mixed['tol']
         )
