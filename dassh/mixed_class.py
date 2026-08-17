@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
-import sys
 from dassh._commons import GRAVITY_CONST
-
+from dassh.material import Material
 
 class MixedClass(ABC):
     """Parent class for mixed convection models
@@ -23,43 +22,42 @@ class MixedClass(ABC):
     """
     
     
-    def __init__(self, n_sc, coolant_obj):
+    def __init__(self, n_sc: int, coolant_obj: Material):
         # Coolant object
-        self.coolant = coolant_obj
+        self._coolant: Material = coolant_obj
         # Set initial guesses 
-        self._delta_P = 1.0 # Guess on pressure drop
-        self._delta_v = 0.1 * np.ones(n_sc) # Guess on velocity variation
-        self._delta_rho = np.ones(n_sc) # Guess on density variation
+        self._delta_P: float = 1.0 # Guess on pressure drop
+        self._delta_v: np.ndarray = 0.1 * np.ones(n_sc) # Guess on velocity variation
+        self._delta_rho: np.ndarray = np.ones(n_sc) # Guess on density variation
         # Initialize star quantities
-        self._hstar = np.zeros(n_sc)
-        self._vstar = np.zeros(n_sc)
+        self._hstar: np.ndarray = np.zeros(n_sc)
+        self._vstar: np.ndarray = np.zeros(n_sc)
         # Initialize pressure drop
-        self._pressure_drop = 0.0 
+        self._pressure_drop: float = 0.0 
         # Initialize coolant density in subchannels
-        self.sc_properties['density'] = self.coolant.density * np.ones(n_sc) 
+        self.sc_properties['density']: np.ndarray = self._coolant.density \
+            * np.ones(n_sc) 
         # Initialize enthalpy array
-        self._enthalpy = self.coolant.convert_properties(
+        self._enthalpy: np.ndarray = self._coolant.convert_properties(
             density=self.sc_properties['density'])
         # Initialize subchannel velocities
-        self._sc_vel = np.zeros(n_sc)
+        self._sc_vel: np.ndarray = np.zeros(n_sc)
 
         
     def _calc_momentum_coefficients(self, dz: float, 
                                     ff: np.ndarray, dh: np.ndarray,
                                     delta_v: np.ndarray) -> tuple[np.ndarray]:
         """
-        Calculate Ei and Fi coefficients for the momentum equation
+        Calculate coefficients for the momentum equation.
         
         Parameters
         ----------
-        nn : int
-            Number of coolant subchannels
         dz : float
             Axial step size (m)
         ff : np.ndarray
-            Friction factor for each subchannel
+            Friction factor for each subchannel (-)
         dh : np.ndarray
-            Hydraulic diameter for each subchannel
+            Hydraulic diameter for each subchannel (m) 
         delta_v : np.ndarray
             Variation of the SC velocities (m/s)
             
@@ -92,7 +90,7 @@ class MixedClass(ABC):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
+            Derivative of enthalpy w.r.t. density (J*m^3/kg^2)
             
         Returns
         -------
@@ -145,11 +143,11 @@ class MixedClass(ABC):
             
         Returns
         -------
-        RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
+        np.ndarray
+            Derivative of enthalpy w.r.t. density (J*m^3/kg^2)
             RR = dh / drho = [h(rho + drho) - h(rho)] / drho
         """
-        return (self.coolant.convert_properties(
+        return (self._coolant.convert_properties(
             density=self.sc_properties['density']+drho) 
                 - self._enthalpy) / drho
     
@@ -157,3 +155,13 @@ class MixedClass(ABC):
     def _calc_star_quantity():
         """Calculate the star quantities hstar and vstar"""
         pass
+    
+
+    @property
+    def coolant(self) -> Material:
+        """Get the coolant object"""
+        return self._coolant
+    
+    @coolant.setter
+    def coolant(self, value: Material):
+        self._coolant = value

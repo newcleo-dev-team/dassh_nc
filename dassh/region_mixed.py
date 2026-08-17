@@ -194,7 +194,7 @@ class MixedRegion(RoddedRegion, MixedClass):
         self._solve_system(dz, z, q['pins'], q['cool'], ebal)
         # Update coolant temperatures from enthalpy
         self.temp['coolant_int'] = \
-            self.coolant.convert_properties(enthalpy=self._enthalpy) 
+            self._coolant.convert_properties(enthalpy=self._enthalpy) 
         # Update coolant properties
         self._update_coolant_int_params(self.avg_coolant_int_temp, 
                                         sc_vel=self._sc_vel)
@@ -289,7 +289,7 @@ class MixedRegion(RoddedRegion, MixedClass):
         self.sc_properties['density'] += delta_rho
         self._pressure_drop -= delta_P
         # Update enthalpy converting density
-        self._enthalpy = self.coolant.convert_properties(
+        self._enthalpy = self._coolant.convert_properties(
             density=self.sc_properties['density'])
         # Update energy balance if requested
         # Calculated as:
@@ -773,9 +773,9 @@ class MixedRegion(RoddedRegion, MixedClass):
             Array of temperatures
         """
         for i in range(len(temp)):  
-            self.coolant.update(temp[i])
+            self._coolant.update(temp[i])
             for prop in MIXED_CONV_PROP_TO_UPDATE:
-                self.sc_properties[prop][i] = getattr(self.coolant, prop)
+                self.sc_properties[prop][i] = getattr(self._coolant, prop)
                 
                 
     def _setup_ht_constants(self):
