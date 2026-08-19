@@ -7,16 +7,18 @@ Class to handle the inter-assembly models
 ########################################################################
 import numpy as np
 from dassh.material import Material
+from dassh.mixed_class import MixedClass
 from typing import Union
 
-class InterAssembly():
+
+class InterAssembly(MixedClass):
     """Class to handle the inter-assembly models
     
     Parameters
     ----------
     model : str
         Inter-assembly gap model to use
-        Options are: 'flow', 'no_flow', 'duct_average'
+        Options are: 'flow', 'no_flow', 'duct_average', and 'mixed_flow'
     dz : float
         Axial mesh [m]
     t_duct : numpy.ndarray
@@ -55,6 +57,8 @@ class InterAssembly():
         self._conv_util: dict[str, Union[np.ndarray, list]] = conv_util
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
         
+        MixedClass.__init__(self, coolant_gap_temp.shape[0], 
+                            coolant_obj=gap_coolant)
 
     def gap_model(self) -> np.ndarray:
         """Run the selected inter-assembly gap model to calculate the 
@@ -151,6 +155,15 @@ class InterAssembly():
         self._coolant_gap_temp = (np.sum((T0, T1, T2), axis=0)
                                   / np.count_nonzero((T0, T1, T2), axis=0))
         
+        
+    def _mixed_flow_model(self):
+        """
+        Inter-assembly gap model that uses a mixed convection model
+        to calculate the inter-assembly gap coolant temperature
+        """        
+        raise NotImplementedError("Mixed convection inter-assembly gap model is not yet implemented")
+        
+        
     @property
     def available_models(self):
         """
@@ -159,5 +172,6 @@ class InterAssembly():
         return {
             "flow": self._flow_model,
             "no_flow": self._noflow_model,
-            "duct_average": self._duct_average_model
+            "duct_average": self._duct_average_model,
+            "mixed_flow": self._mixed_flow_model,
             }

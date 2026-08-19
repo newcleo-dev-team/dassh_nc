@@ -72,7 +72,8 @@ class Core(LoggedClass):
                  test=False, htc_params_duct=None):
         """Instantiate Core object."""
         LoggedClass.__init__(self, 4, 'dassh.core.Core')
-        if model not in ['flow', 'no_flow', 'duct_average', None]:
+        if model not in ['flow', 'no_flow', 'duct_average', 
+                         'mixed_flow', None]:
             msg = 'Do not understand input inter-assembly gap model: '
             self.log('error', msg + model)
 
