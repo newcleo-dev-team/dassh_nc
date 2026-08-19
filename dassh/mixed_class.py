@@ -35,8 +35,7 @@ class MixedClass(ABC):
         # Initialize pressure drop
         self._pressure_drop: float = 0.0 
         # Initialize coolant density in subchannels
-        self.sc_properties['density']: np.ndarray = self._coolant.density \
-            * np.ones(n_sc) 
+        self.sc_properties['density'] = self._coolant.density * np.ones(n_sc) 
         # Initialize enthalpy array
         self._enthalpy: np.ndarray = self._coolant.convert_properties(
             density=self.sc_properties['density'])

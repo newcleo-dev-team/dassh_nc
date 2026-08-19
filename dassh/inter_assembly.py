@@ -8,6 +8,7 @@ Class to handle the inter-assembly models
 import numpy as np
 from dassh.material import Material
 from dassh.mixed_class import MixedClass
+from dassh._commons import PROPS_NAME
 from typing import Union
 
 
@@ -56,9 +57,12 @@ class InterAssembly(MixedClass):
         self._htc: np.ndarray = htc
         self._conv_util: dict[str, Union[np.ndarray, list]] = conv_util
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
-        
-        MixedClass.__init__(self, coolant_gap_temp.shape[0], 
-                            coolant_obj=gap_coolant)
+        self.sc_properties: dict[str, np.ndarray] = {
+            k: np.zeros(coolant_gap_temp.shape[0]) for k in PROPS_NAME}
+        if self._model == 'mixed_flow':
+            MixedClass.__init__(self, coolant_gap_temp.shape[0], 
+                                coolant_obj=gap_coolant)
+
 
     def gap_model(self) -> np.ndarray:
         """Run the selected inter-assembly gap model to calculate the 
@@ -164,6 +168,10 @@ class InterAssembly(MixedClass):
         raise NotImplementedError("Mixed convection inter-assembly gap model is not yet implemented")
         
         
+    def _calc_star_quantity():
+        pass    
+    
+    
     @property
     def available_models(self):
         """
