@@ -1,3 +1,11 @@
+########################################################################
+"""
+date: 2026-07-xx
+author: fpepe
+Abstract class to handle the mixed convection models
+"""
+########################################################################
+
 from abc import ABC, abstractmethod
 import numpy as np
 from dassh._commons import GRAVITY_CONST
