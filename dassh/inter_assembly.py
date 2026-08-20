@@ -6,6 +6,7 @@ Class to handle the inter-assembly models
 """
 ########################################################################
 import numpy as np
+from dassh.correlations import friction_ia
 from dassh.material import Material
 from dassh.mixed_class import MixedClass
 from dassh._commons import PROPS_NAME
