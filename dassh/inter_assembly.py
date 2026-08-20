@@ -175,10 +175,42 @@ class InterAssembly(MixedClass):
         pass
     
         
-    def _calc_star_quantity(self):
-        pass    
-    
-    
+    def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray,
+                            variable: str, 
+                            RR: Union[np.ndarray, None] = None) -> np.ndarray:
+        """
+        Update hstar or vstar
+        
+        Parameters
+        ----------
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+        delta_rho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+        variable : str
+            Indicate whether to calculate hstar or vstar; 
+            options are 'h' or 'v'
+        RR : Union[np.ndarray, None], optional
+            Derivative of enthalpy with respect to density (J*m^3/kg^2);
+            Only used for hstar calculation
+
+        Returns
+        -------
+        np.ndarray
+            Calculated star quantity for each subchannel
+
+        Raises
+        ------
+        ValueError
+            If `variable` is not 'h' or 'v'
+        """   
+        if variable != 'h' and variable != 'v':
+            raise ValueError("Invalid variable for star quantity calculation.")
+        if variable == 'h':
+            return self._enthalpy + RR * delta_rho / 2
+        return self._sc_vel + delta_v / 2
+
+
     @property
     def available_models(self):
         """
