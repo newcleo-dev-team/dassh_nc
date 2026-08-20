@@ -23,7 +23,7 @@ the coolant in the gap between them
 import numpy as np
 from dassh.inter_assembly import InterAssembly
 from dassh.logged_class import LoggedClass
-from dassh.correlations import nusselt_db
+from dassh.correlations import nusselt_db, friction_ia
 
 
 _sqrt3 = np.sqrt(3)
@@ -87,12 +87,7 @@ class Core(LoggedClass):
         self.gap_coolant = coolant_obj
         self.gap_coolant.update(inlet_temperature)
         self.gap_flow_rate = gap_flow_rate
-        self.coolant_gap_params = \
-            {'Re': 0.0,  # bundle-average Reynolds number
-             'Re_sc': np.zeros(2),  # subchannel Reynolds numbers
-             'vel': 0.0,  # bundle-average coolant velocity
-             'ff': np.zeros(2),  # subchannel friction factors
-             'htc': np.zeros(2)}  # heat transfer coefficients
+        self.coolant_gap_params = {}  
         self.z = [0.0]
         self.model = model
         if htc_params_duct:
@@ -1263,23 +1258,9 @@ class Core(LoggedClass):
         """
         self.gap_coolant.update(temp)
 
-        # Inter-assembly gap average velocity
-        self.coolant_gap_params['vel'] = \
-            (self.gap_flow_rate
-             / self.gap_coolant.density
-             / self.gap_params['total area'])
-
-        # Gap-average Reynolds number
-        self.coolant_gap_params['Re'] = \
-            (self.gap_flow_rate
-             * self.gap_params['total de']
-             / self.gap_coolant.viscosity
-             / self.gap_params['total area'])
-
         # Subchannel Reynolds numbers
-        self.coolant_gap_params['Re_sc'] = \
-            (self.coolant_gap_params['_Re_sc']  # <-- = m_i * De_i / A_i
-             / self.gap_coolant.viscosity)
+        Re_sc = (self.coolant_gap_params['_Re_sc']  # <-- = m_i * De_i / A_i
+                 / self.gap_coolant.viscosity)
 
         # Heat transfer coefficient (via Nusselt number)
         # Although coolant properties are global and velocity is the
@@ -1287,9 +1268,9 @@ class Core(LoggedClass):
         # diameter. Therefore will all have unique Nu
         if self.model is None:
             self.coolant_gap_params['htc'] = np.zeros(self.n_sc)
-        elif self.model == 'flow':
+        elif self.model in ['flow', 'mixed_flow']:
             nu = nusselt_db.calculate_sc_Nu(
-                self.coolant_gap_params['Re_sc'],
+                Re_sc,
                 self._htc_params,
                 coolant_obj=self.gap_coolant)
             self.coolant_gap_params['htc'] = \
@@ -1303,6 +1284,10 @@ class Core(LoggedClass):
             # self.coolant_gap_params['htc'] *= 0.5 * self.d_gap
             h = 2 * self.gap_coolant.thermal_conductivity / self.d_gap
             self.coolant_gap_params['htc'] = np.full((self.n_sc,), h)
+
+        if self.model == 'mixed_flow':
+            self.coolant_gap_params['ff'] = \
+                friction_ia.calculate_sc_friction_factor(Re_sc)
 
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION
