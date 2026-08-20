@@ -302,28 +302,6 @@ class MixedRegion(RoddedRegion, MixedClass):
             delta_m = self.sc_mfr - old_mfr
             star_error = self._hstar * delta_m
             self.update_ebal(dz*np.sum(qq), self._qw, mcpdT_i, star_error)
-            
-            
-    def _copy_solution(self, drho: np.ndarray, dv: np.ndarray, 
-                       dP: float) -> tuple[np.ndarray, float]:
-        """
-        Copy solution deltas
-        
-        Parameters
-        ----------
-        drho : np.ndarray
-            Density variation (kg/m^3)
-        dv : np.ndarray
-            Velocity variation (m/s)
-        dP : float
-            Pressure drop (Pa)
-            
-        Returns
-        -------
-        tuple[np.ndarray, float]
-            Copied density variation, velocity variation, and pressure drop
-        """
-        return drho.copy(), dv.copy(), dP
     
     
     def _build_vector(self, qq: np.ndarray, dz: float, z: float, 
@@ -539,60 +517,6 @@ class MixedRegion(RoddedRegion, MixedClass):
             (self.sc_properties['density'][adj_ind] * var[adj_ind] 
              - self.sc_properties['density'][self.ht['conv']['ind']]
              * var[self.ht['conv']['ind']])
-        
-        
-    def _build_matrix(self, dz: float, delta_v: np.ndarray,
-                      delta_rho: np.ndarray, RR: np.ndarray, 
-                      nn: int) -> np.ndarray:
-        """
-        Build the matrix for the system to solve
-
-        Parameters
-        ----------
-        dz : float
-            Axial step size (m)
-        delta_v : np.ndarray
-            Variation of the SC velocities (m/s)
-        delta_rho : np.ndarray
-            Variation of the SC densities (kg/m^3)
-        RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
-        nn : int
-            Number of coolant subchannels
-
-        Returns
-        -------
-        AA : np.ndarray
-            Coefficient matrix for the system to solve
-        """
-        self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
-        # Calculate coefficients for the matrix
-        EE, FF = self._calc_momentum_coefficients(
-            dz, self.coolant_int_params['ff_i'], 
-            self.params['de'][self.subchannel.type[:nn]], 
-            delta_v
-            )
-        SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
-        C_rho, C_v = self._calc_continuity_coefficients(
-            delta_v, self.params['area'][self.subchannel.type[:nn]]
-            )
-        # Build matrix
-        AA = np.zeros((2*nn + 1, 2*nn + 1))
-            
-        diag = np.zeros(2*nn + 1)
-        sup_diag = np.zeros(2*nn)
-        sub_diag = np.zeros(2*nn)
-    
-        diag[0:2*nn:2] = EE
-        diag[1:2*nn:2] = TT
-        sup_diag[0:2*nn:2] = FF
-        sub_diag[0:2*nn:2] = SS
-            
-        AA += np.diag(diag) + np.diag(sup_diag, k=1) + np.diag(sub_diag, k=-1)
-        AA[0:-2:2,-1] = 1
-        AA[-1,0:2*nn:2] = C_rho
-        AA[-1,1:2*nn:2] = C_v
-        return AA
 
 
     def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
@@ -698,35 +622,6 @@ class MixedRegion(RoddedRegion, MixedClass):
         """
         return np.abs(xij) * (var_mid_i + var_mid_j) \
             - xij * (var_mid_i - var_mid_j)
-
-
-    def _calc_energy_coefficients(self, delta_v: np.ndarray, 
-                                  delta_rho: np.ndarray, 
-                                  RR: np.ndarray) -> tuple[np.ndarray]:
-        """
-        Calculate coefficients for the energy equation.
-        
-        Parameters
-        ----------
-        delta_v : np.ndarray
-            Variation of the SC velocities (m/s)
-        delta_rho : np.ndarray
-            Variation of the SC densities (kg/m^3)
-        RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
-            
-        Returns
-        -------
-        Tuple[np.ndarray]
-            Container of the two following np.ndarrays:
-            
-            - SS coefficients 
-            - TT coefficients
-        """
-        SS = (self._sc_vel + delta_v) * (self._enthalpy  + 
-             RR * (self.sc_properties['density'] + delta_rho))
-        TT = self.sc_properties['density'] * self._enthalpy 
-        return SS, TT
     
 
     def _init_static_correlated_params(self, t: float) -> None:

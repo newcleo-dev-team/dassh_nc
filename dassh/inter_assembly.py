@@ -165,10 +165,17 @@ class InterAssembly(MixedClass):
         Inter-assembly gap model that uses a mixed convection model
         to calculate the inter-assembly gap coolant temperature
         """        
-        raise NotImplementedError("Mixed convection inter-assembly gap model is not yet implemented")
+        self._solve_system()
+        self._coolant_gap_temp = \
+            self._coolant.convert_properties(enthalpy=self._enthalpy)       
         
+    
+    def _solve_system(self):
+        """Solve the system of equations for the mixed convection model"""
+        pass
+    
         
-    def _calc_star_quantity():
+    def _calc_star_quantity(self):
         pass    
     
     
