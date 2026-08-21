@@ -791,6 +791,9 @@ class Reactor(LoggedClass):
         # gap --> duct for each assembly
         # self._setup_interpolation_params()
         self._setup_gap_mesh_params()
+        # Initialize inter-assembly gap parameters for mixed convection
+        if self.core.model == 'mixed_flow':
+            self.core._init_params(self.inlet_temp)
 
     def _setup_interpolation_params(self):
         """Give each assembly some precalculated constants to speed up

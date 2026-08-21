@@ -236,6 +236,11 @@ class Core(LoggedClass):
         # self.ebal = np.zeros(())
         self.ebal = {}
         self.ebal['asm'] = np.zeros(self._asm_sc_adj.shape)
+        
+        # Instantiate the inter-assembly gap model object
+        self.ia_obj = InterAssembly(self.model, self.n_sc, self.gap_coolant, 
+                                    self._Rcond, self._sc_adj, 
+                                    self._conv_util, self._inv_sc_mfr)
 
     # MAP INTER-ASSEMBLY GAP; DEFINE GEOMETRY --------------------------
 
@@ -1287,8 +1292,21 @@ class Core(LoggedClass):
 
         if self.model == 'mixed_flow':
             self.coolant_gap_params['ff'] = \
-                friction_ia.calculate_sc_friction_factor(Re_sc)
+                friction_ia.calculate_subchannel_friction_factor(Re_sc)
 
+    
+    def _init_params(self, temp: float) -> None:
+        """
+        Initialize the parameters for the mixed convection model
+        
+        Parameters
+        ----------
+        temp : float
+            Coolant inlet temperature (K)
+        """
+        pass
+        
+        
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION
     ####################################################################
@@ -1314,13 +1332,9 @@ class Core(LoggedClass):
         self._update_energy_balance(dz, asm_duct_temps)
 
         # Calculate new coolant gap temperatures
-        IAobj = InterAssembly(self.model, dz, asm_duct_temps, 
-                              self.coolant_gap_temp, 
-                              self.gap_coolant, self._Rcond, self._sc_adj, 
-                              self._conv_util, self._inv_sc_mfr, 
-                              self.coolant_gap_params['htc'])
-        
-        self.coolant_gap_temp = IAobj.gap_model()
+        self.ia_obj.set_params(dz, asm_duct_temps, self.coolant_gap_temp,
+                               self.coolant_gap_params['htc'])
+        self.coolant_gap_temp = self.ia_obj.gap_model()
 
 
     def _update_energy_balance(self, dz, approx_duct_temps):

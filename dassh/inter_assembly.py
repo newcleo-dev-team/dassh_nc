@@ -20,12 +20,8 @@ class InterAssembly(MixedClass):
     model : str
         Inter-assembly gap model to use
         Options are: 'flow', 'no_flow', 'duct_average', and 'mixed_flow'
-    dz : float
-        Axial mesh [m]
-    t_duct : numpy.ndarray
-        Duct wall temperature [K]
-    coolant_gap_temp : numpy.ndarray
-        Inter-assembly gap coolant temperature [K]
+    n_sc : int
+        Number of subchannels in the assembly
     gap_coolant : DASSH Material object
         Coolant object for the inter-assembly gap coolant
     Rcond : numpy.ndarray
@@ -36,33 +32,47 @@ class InterAssembly(MixedClass):
         Dictionary of convection utility variables
     inv_sc_mfr : numpy.ndarray
         Inverse of the subchannel mass flow rate [s/kg]
-    htc : numpy.ndarray
-        Heat transfer coefficient between the duct wall and the inter-assembly 
-        gap coolant [W/m^2-K]
     """    
-    def __init__(self, model: str, dz: float, t_duct: np.ndarray, 
-                 coolant_gap_temp: np.ndarray, 
+    def __init__(self, model: str, n_sc: int,
                  gap_coolant: Material, Rcond: np.ndarray, 
                  sc_adj: np.ndarray, 
                  conv_util: dict[str, Union[np.ndarray, list]],
-                 inv_sc_mfr: np.ndarray, htc: np.ndarray):
+                 inv_sc_mfr: np.ndarray):
         
         self._model: str = model
-        self._dz: float = dz
-        self._t_duct: np.ndarray = t_duct
-        self._coolant_gap_temp: np.ndarray = coolant_gap_temp
         self._gap_coolant: Material = gap_coolant
         self._sc_adj: np.ndarray = sc_adj
         self._Rcond: np.ndarray = Rcond
-        self._htc: np.ndarray = htc
         self._conv_util: dict[str, Union[np.ndarray, list]] = conv_util
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
-        self.sc_properties: dict[str, np.ndarray] = {
-            k: np.zeros(coolant_gap_temp.shape[0]) for k in PROPS_NAME}
+        self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(n_sc) 
+                                                     for k in PROPS_NAME}
         if self._model == 'mixed_flow':
-            MixedClass.__init__(self, coolant_gap_temp.shape[0], 
-                                coolant_obj=gap_coolant)
+            MixedClass.__init__(self, n_sc, coolant_obj=gap_coolant)
 
+
+    def set_params(self, dz: float, t_duct: np.ndarray, 
+                   coolant_gap_temp: np.ndarray, htc: np.ndarray):
+        """
+        Set non-constant parameters for the inter-assembly gap model
+        
+        Parameters
+        ----------
+        dz : float
+            Axial mesh size [m]
+        t_duct : numpy.ndarray
+            Duct wall temperature [K]
+        coolant_gap_temp : numpy.ndarray
+            Inter-assembly gap coolant temperature [K]
+        htc : numpy.ndarray
+            Heat transfer coefficient between the duct wall and the 
+            inter-assembly gap coolant [W/m^2-K]
+        """
+        self._dz = dz
+        self._t_duct = t_duct
+        self._coolant_gap_temp = coolant_gap_temp
+        self._htc = htc
+    
 
     def gap_model(self) -> np.ndarray:
         """Run the selected inter-assembly gap model to calculate the 
