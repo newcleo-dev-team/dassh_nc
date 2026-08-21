@@ -421,6 +421,7 @@ def test_interasm_gap_ductavg_model_verification(three_asm_core):
     """Test no-flow (duct-avg) model for inter-assembly gap coolant"""
     asm_list, core_obj = three_asm_core
     core_obj.model = 'duct_average'
+    core_obj.ia_obj._model = 'duct_average'
     core_obj.gap_flow_rate = 0.0
 
     # Set up some stuff

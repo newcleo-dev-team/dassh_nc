@@ -26,7 +26,7 @@ from dassh import core, InterAssembly
 # np.set_printoptions(threshold=sys.maxsize)
 # np.set_printoptions(linewidth=500)
 
-def _get_inter_assembly_model_res(c: dassh.core.Core, model: str, 
+def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
                                   t_duct: np.ndarray,
                                   dz: float = 0.0) -> np.ndarray:
     """Instantiate an InterAssembly object for testing and return 
@@ -49,11 +49,10 @@ def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
     numpy.ndarray
         Temperature change dT or temperature in the inter-assembly gap
     """
-    IAobj = InterAssembly(model, dz, t_duct, c.coolant_gap_temp,
-                          c.gap_coolant, c._Rcond, c._sc_adj,
-                          c._conv_util, c._inv_sc_mfr,
-                          c.coolant_gap_params['htc'])
-    
+    IAobj = InterAssembly(model, c.n_sc,c.gap_coolant, c._Rcond, c._sc_adj,
+                          c._conv_util, c._inv_sc_mfr)
+    IAobj.set_params(dz, t_duct, c.coolant_gap_temp, 
+                     c.coolant_gap_params['htc'])
     if model == 'flow':
         return - c.coolant_gap_temp + IAobj.gap_model()
     return IAobj.gap_model()
@@ -749,6 +748,7 @@ def test_adiabatic_wall_temp(small_core_no_power):
     """Test that adiabatic wall model never changes gap temp and that
     outer wall HTC is always returned as zero"""
     small_core_no_power.model = None
+    small_core_no_power.ia_obj._model = None
     scpa = np.max(small_core_no_power._n_sc_per_asm)
     T_duct = [(np.random.random(scpa) - 0.5) * 5 + 650 for a in
               range(small_core_no_power.n_asm)]
