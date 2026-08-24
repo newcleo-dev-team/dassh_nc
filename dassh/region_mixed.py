@@ -253,7 +253,12 @@ class MixedRegion(RoddedRegion, MixedClass):
         while np.any(err_vect > self._mixed_convection_rel_tol) \
             and iter < MC_MAX_ITER:
             # Build matrix
-            AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
+            AA = self._build_matrix(
+                dz, delta_v0, delta_rho0, RR, nn, 
+                self.coolant_int_params['ff_i'],
+                self.params['de'][self.subchannel.type[:nn]], 
+                self.params['area'][self.subchannel.type[:nn]]
+                )
             # Solve system
             xx = np.linalg.solve(AA, bb)
             # Extract deltas from solution vector

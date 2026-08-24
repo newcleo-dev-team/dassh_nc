@@ -23,12 +23,16 @@ import numpy as np
 import pytest
 import dassh
 from dassh import core, InterAssembly
+from typing import Union
 # np.set_printoptions(threshold=sys.maxsize)
 # np.set_printoptions(linewidth=500)
 
 def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
                                   t_duct: np.ndarray,
-                                  dz: float = 0.0) -> np.ndarray:
+                                  dz: float = 0.0,
+                                  de: Union[np.ndarray, None] = None,
+                                  areas: Union[np.ndarray, None] = None
+                                  ) -> np.ndarray:
     """Instantiate an InterAssembly object for testing and return 
     the expected result: either the temperature change dT if 'flow' model,
     or the temperature itself if 'no_flow' or 'duct_average' models
@@ -43,6 +47,10 @@ def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
         Duct wall temperature array [K]
     dz : float
         Axial mesh [m]
+    de : Union[np.ndarray, None], optional
+        Hydraulic diameter array [m]
+    areas : Union[np.ndarray, None], optional
+        Cross-sectional area array [m^2]
         
     Returns
     -------
@@ -50,7 +58,7 @@ def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
         Temperature change dT or temperature in the inter-assembly gap
     """
     IAobj = InterAssembly(model, c.n_sc,c.gap_coolant, c._Rcond, c._sc_adj,
-                          c._conv_util, c._inv_sc_mfr)
+                          c._conv_util, c._inv_sc_mfr, de, areas)
     IAobj.set_params(dz, t_duct, c.coolant_gap_temp, 
                      c.coolant_gap_params['htc'])
     if model == 'flow':

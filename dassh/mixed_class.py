@@ -53,7 +53,8 @@ class MixedClass(ABC):
 
     def _build_matrix(self, dz: float, delta_v: np.ndarray,
                       delta_rho: np.ndarray, RR: np.ndarray, 
-                      nn: int) -> np.ndarray:
+                      nn: int, ff: np.ndarray, de: np.ndarray,
+                      areas: np.ndarray) -> np.ndarray:
         """
         Build the matrix for the system to solve
 
@@ -69,6 +70,12 @@ class MixedClass(ABC):
             Enthalpy variation coefficient (J*m^3/kg^2)
         nn : int
             Number of coolant subchannels
+        ff : np.ndarray
+            Friction factor for each subchannel (-)
+        de : np.ndarray
+            Hydraulic diameter for each subchannel (m)
+        areas : np.ndarray
+            Subchannel flow areas (m^2)
 
         Returns
         -------
@@ -77,15 +84,9 @@ class MixedClass(ABC):
         """
         self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
         # Calculate coefficients for the matrix
-        EE, FF = self._calc_momentum_coefficients(
-            dz, self.coolant_int_params['ff_i'], 
-            self.params['de'][self.subchannel.type[:nn]], 
-            delta_v
-            )
+        EE, FF = self._calc_momentum_coefficients(dz, ff, de, delta_v)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
-        C_rho, C_v = self._calc_continuity_coefficients(
-            delta_v, self.params['area'][self.subchannel.type[:nn]]
-            )
+        C_rho, C_v = self._calc_continuity_coefficients(delta_v, areas)
         # Build matrix
         AA = np.zeros((2*nn + 1, 2*nn + 1))
             
@@ -262,6 +263,12 @@ class MixedClass(ABC):
         return err_vect
 
 
+    @abstractmethod
+    def _build_vector(self):
+        """Build the known vector for the system to solve"""
+        pass
+    
+    
     @abstractmethod
     def _calc_star_quantity():
         """Calculate the star quantities hstar and vstar"""

@@ -240,7 +240,9 @@ class Core(LoggedClass):
         # Instantiate the inter-assembly gap model object
         self.ia_obj = InterAssembly(self.model, self.n_sc, self.gap_coolant, 
                                     self._Rcond, self._sc_adj, 
-                                    self._conv_util, self._inv_sc_mfr)
+                                    self._conv_util, self._inv_sc_mfr,
+                                    self.gap_params['de'], 
+                                    self.gap_params['area'])
 
     # MAP INTER-ASSEMBLY GAP; DEFINE GEOMETRY --------------------------
 

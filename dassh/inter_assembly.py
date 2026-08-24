@@ -8,7 +8,7 @@ Class to handle the inter-assembly models
 import numpy as np
 from dassh.material import Material
 from dassh.mixed_class import MixedClass
-from dassh._commons import PROPS_NAME
+from dassh._commons import PROPS_NAME, GRAVITY_CONST
 from typing import Union
 
 
@@ -32,12 +32,15 @@ class InterAssembly(MixedClass):
         Dictionary of convection utility variables
     inv_sc_mfr : numpy.ndarray
         Inverse of the subchannel mass flow rate [s/kg]
+    de : numpy.ndarray
+        Hydraulic diameter of the inter-assembly gap subchannels [m]
     """    
     def __init__(self, model: str, n_sc: int,
                  gap_coolant: Material, Rcond: np.ndarray, 
                  sc_adj: np.ndarray, 
                  conv_util: dict[str, Union[np.ndarray, list]],
-                 inv_sc_mfr: np.ndarray):
+                 inv_sc_mfr: np.ndarray, de: np.ndarray,
+                 areas: np.ndarray):
         
         self._model: str = model
         self._gap_coolant: Material = gap_coolant
@@ -45,6 +48,8 @@ class InterAssembly(MixedClass):
         self._Rcond: np.ndarray = Rcond
         self._conv_util: dict[str, Union[np.ndarray, list]] = conv_util
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
+        self._de: np.ndarray = de
+        self._areas: np.ndarray = areas
         self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(n_sc) 
                                                      for k in PROPS_NAME}
         if self._model == 'mixed_flow':
@@ -102,24 +107,51 @@ class InterAssembly(MixedClass):
         the actual velocity of the interassembly gap flow
         """
         # CONVECTION TO/FROM DUCT WALL
-        C = self._conv_util['const'] * self._htc[:, None]
-        dT = C[:, 0] * (self._t_duct[tuple(self._conv_util['inds'][0])]
-                        - self._coolant_gap_temp)
-        dT += C[:, 1] * (self._t_duct[tuple(self._conv_util['inds'][1])]
-                         - self._coolant_gap_temp)
-        dT += C[:, 2] * (self._t_duct[tuple(self._conv_util['inds'][2])]
-                         - self._coolant_gap_temp)
-
+        dT = self._convection_duct_wall()
+    
         # CONDUCTION TO/FROM OTHER COOLANT CHANNELS
-        dT += (self._gap_coolant.thermal_conductivity * 
-               np.sum((self._Rcond * (self._coolant_gap_temp[self._sc_adj - 1]
-                                     - self._coolant_gap_temp[..., None])), 
-                      axis=1))
+        dT += self._conduction_adj_sc()
 
         self._coolant_gap_temp += dT * self._dz * self._inv_sc_mfr \
             / self._gap_coolant.heat_capacity
         
+    
+    def _convection_duct_wall(self) -> np.ndarray:
+        """Calculate the temperature change due to convection to/from 
+        the duct wall
         
+        Returns
+        -------
+        numpy.ndarray
+            Temperature change due to convection to/from the duct wall [K]
+        """
+        C = self._conv_util['const'] * self._htc[:, None]
+        dT = C[:, 0] * (self._t_duct[tuple(self._conv_util['inds'][0])]
+                        - self._coolant_gap_temp)
+        dT += C[:, 1] * (self._t_duct[tuple(self._conv_util['inds'][1])]
+                            - self._coolant_gap_temp)
+        dT += C[:, 2] * (self._t_duct[tuple(self._conv_util['inds'][2])]
+                         - self._coolant_gap_temp)
+        return dT    
+    
+    
+    def _conduction_adj_sc(self) -> np.ndarray:
+        """Calculate the temperature change due to conduction to/from 
+        adjacent subchannels
+        
+        Returns
+        -------
+        numpy.ndarray
+            Temperature change due to conduction to/from adjacent 
+            subchannels [K]
+        """
+        dT = (self._gap_coolant.thermal_conductivity * 
+              np.sum((self._Rcond * (self._coolant_gap_temp[self._sc_adj - 1]
+                                     - self._coolant_gap_temp[..., None])), 
+                     axis=1))
+        return dT
+    
+    
     def _noflow_model(self):
         """Inter-assembly gap conduction model
 
@@ -202,7 +234,8 @@ class InterAssembly(MixedClass):
         while np.any(err_vect > 1e-3) and iter < 10:
             # Build matrix
             AA = self._build_matrix(self._dz, delta_v0, delta_rho0, RR, 
-                                    self._n_sc)
+                                    self._n_sc, self._ff, self._de, 
+                                    self._areas)
             # Solve system
             xx = np.linalg.solve(AA, bb)
             # Extract deltas
@@ -230,10 +263,31 @@ class InterAssembly(MixedClass):
         # Update enthalpy using converting density
         self._enthalpy = self._coolant.convert_properties(
             density=self.sc_properties['density'])
-            
+        # Update hstar
+        self._hstar = self._calc_star_quantity(self._delta_v, self._delta_rho, 
+                                               self._n_sc, 'h', RR)
+    
     
     def _build_vector(self) -> np.ndarray:
-        pass
+        """
+        Build the vector of known terms
+        """
+        # Calculate and GG terms
+        GG = - self.sc_properties['density'] * self._dz * \
+            (GRAVITY_CONST + self._ff * self._sc_vel**2 / 2 / self._de)
+        # Build energy terms of the known vector
+        EEX = self._conduction_adj_sc() * self._dz / self._areas
+        STAR = (self._sc_vel + self._delta_v) * self._hstar \
+            * self._delta_rho + self.sc_properties['density'] \
+                * self._hstar * self._delta_v
+        # Wall convection term
+        qwall = self._convection_duct_wall() * self._dz / self._areas
+        # Assemble known vector
+        bb = np.zeros(2 * self._n_sc + 1)
+        bb[1:2*self._n_sc:2] = STAR + qwall + EEX
+        bb[0:2*self._n_sc:2] = GG
+        return bb
+        
         
     def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray,
                             variable: str, 
