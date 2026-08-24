@@ -242,8 +242,7 @@ class Core(LoggedClass):
                                     self._Rcond, self._sc_adj, 
                                     self._conv_util, self._inv_sc_mfr,
                                     self.gap_params['de'], 
-                                    self.gap_params['area'],
-                                    self._htc_params)
+                                    self.gap_params['area'])
 
     # MAP INTER-ASSEMBLY GAP; DEFINE GEOMETRY --------------------------
 
@@ -1321,6 +1320,9 @@ class Core(LoggedClass):
         # Calculate new coolant gap temperatures
         self.ia_obj.set_params(dz, asm_duct_temps, self.coolant_gap_temp,
                                self.coolant_gap_params['htc'])
+        if self.model == 'mixed_flow':
+            self.ia_obj.set_mixed_only(self._sc_mfr/self.params['area'], 
+                                       self._htc_params)
         self.coolant_gap_temp = self.ia_obj.gap_model()
 
 

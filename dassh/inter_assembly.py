@@ -35,15 +35,13 @@ class InterAssembly(MixedClass):
         Inverse of the subchannel mass flow rate [s/kg]
     de : numpy.ndarray
         Hydraulic diameter of the inter-assembly gap subchannels [m]
-    htc_params : list[float]
-        List of parameters for the heat transfer coefficient correlation
     """    
     def __init__(self, model: str, n_sc: int,
                  gap_coolant: Material, Rcond: np.ndarray, 
                  sc_adj: np.ndarray, 
                  conv_util: dict[str, Union[np.ndarray, list]],
                  inv_sc_mfr: np.ndarray, de: np.ndarray,
-                 areas: np.ndarray, htc_params: list[float]):
+                 areas: np.ndarray):
         
         self._model: str = model
         self._gap_coolant: Material = gap_coolant
@@ -53,7 +51,6 @@ class InterAssembly(MixedClass):
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
         self._de: np.ndarray = de
         self._areas: np.ndarray = areas
-        self._htc_params: list[float] = htc_params
         self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(n_sc) 
                                                      for k in PROPS_NAME}
         if self._model == 'mixed_flow':
@@ -74,15 +71,33 @@ class InterAssembly(MixedClass):
             Duct wall temperature [K]
         coolant_gap_temp : numpy.ndarray
             Inter-assembly gap coolant temperature [K]
-        ff : numpy.ndarray
-            Friction factor for each subchannel (-)
+        htc : numpy.ndarray
+            Heat transfer coefficient for the inter-assembly 
+            gap subchannels [W/m^2-K]
         """
-        self._dz = dz
-        self._t_duct = t_duct
-        self._coolant_gap_temp = coolant_gap_temp
-        self._htc = htc
+        self._dz: float = dz
+        self._t_duct: np.ndarray = t_duct
+        self._coolant_gap_temp: np.ndarray = coolant_gap_temp
+        self._htc: np.ndarray = htc
+        
     
-
+    def set_mixed_only(self, rhov_in: np.ndarray, htc_params: list[float]):
+        """
+        Set parameters that are only used for the mixed convection model
+        
+        Parameters
+        ----------
+        rhov_in : numpy.ndarray
+            Inlet mass flux for the inter-assembly gap 
+            subchannels [kg/m^2-s]
+        htc_params : list[float]
+            Heat transfer coefficient for the inter-assembly 
+            gap subchannels [W/m^2-K]
+        """
+        self._sc_vel = rhov_in / self.sc_properties['density']
+        self._htc_params = htc_params
+        
+        
     def gap_model(self) -> np.ndarray:
         """Run the selected inter-assembly gap model to calculate the 
         temperature in the inter-assembly 
