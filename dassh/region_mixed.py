@@ -261,11 +261,9 @@ class MixedRegion(RoddedRegion, MixedClass):
             delta_v = xx[1:2*nn:2]
             delta_P = xx[-1]
             # Calculate errors
-            new_solution = np.dstack((delta_rho, delta_v))
-            old_solution = np.dstack((delta_rho0, delta_v0))
-            err_vect[:2] = np.max(np.abs((new_solution - old_solution) 
-                                         / old_solution), axis=1)
-            err_vect[2] = np.abs((delta_P - delta_P0) / delta_P0)
+            err_vect = self._calc_error(np.dstack((delta_rho, delta_v)), 
+                                        np.dstack((delta_rho0, delta_v0)),
+                                        delta_P, delta_P0)
             # Verbose output iteration info
             if self._verbose:
                 self.log('info', f'{iter+1}       {err_vect[0]:.6e}' + \

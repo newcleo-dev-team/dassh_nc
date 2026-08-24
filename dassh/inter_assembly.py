@@ -49,10 +49,11 @@ class InterAssembly(MixedClass):
                                                      for k in PROPS_NAME}
         if self._model == 'mixed_flow':
             MixedClass.__init__(self, n_sc, coolant_obj=gap_coolant)
-
+        self._n_sc: int = n_sc
 
     def set_params(self, dz: float, t_duct: np.ndarray, 
-                   coolant_gap_temp: np.ndarray, htc: np.ndarray):
+                   coolant_gap_temp: np.ndarray, htc: np.ndarray, 
+                   ff: Union[np.ndarray, None] = None):
         """
         Set non-constant parameters for the inter-assembly gap model
         
@@ -67,11 +68,14 @@ class InterAssembly(MixedClass):
         htc : numpy.ndarray
             Heat transfer coefficient between the duct wall and the 
             inter-assembly gap coolant [W/m^2-K]
+        ff : Union[numpy.ndarray, None], optional
+            Friction factor for the inter-assembly gap [-]
         """
         self._dz = dz
         self._t_duct = t_duct
         self._coolant_gap_temp = coolant_gap_temp
         self._htc = htc
+        self._ff = ff
     
 
     def gap_model(self) -> np.ndarray:
@@ -181,9 +185,55 @@ class InterAssembly(MixedClass):
         
     
     def _solve_system(self):
-        """Solve the system of equations for the mixed convection model"""
-        pass
+        """
+        Solve the system of equations for the mixed convection model
+        
+        """
+        # Use previous step deltas as initial guesses
+        delta_rho0, delta_v0, delta_P0 = \
+            self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
+        # BUild known vector
+        bb = self._build_vector()
+        # Calculate initial RR using guess `delta_rho0`
+        RR = self._calc_RR(delta_rho0)
+        # Iterate to solve the system
+        iter = 0
+        err_vect = np.ones(3)
+        while np.any(err_vect > 1e-3) and iter < 10:
+            # Build matrix
+            AA = self._build_matrix(self._dz, delta_v0, delta_rho0, RR, 
+                                    self._n_sc)
+            # Solve system
+            xx = np.linalg.solve(AA, bb)
+            # Extract deltas
+            delta_rho = xx[0:2*self._n_sc:2]
+            delta_v = xx[1:2*self._n_sc:2]
+            delta_P = xx[-1]
+            # Calculate errors
+            err_vect = self._calc_error(np.dstack((delta_rho, delta_v)), 
+                                        np.dstack((delta_rho0, delta_v0)),
+                                        delta_P, delta_P0)
+            # Update guesses for next iteration
+            delta_rho0, delta_v0, delta_P0 = \
+                self._copy_solution(delta_rho, delta_v, delta_P)
+            # Recalculate RR 
+            RR = self._calc_RR(delta_rho)
+            # Update iteration counter
+            iter += 1
+        # Update deltas with converged values
+        self._delta_rho, self._delta_v, self._delta_P = \
+            self._copy_solution(delta_rho, delta_v, delta_P)
+        # Update velocity, density, pressure drop adding convergence deltas
+        self._sc_vel += self._delta_v
+        self.sc_properties['density'] += self._delta_rho
+        self._pressure_drop -= self._delta_P
+        # Update enthalpy using converting density
+        self._enthalpy = self._coolant.convert_properties(
+            density=self.sc_properties['density'])
+            
     
+    def _build_vector(self) -> np.ndarray:
+        pass
         
     def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray,
                             variable: str, 

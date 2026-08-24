@@ -1293,7 +1293,8 @@ class Core(LoggedClass):
         if self.model == 'mixed_flow':
             self.coolant_gap_params['ff'] = \
                 friction_ia.calculate_subchannel_friction_factor(Re_sc)
-
+        else:
+            self.coolant_gap_params['ff'] = None
     
     def _init_params(self, temp: float) -> None:
         """
@@ -1333,7 +1334,8 @@ class Core(LoggedClass):
 
         # Calculate new coolant gap temperatures
         self.ia_obj.set_params(dz, asm_duct_temps, self.coolant_gap_temp,
-                               self.coolant_gap_params['htc'])
+                               self.coolant_gap_params['htc'],
+                               self.coolant_gap_params['ff'])
         self.coolant_gap_temp = self.ia_obj.gap_model()
 
 

@@ -233,7 +233,35 @@ class MixedClass(ABC):
         """
         return drho.copy(), dv.copy(), dP
     
+    
+    def _calc_error(self, new_vrho: np.ndarray, old_vrho: np.ndarray,
+                    new_dP: float, old_dP: float) -> np.ndarray:
+        """
+        Calculate the error between the new and old solutions
         
+        Parameters
+        ----------
+        new_vrho : np.ndarray
+            New velocity and density variations
+        old_vrho : np.ndarray
+            Old velocity and density variations
+        new_dP : float
+            New pressure drop
+        old_dP : float
+            Old pressure drop
+
+        Returns
+        -------
+        np.ndarray
+            Error vector for each subchannel and variable
+        """
+        err_vect = np.ones(3)
+        err_vect[:2] = np.max(np.abs((new_vrho - old_vrho) / old_vrho), 
+                              axis=1)
+        err_vect[2] = np.abs((new_dP - old_dP) / old_dP)
+        return err_vect
+
+
     @abstractmethod
     def _calc_star_quantity():
         """Calculate the star quantities hstar and vstar"""
