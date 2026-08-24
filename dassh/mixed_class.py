@@ -8,7 +8,7 @@ Abstract class to handle the mixed convection models
 
 from abc import ABC, abstractmethod
 import numpy as np
-from dassh._commons import GRAVITY_CONST
+from dassh._commons import GRAVITY_CONST, MIXED_CONV_PROP_TO_UPDATE
 from dassh.material import Material
 
 class MixedClass(ABC):
@@ -263,6 +263,21 @@ class MixedClass(ABC):
         return err_vect
 
 
+    def _update_subchannels_properties(self, temp: np.ndarray) -> None:
+        """
+        Update subchannel properties based on temperature
+        
+        Parameters
+        ----------
+        temp : np.ndarray
+            Array of temperatures
+        """
+        for i in range(len(temp)):  
+            self._coolant.update(temp[i])
+            for prop in MIXED_CONV_PROP_TO_UPDATE:
+                self.sc_properties[prop][i] = getattr(self._coolant, prop)
+    
+    
     @abstractmethod
     def _build_vector(self):
         """Build the known vector for the system to solve"""

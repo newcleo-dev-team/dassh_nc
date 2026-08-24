@@ -23,7 +23,7 @@ the coolant in the gap between them
 import numpy as np
 from dassh.inter_assembly import InterAssembly
 from dassh.logged_class import LoggedClass
-from dassh.correlations import nusselt_db, friction_ia
+from dassh.correlations import nusselt_db
 
 
 _sqrt3 = np.sqrt(3)
@@ -242,7 +242,8 @@ class Core(LoggedClass):
                                     self._Rcond, self._sc_adj, 
                                     self._conv_util, self._inv_sc_mfr,
                                     self.gap_params['de'], 
-                                    self.gap_params['area'])
+                                    self.gap_params['area'],
+                                    self._htc_params)
 
     # MAP INTER-ASSEMBLY GAP; DEFINE GEOMETRY --------------------------
 
@@ -1275,7 +1276,7 @@ class Core(LoggedClass):
         # diameter. Therefore will all have unique Nu
         if self.model is None:
             self.coolant_gap_params['htc'] = np.zeros(self.n_sc)
-        elif self.model in ['flow', 'mixed_flow']:
+        elif self.model in ['flow']:
             nu = nusselt_db.calculate_sc_Nu(
                 Re_sc,
                 self._htc_params,
@@ -1291,23 +1292,6 @@ class Core(LoggedClass):
             # self.coolant_gap_params['htc'] *= 0.5 * self.d_gap
             h = 2 * self.gap_coolant.thermal_conductivity / self.d_gap
             self.coolant_gap_params['htc'] = np.full((self.n_sc,), h)
-
-        if self.model == 'mixed_flow':
-            self.coolant_gap_params['ff'] = \
-                friction_ia.calculate_subchannel_friction_factor(Re_sc)
-        else:
-            self.coolant_gap_params['ff'] = None
-    
-    def _init_params(self, temp: float) -> None:
-        """
-        Initialize the parameters for the mixed convection model
-        
-        Parameters
-        ----------
-        temp : float
-            Coolant inlet temperature (K)
-        """
-        pass
         
         
     ####################################################################
@@ -1336,8 +1320,7 @@ class Core(LoggedClass):
 
         # Calculate new coolant gap temperatures
         self.ia_obj.set_params(dz, asm_duct_temps, self.coolant_gap_temp,
-                               self.coolant_gap_params['htc'],
-                               self.coolant_gap_params['ff'])
+                               self.coolant_gap_params['htc'])
         self.coolant_gap_temp = self.ia_obj.gap_model()
 
 

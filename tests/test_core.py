@@ -58,12 +58,13 @@ def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
         Temperature change dT or temperature in the inter-assembly gap
     """
     IAobj = InterAssembly(model, c.n_sc,c.gap_coolant, c._Rcond, c._sc_adj,
-                          c._conv_util, c._inv_sc_mfr, de, areas)
+                          c._conv_util, c._inv_sc_mfr, de, areas, c._htc_params)
     IAobj.set_params(dz, t_duct, c.coolant_gap_temp, 
                      c.coolant_gap_params['htc'])
     if model == 'flow':
         return - c.coolant_gap_temp + IAobj.gap_model()
     return IAobj.gap_model()
+
 
 def build_asm_list(n_ring, empty_positions=()):
     """Build assembly list for use in core objects"""

@@ -6,6 +6,7 @@ Class to handle the inter-assembly models
 """
 ########################################################################
 import numpy as np
+from dassh.correlations import nusselt_db, friction_ia
 from dassh.material import Material
 from dassh.mixed_class import MixedClass
 from dassh._commons import PROPS_NAME, GRAVITY_CONST
@@ -34,13 +35,15 @@ class InterAssembly(MixedClass):
         Inverse of the subchannel mass flow rate [s/kg]
     de : numpy.ndarray
         Hydraulic diameter of the inter-assembly gap subchannels [m]
+    htc_params : list[float]
+        List of parameters for the heat transfer coefficient correlation
     """    
     def __init__(self, model: str, n_sc: int,
                  gap_coolant: Material, Rcond: np.ndarray, 
                  sc_adj: np.ndarray, 
                  conv_util: dict[str, Union[np.ndarray, list]],
                  inv_sc_mfr: np.ndarray, de: np.ndarray,
-                 areas: np.ndarray):
+                 areas: np.ndarray, htc_params: list[float]):
         
         self._model: str = model
         self._gap_coolant: Material = gap_coolant
@@ -50,15 +53,16 @@ class InterAssembly(MixedClass):
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
         self._de: np.ndarray = de
         self._areas: np.ndarray = areas
+        self._htc_params: list[float] = htc_params
         self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(n_sc) 
                                                      for k in PROPS_NAME}
         if self._model == 'mixed_flow':
             MixedClass.__init__(self, n_sc, coolant_obj=gap_coolant)
         self._n_sc: int = n_sc
 
+
     def set_params(self, dz: float, t_duct: np.ndarray, 
-                   coolant_gap_temp: np.ndarray, htc: np.ndarray, 
-                   ff: Union[np.ndarray, None] = None):
+                   coolant_gap_temp: np.ndarray, htc: np.ndarray):
         """
         Set non-constant parameters for the inter-assembly gap model
         
@@ -70,17 +74,13 @@ class InterAssembly(MixedClass):
             Duct wall temperature [K]
         coolant_gap_temp : numpy.ndarray
             Inter-assembly gap coolant temperature [K]
-        htc : numpy.ndarray
-            Heat transfer coefficient between the duct wall and the 
-            inter-assembly gap coolant [W/m^2-K]
-        ff : Union[numpy.ndarray, None], optional
-            Friction factor for the inter-assembly gap [-]
+        ff : numpy.ndarray
+            Friction factor for each subchannel (-)
         """
         self._dz = dz
         self._t_duct = t_duct
         self._coolant_gap_temp = coolant_gap_temp
         self._htc = htc
-        self._ff = ff
     
 
     def gap_model(self) -> np.ndarray:
@@ -210,12 +210,31 @@ class InterAssembly(MixedClass):
         """
         Inter-assembly gap model that uses a mixed convection model
         to calculate the inter-assembly gap coolant temperature
-        """        
+        """   
+        self._update_mixed_params()     
         self._solve_system()
         self._coolant_gap_temp = \
             self._coolant.convert_properties(enthalpy=self._enthalpy)       
         
     
+    def _update_mixed_params(self):
+        """
+        Update the parameters for the mixed convection model
+        """
+        # Update subchannel properties
+        self.update_subchannels_properties(self._coolant_gap_temp)
+        # Calculate Reynolds number
+        Re_sc = self.sc_properties['density'] *self._sc_vel * \
+            self._de /self.sc_properties['viscosity']
+        # Calculate Nusselt number and HTC
+        Nu_sc = nusselt_db.calculate_sc_Nu(Re_sc, self._htc_params,
+                                           self._htc_params)
+        self._htc = Nu_sc * self.sc_properties['thermal_conductivity'] \
+            / self._de
+        # Calculate friction factor
+        self._ff = friction_ia.calculate_subchannel_friction_factor(Re_sc)
+        
+        
     def _solve_system(self):
         """
         Solve the system of equations for the mixed convection model
