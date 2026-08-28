@@ -275,12 +275,12 @@ class TestMethodsMixedRegion():
             The expected vstar values
         """                              
         rm._hstar = rm._calc_star_quantity(
-            dv, drho, rm.subchannel.n_sc['coolant']['total'], 'h', RR
+            dv, drho, 'h', RR
             )
         assert rm._hstar == pytest.approx(expected_hstar, 
                                           abs=rr_data.mixed['tol'])
         rm._vstar = rm._calc_star_quantity(
-            dv, drho, rm.subchannel.n_sc['coolant']['total'], 'v', RR
+            dv, drho, 'v', RR
             )
         assert rm._vstar == pytest.approx(expected_vstar, 
                                          abs=rr_data.mixed['tol'])

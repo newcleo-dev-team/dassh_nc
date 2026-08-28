@@ -132,39 +132,39 @@ class InterAssembly(MixedClass):
         
     
     def _convection_duct_wall(self) -> np.ndarray:
-        """Calculate the temperature change due to convection to/from 
+        """Calculate the linear heat transfer due to convection to/from 
         the duct wall
         
         Returns
         -------
         numpy.ndarray
-            Temperature change due to convection to/from the duct wall [K]
+            Linear heat transfer [W/m]
         """
         C = self._conv_util['const'] * self._htc[:, None]
-        dT = C[:, 0] * (self._t_duct[tuple(self._conv_util['inds'][0])]
+        qconv = C[:, 0] * (self._t_duct[tuple(self._conv_util['inds'][0])]
                         - self._coolant_gap_temp)
-        dT += C[:, 1] * (self._t_duct[tuple(self._conv_util['inds'][1])]
+        qconv += C[:, 1] * (self._t_duct[tuple(self._conv_util['inds'][1])]
                             - self._coolant_gap_temp)
-        dT += C[:, 2] * (self._t_duct[tuple(self._conv_util['inds'][2])]
+        qconv += C[:, 2] * (self._t_duct[tuple(self._conv_util['inds'][2])]
                          - self._coolant_gap_temp)
-        return dT    
+        return qconv    
     
     
     def _conduction_adj_sc(self) -> np.ndarray:
-        """Calculate the temperature change due to conduction to/from 
+        """Calculate the linear heat transfer due to conduction to/from 
         adjacent subchannels
         
         Returns
         -------
         numpy.ndarray
-            Temperature change due to conduction to/from adjacent 
-            subchannels [K]
+            Linear heat transfer [W/m]
         """
-        dT = (self._gap_coolant.thermal_conductivity * 
-              np.sum((self._Rcond * (self._coolant_gap_temp[self._sc_adj - 1]
+        qcond = (np.sum((self._Rcond * (self._coolant_gap_temp[self._sc_adj - 1]
                                      - self._coolant_gap_temp[..., None])), 
                      axis=1))
-        return dT
+        if self._model == 'flow':
+            return qcond * self._gap_coolant.thermal_conductivity
+        return qcond * self.sc_properties['thermal_conductivity']
     
     
     def _noflow_model(self):
@@ -237,13 +237,13 @@ class InterAssembly(MixedClass):
         Update the parameters for the mixed convection model
         """
         # Update subchannel properties
-        self.update_subchannels_properties(self._coolant_gap_temp)
+        self._update_subchannels_properties(self._coolant_gap_temp)
         # Calculate Reynolds number
-        Re_sc = self.sc_properties['density'] *self._sc_vel * \
-            self._de /self.sc_properties['viscosity']
+        Re_sc = self.sc_properties['density'] * self._sc_vel * \
+            self._de / self.sc_properties['viscosity']
         # Calculate Nusselt number and HTC
-        Nu_sc = nusselt_db.calculate_sc_Nu(Re_sc, self._htc_params,
-                                           self._htc_params)
+        Nu_sc = nusselt_db.calculate_sc_Nu(Re_sc, consts=self._htc_params,
+                                           sc_prop=self.sc_properties)
         self._htc = Nu_sc * self.sc_properties['thermal_conductivity'] \
             / self._de
         # Calculate friction factor
@@ -298,8 +298,8 @@ class InterAssembly(MixedClass):
         self._enthalpy = self._coolant.convert_properties(
             density=self.sc_properties['density'])
         # Update hstar
-        self._hstar = self._calc_star_quantity(self._delta_v, self._delta_rho, 
-                                               self._n_sc, 'h', RR)
+        self._hstar = self._calc_star_quantity(self._delta_v, self._delta_rho,
+                                               'h', RR)
     
     
     def _build_vector(self) -> np.ndarray:

@@ -246,8 +246,10 @@ class Core(LoggedClass):
         # If mixed convection model, initialize velocities and 
         # pass coefficients fot Nusselt number correlation
         if self.model == 'mixed_flow':
-            self.ia_obj.set_mixed_only(self._sc_mfr/self.params['area'], 
+            self.ia_obj.set_mixed_only(self._sc_mfr/self.gap_params['area'], 
                                        self._htc_params)
+            
+            
     # MAP INTER-ASSEMBLY GAP; DEFINE GEOMETRY --------------------------
 
     def _collect_sc_geom_params(self, asm_list):
@@ -1279,7 +1281,7 @@ class Core(LoggedClass):
         # diameter. Therefore will all have unique Nu
         if self.model is None:
             self.coolant_gap_params['htc'] = np.zeros(self.n_sc)
-        elif self.model in ['flow']:
+        elif self.model == 'flow':
             nu = nusselt_db.calculate_sc_Nu(
                 Re_sc,
                 self._htc_params,
@@ -1287,6 +1289,17 @@ class Core(LoggedClass):
             self.coolant_gap_params['htc'] = \
                 (self.gap_coolant.thermal_conductivity
                  * nu / self.gap_params['de'])
+        elif self.model == 'mixed_flow':
+            if hasattr(self, 'ia_obj') and hasattr(self.ia_obj, '_htc'):
+                self.coolant_gap_params['htc'] = self.ia_obj._htc
+            else:
+                nu = nusselt_db.calculate_sc_Nu(
+                    Re_sc,
+                    self._htc_params,
+                    coolant_obj=self.gap_coolant)
+                self.coolant_gap_params['htc'] = \
+                    (self.gap_coolant.thermal_conductivity
+                    * nu / self.gap_params['de'])
         else:  # Nu == 1
             # self.coolant_gap_params['htc'] = \
             #     (self.gap_coolant.thermal_conductivity

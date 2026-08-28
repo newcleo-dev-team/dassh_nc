@@ -82,7 +82,7 @@ class MixedClass(ABC):
         AA : np.ndarray
             Coefficient matrix for the system to solve
         """
-        self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
+        self._vstar = self._calc_star_quantity(delta_v, delta_rho, 'v')
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(dz, ff, de, delta_v)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)

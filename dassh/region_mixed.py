@@ -10,8 +10,7 @@ from dassh.mixed_class import MixedClass
 from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
     setup_conduction_constants, setup_convection_constants, \
         specify_region_details
-from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
-    MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE
+from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, MC_MAX_ITER
 import sys
 from typing import Union
 
@@ -62,7 +61,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
     return specify_region_details(rr, inp, mat)
 
 
-class MixedRegion(RoddedRegion, MixedClass):
+class MixedRegion(MixedClass, RoddedRegion):
     """Class to represent a rodded region with mixed convection
     
     Parameters
@@ -297,8 +296,7 @@ class MixedRegion(RoddedRegion, MixedClass):
         # Update energy balance if requested
         # Calculated as:
         # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
-        self._hstar = self._calc_star_quantity(delta_v0, delta_rho0, nn, 
-                                               'h', RR)
+        self._hstar = self._calc_star_quantity(delta_v0, delta_rho0, 'h', RR)
         if ebal:
             mcpdT_i = self.sc_mfr * self._enthalpy - mdh_old
             # Error introduced in the energy balance by h_star approximation
@@ -523,7 +521,7 @@ class MixedRegion(RoddedRegion, MixedClass):
 
 
     def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray, 
-                            nn: int, variable: str, 
+                            variable: str, 
                             RR: Union[np.ndarray, None] = None) -> np.ndarray:
         """
         Update hstar or vstar
@@ -534,8 +532,6 @@ class MixedRegion(RoddedRegion, MixedClass):
             Variation of the SC velocities (m/s)
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
-        nn : int
-            Number of coolant subchannels
         variable : str
             Indicate whether to calculate hstar or vstar; 
             options are 'h' or 'v'
@@ -572,6 +568,7 @@ class MixedRegion(RoddedRegion, MixedClass):
         if not self._accurate_star_quantities:
             return star_mid
         # OPTION 2: Calculate hstar or vstar as per Cheng 
+        nn = self._sc_vel.size
         numerator = np.zeros(nn)
         sum_den = np.zeros(nn)
         # Calculate delta_m for each subchannel
@@ -661,21 +658,6 @@ class MixedRegion(RoddedRegion, MixedClass):
                 :self.subchannel.n_sc['coolant']['total']]]     
 
 
-    def _update_subchannels_properties(self, temp: np.ndarray) -> None:
-        """
-        Update subchannel properties based on temperature
-        
-        Parameters
-        ----------
-        temp : np.ndarray
-            Array of temperatures
-        """
-        for i in range(len(temp)):  
-            self._coolant.update(temp[i])
-            for prop in MIXED_CONV_PROP_TO_UPDATE:
-                self.sc_properties[prop][i] = getattr(self._coolant, prop)
-                
-                
     def _setup_ht_constants(self):
         """Setup heat transfer constants in numpy arrays"""
         const = calculate_ht_constants(self, mixed=True)
