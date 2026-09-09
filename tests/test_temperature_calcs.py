@@ -25,6 +25,32 @@ import copy
 import pytest
 import dassh
 
+# Constants
+INTERNAL_IND: list[int] = [0, 2, 19]
+"""Indices of inter-assembly gap subchannels between the sides of two 
+assemblies in a 3-assembly core."""
+CORNER_IND: list[int] = [3, 11, 20]
+"""Indices of inter-assembly gap subchannels between the corners of two
+assemblies in a 3-assembly core."""
+CENTRAL_IND: int = 1
+"""Index of inter-assembly gap subchannel between three assemblies in a
+3-assembly core."""
+EXTERNAL_IND: list[list[int]] = [
+    [4, 5, 6, 7, 8, 9, 10], 
+    [12, 13, 14, 15, 16, 17, 18], 
+    [24, 25, 26, 27, 21, 22, 23]
+]
+"""Indices of inter-assembly gap subchannels that are close to only one 
+assembly in a 3-assembly core. Each sublist corresponds to one assembly."""
+DELTAZ = 1e-3
+"""Axial step size for calculating inter-assembly gap temperatures in tests."""
+DELTA_T_DUCT = 10.0
+"""Temperature difference for duct wall temperatures in tests."""
+HIGH_MFR = 100.0
+"""High mass flow rate for testing inter-assembly gap flow models in tests."""
+ABSTOL = 1e-2
+"""Absolute tolerance for comparing inter-assembly gap temperatures in tests."""
+
 
 # Use "print_option" to print temperatures and parameters
 # for use in Excel spreadsheet for verification
@@ -57,10 +83,9 @@ def test_int_coolant_verification(simple_asm):
     ])
 
     z = 1.29
-    dz = 0.001
     for i in range(200):
         # Calculate coolant and duct temperatures at the current level
-        simple_asm.calculate(dz, gap_t, gap_htc, z=z)
+        simple_asm.calculate(DELTAZ, gap_t, gap_htc, z=z)
 
         # Collect data to print for verification if test is not passed
         z_power = simple_asm.power.get_power(z)
@@ -81,7 +106,7 @@ def test_int_coolant_verification(simple_asm):
         print_list += list(simple_asm.temp_duct_surf[0, 0])
         if print_option:
             print(' '.join(['{:.10e}'.format(v) for v in print_list]))
-        z += dz
+        z += DELTAZ
 
     # print(simple_asm.temp_coolant - ans)
     assert np.allclose(simple_asm.temp_coolant, ans)
@@ -197,16 +222,15 @@ def test_duct_verification(simple_asm):
     }
     simple_asm._z = 1.29
     z = 1.29
-    dz = 0.001
     for i in range(100):
         htc1 = simple_asm.active_region.coolant_int_params['htc'][1]
         htc2 = simple_asm.active_region.coolant_int_params['htc'][2]
         start = simple_asm.active_region.subchannel.n_sc['coolant']['interior']
         coolant_temps = list(simple_asm.temp_coolant[start:])
-        simple_asm.calculate(dz, gap_t, gap_htc, z=z)
+        simple_asm.calculate(DELTAZ, gap_t, gap_htc, z=z)
 
         # Collect data to print for verification if test is not passed
-        z_power = simple_asm.power.get_power(z - dz * 0.5)
+        z_power = simple_asm.power.get_power(z - DELTAZ * 0.5)
         print_list = [z]
         print_list += list(simple_asm.temp_duct_surf[0, 0])
         print_list += list(simple_asm.temp_duct_mw[0])
@@ -218,7 +242,7 @@ def test_duct_verification(simple_asm):
         if print_option:
             print(' '.join(['{:.10e}'.format(v) for v in print_list]))
 
-        z += dz
+        z += DELTAZ
 
     assert np.allclose(ans['s_in'], simple_asm.temp_duct_surf[0, 0])
     assert np.allclose(ans['mw'], simple_asm.temp_duct_mw[0])
@@ -259,9 +283,8 @@ def test_bypass_gap_verification(simple_ctrl_asm):
                     6.2343766744661E+02, 6.2361524220506E+02])
     simple_ctrl_asm._z = 1.29
     z = 1.29
-    dz = 0.001
     for i in range(100):
-        simple_ctrl_asm.calculate(dz, gap_t, gap_htc, z=z)
+        simple_ctrl_asm.calculate(DELTAZ, gap_t, gap_htc, z=z)
 
         # Print things to see what's going on in the bypass gap
         print_list = [z]
@@ -277,7 +300,7 @@ def test_bypass_gap_verification(simple_ctrl_asm):
 
         if print_option:
             print(' '.join(['{:.12e}'.format(v) for v in print_list]))
-        z += dz
+        z += DELTAZ
 
     assert np.allclose(ans, simple_ctrl_asm.temp_bypass[0])
 
@@ -288,7 +311,6 @@ def test_interasm_gap_flow_model_verification(three_asm_core):
     # Set up some stuff
     asm_list, core_obj = three_asm_core
     inlet_temp = 623.15
-    dz = 0.001  # should be sufficient
     n_zpts = 20
     r = np.random.RandomState(seed=42)  # set for reproducibility
 
@@ -345,8 +367,8 @@ def test_interasm_gap_flow_model_verification(three_asm_core):
 
         # Calculate and print gap subchannel temperatures
         tduct = np.array([d[zi] for d in duct_temps])
-        core_obj.calculate_gap_temperatures(dz, tduct)
-        print_list = [dz * zi] + list(core_obj.coolant_gap_temp) + print_list
+        core_obj.calculate_gap_temperatures(DELTAZ, tduct)
+        print_list = [DELTAZ * zi] + list(core_obj.coolant_gap_temp) + print_list
         if print_option:
             print(' '.join(['{:.10e}'.format(v) for v in print_list]))
 
@@ -369,7 +391,6 @@ def test_interasm_gap_noflow_model_verification(three_asm_core):
 
     # Set up some stuff
     inlet_temp = 623.15
-    dz = 0.001  # should be sufficient
     n_zpts = 20
     r = np.random.RandomState(seed=42)  # set for reproducibility
     ans = np.array([
@@ -402,8 +423,8 @@ def test_interasm_gap_noflow_model_verification(three_asm_core):
 
         # Calculate and print gap subchannel temperatures
         tduct = np.array([d[zi] for d in duct_temps])
-        core_obj.calculate_gap_temperatures(dz, tduct)
-        print_list = [dz * zi] + list(core_obj.coolant_gap_temp) + print_list
+        core_obj.calculate_gap_temperatures(DELTAZ, tduct)
+        print_list = [DELTAZ * zi] + list(core_obj.coolant_gap_temp) + print_list
         if print_option:
             print(' '.join(['{:.10e}'.format(v) for v in print_list]))
 
@@ -426,7 +447,6 @@ def test_interasm_gap_ductavg_model_verification(three_asm_core):
 
     # Set up some stuff
     inlet_temp = 623.15
-    dz = 0.001  # should be sufficient
     n_zpts = 20
     r = np.random.RandomState(seed=42)  # set for reproducibility
     ans = np.array([651.511243165, 647.525353140, 651.392401735,
@@ -457,8 +477,8 @@ def test_interasm_gap_ductavg_model_verification(three_asm_core):
 
         # Calculate and print gap subchannel temperatures
         tduct = np.array([d[zi] for d in duct_temps])
-        core_obj.calculate_gap_temperatures(dz, tduct)
-        print_list = [dz * zi] + list(core_obj.coolant_gap_temp) + print_list
+        core_obj.calculate_gap_temperatures(DELTAZ, tduct)
+        print_list = [DELTAZ * zi] + list(core_obj.coolant_gap_temp) + print_list
         if print_option:
             print(' '.join(['{:.10e}'.format(v) for v in print_list]))
 
@@ -519,9 +539,8 @@ def print_bypass_gap_energy_cons_verification(simple_ctrl_asm_pins_cmat):
             print(k, asm_params[k])
     asm._z = 1.29
     z = 1.29
-    dz = 0.001
     for i in range(20):
-        asm.calculate(z, dz, gap_t, gap_htc, adiabatic=True, ebal=True)
+        asm.calculate(z, DELTAZ, gap_t, gap_htc, adiabatic=True, ebal=True)
 
         # Collect data to print for verification if test is not passed
         print_list = [z]
@@ -539,10 +558,183 @@ def print_bypass_gap_energy_cons_verification(simple_ctrl_asm_pins_cmat):
         if print_option:
             print(' '.join(['{:.10e}'.format(v) for v in print_list]))
 
-        z += dz
+        z += DELTAZ
     if print_option:
         assert 0
 
+
+def _setup_mixed_flow(three_asm_core: tuple[list[dassh.Assembly], 
+                                            dassh.Core]) -> tuple[dassh.Core, 
+                                                                  np.ndarray]:
+    """
+    Setup function for the `mixed_flow` model tests
+    
+    Parameters
+    ----------
+    three_asm_core : tuple[list[dassh.Assembly], dassh.Core]
+        A tuple containing a list of three assemblies and a core object.
+        The assemblies are instances of the `Assembly` class, and the core
+        object is an instance of the `Core` class.
+        
+    Returns
+    -------
+    tuple[dassh.Core, np.ndarray]
+        A tuple containing the core object and an array of duct wall
+        temperatures for the three assemblies.
+    """
+    asm_list, core_obj = three_asm_core
+    core_obj.model = 'mixed_flow'
+    duct_temps = np.array([asm.duct_outer_surf_temp for asm in asm_list])
+    return core_obj, duct_temps
+    
+
+def test_mixed_flow_zero_flux(three_asm_core: tuple[list[dassh.Assembly],
+                                                    dassh.Core]) -> None:
+    """
+    Test that the `mixed_flow` model for inter-assembly gap coolant
+    temperatures does not produce temperature increases in the gap
+    when the duct wall temperatures are equal to the inlet coolant temperature
+    
+    Parameters
+    ----------
+    three_asm_core : tuple[list[dassh.Assembly], dassh.Core]
+        A tuple containing a list of three assemblies and a core object.
+        The assemblies are instances of the `Assembly` class, and the core
+        object is an instance of the `Core` class.
+    """
+    core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
+    # Copy the initial coolant gap temperatures to compare after calculation
+    ans = core_obj.coolant_gap_temp.copy()
+    # Calculate gap temperatures with duct wall temperatures
+    core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
+    assert np.allclose(core_obj.coolant_gap_temp, ans)    
+    
+
+def test_mixed_flow_symmetric(three_asm_core: tuple[list[dassh.Assembly], 
+                                                    dassh.Core]) -> None:
+    """
+    Test that the `mixed_flow` model for inter-assembly gap coolant
+    temperatures produces symmetric temperature distributions in the gap
+    when the duct wall temperatures are symmetric.
+    
+    Parameters
+    ----------
+    three_asm_core : tuple[list[dassh.Assembly], dassh.Core]
+        A tuple containing a list of three assemblies and a core object.
+        The assemblies are instances of the `Assembly` class, and the core
+        object is an instance of the `Core` class.
+    """
+    core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
+    duct_temps += DELTA_T_DUCT # increase all duct wall temperatures by 10 K 
+    core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
+    # SCs between two assembly sides
+    assert np.all(core_obj.coolant_gap_temp[INTERNAL_IND] == 
+                  core_obj.coolant_gap_temp[INTERNAL_IND[0]])
+    # SCs between two assembly corners
+    assert np.all(core_obj.coolant_gap_temp[CORNER_IND] == 
+                  core_obj.coolant_gap_temp[CORNER_IND[0]])
+    # External SCs
+    assert np.all(core_obj.coolant_gap_temp[EXTERNAL_IND[0]] == 
+                  core_obj.coolant_gap_temp[EXTERNAL_IND[1]])
+    assert np.all(core_obj.coolant_gap_temp[EXTERNAL_IND[2]] == 
+                  core_obj.coolant_gap_temp[EXTERNAL_IND[1]])
+    
+    
+def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly], 
+                                                     dassh.Core]) -> None:
+    """
+    Test that the `mixed_flow` model for inter-assembly gap coolant
+    temperatures produces larger temperature increase in the gap adjacent to 
+    higher duct wall temperature. 
+    Additionally, test energy exchange between higher temperature subchannel
+    and its neighbors.
+    
+    Parameters
+    ----------
+    three_asm_core : tuple[list[dassh.Assembly], dassh.Core]
+        A tuple containing a list of three assemblies and a core object.
+        The assemblies are instances of the `Assembly` class, and the core
+        object is an instance of the `Core` class.
+        
+    Notes
+    -----
+    This test is conducted in two steps:
+    1. One side of the duct wall temperature of the first assembly is 
+       increased by 10 K, while the other duct wall temperatures remain at 
+       the inlet coolant temperature. When the `calculate_gap_temperatures` 
+       method is called, only the temperature of the subchannel adjacent to the
+       higher duct wall temperature changes. The other subchannels remain at 
+       the inlet coolant temperature because inter-subchannel heat transfer 
+       is based on the previous axial step.
+       Test: The maximum temperature in the gap is in the subchannel adjacent 
+       to the higher duct wall temperature.
+    2. The `calculate_gap_temperatures` method is called again with the same
+       duct wall temperatures. This time, the subchannel adjacent to the higher
+       duct wall temperature exchanges heat with its neighbors. 
+       Test: The maximum temperature in the gap is still in the subchannel 
+       adjacent to the higher duct wall temperature. Temperatures of the 
+       neighboring subchannels are higher than the inlet coolant temperature, 
+       but lower than the subchannel adjacent to the higher duct wall 
+       temperature.
+    """
+    core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
+    duct_temps[0][0] += DELTA_T_DUCT
+    t_in = core_obj.coolant_gap_temp[0]
+    core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
+    # Maximum temperature should be in the gap adjacent to the higher duct wall 
+    # temperature
+    assert np.all(core_obj.coolant_gap_temp <= 
+                  core_obj.coolant_gap_temp[INTERNAL_IND[0]])
+    # Call the method again to allow heat exchange between subchannels
+    core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
+    # Maximum temperature should still be in the gap adjacent to the 
+    # higher duct wall temperature
+    assert np.all(core_obj.coolant_gap_temp <= 
+                  core_obj.coolant_gap_temp[INTERNAL_IND[0]])
+    # Check that the neighboring subchannels have higher temperatures than the
+    # inlet coolant temperature, but lower than the subchannel adjacent to the
+    # higher duct wall temperature
+    assert np.all(core_obj.coolant_gap_temp[[CENTRAL_IND, CORNER_IND[1]]] < 
+                  core_obj.coolant_gap_temp[INTERNAL_IND[0]])
+    assert np.all(core_obj.coolant_gap_temp[[CENTRAL_IND, CORNER_IND[1]]] >
+                  t_in)  
+
+
+def test_mixed_flow_high_mfr(three_asm_core: tuple[list[dassh.Assembly], 
+                                                   dassh.Core]) -> None:
+    """Test that the `mixed_flow` model for inter-assembly gap coolant
+    temperatures produces a temperature distribution that is close to the
+    one predicted by the `flow` model when the mass flow rate in the gap is 
+    high
+    
+    Parameters
+    ----------
+    three_asm_core : tuple[list[dassh.Assembly], dassh.Core]
+        A tuple containing a list of three assemblies and a core object.
+        The assemblies are instances of the `Assembly` class, and the core
+        object is an instance of the `Core` class.
+    """
+    def run_model():
+        """Internal function to run the `calculate_gap_temperatures` method 
+        twice and return the resulting coolant gap temperatures"""
+        core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
+        core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
+        return core_obj.coolant_gap_temp.copy()
+    
+    core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
+    core_obj.gap_flow_rate = HIGH_MFR
+    t_in = core_obj.coolant_gap_temp.copy()
+    # Add some random variation to the duct wall temperatures to simulate a 
+    # non-uniform scenario
+    duct_temps += np.random.rand(*duct_temps.shape) * DELTA_T_DUCT
+    
+    gap_temps_mixed_flow = run_model()
+    # reset temperature to inlet temperature
+    core_obj.coolant_gap_temp = t_in
+    core_obj.model = 'flow'
+    gap_temps_flow = run_model()
+    assert np.allclose(gap_temps_mixed_flow, gap_temps_flow, atol=ABSTOL)
+    
 
 # def test_porous_media_method(simple_asm, conceptual_core):
 #     """Test that the method to calculate interior and bypass coolant
