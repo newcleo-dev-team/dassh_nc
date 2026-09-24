@@ -359,7 +359,7 @@ def test_zero_power_enthalpy_jump(testdir: str):
     Test the mixed_convection solver in isothermal case (no power entering the
     coolant, either as a source term or as a heat flux from the external duct).
     Check that relative error in global enthalpy jump is
-    less than used tolerance.
+    less smaller than the tolerance used.
     
     Parameters
     ----------
