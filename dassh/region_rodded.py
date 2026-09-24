@@ -989,7 +989,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     def _calc_average_velocities(self) -> tuple[float]:
         """
         Calculate average velocities in interior and periphery regions
-        of the rodded assembly. 
+        of the rodded assembly. In the case of the mixed convection solver, the
+        value of the flow-split coefficients is updated according to the
+        current flow field, without relying on the correlation functions.
         
         Returns
         -------
