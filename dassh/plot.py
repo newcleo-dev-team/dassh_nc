@@ -357,12 +357,12 @@ class AssemblyPlot(object):
                 if lbnd < middle < ubnd:
                     kwargs['norm'] = colors.TwoSlopeNorm(
                         vmin=lbnd, vcenter=middle, vmax=ubnd
-                        )
+                    )
                 else:
                     # Check for bad middle values
                     if middle > ubnd or middle < lbnd:
                         raise ValueError('vmin, vcenter, and vmax must be in '
-                                                        'ascending order')
+                                         'ascending order')
                     # Safe fallback if middle lands exactly on the boundaries
                     kwargs['norm'] = colors.Normalize(vmin=lbnd, vmax=ubnd)
             except:
