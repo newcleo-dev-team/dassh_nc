@@ -264,6 +264,13 @@ class MixedRegion(RoddedRegion):
                               # error on delta_P
         while np.any(err_vect > self._mixed_convection_rel_tol) \
             and iter < MC_MAX_ITER:
+            # Update star quantities
+            self._vstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, nn, 'v'
+            )
+            self._hstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, nn, 'h', RR
+            )
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
             # Build known vector
@@ -577,8 +584,6 @@ class MixedRegion(RoddedRegion):
         AA : np.ndarray
             Coefficient matrix for the system to solve
         """
-        self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
-        self._hstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'h', RR)
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)

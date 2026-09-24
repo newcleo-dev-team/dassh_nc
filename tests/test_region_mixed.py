@@ -220,9 +220,9 @@ class TestBalances():
     def test_axial_step_zero_power(self, 
                                    simple_ctrl_rr_mixconv: dassh.MixedRegion):
         """
-        Test that the simulation runs with zero power and that the Delta(mh) 
-        term is equal to zero
-        
+        Test that the simulation runs with zero power and that the mass balance
+        is ensured and no enthalpy variation is calculated.
+
         Parameters
         ----------
         simple_ctrl_rr_mixconv : dassh.MixedRegion
@@ -356,8 +356,9 @@ class TestMethodsMixedRegion():
 
 def test_zero_power_enthalpy_jump(testdir: str):
     """
-    Test the mixed_convection solver in isothermal case (rods with zero
-    power deposition). Check that relative error in global enthalpy jump is
+    Test the mixed_convection solver in isothermal case (no power entering the
+    coolant, either as a source term or as a heat flux from the external duct).
+    Check that relative error in global enthalpy jump is
     less than used tolerance.
     
     Parameters
