@@ -989,7 +989,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     def _calc_average_velocities(self) -> tuple[float]:
         """
         Calculate average velocities in interior and periphery regions
-        of the rodded assembly
+        of the rodded assembly. 
         
         Returns
         -------
@@ -1004,6 +1004,19 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             vm_periphery = np.sum(self.sc_mfr[nint:ntot] * 
                                   self._sc_vel[nint:ntot]) / \
                                       np.sum(self.sc_mfr[nint:ntot])
+            sc_corner = self.subchannel.type[:ntot] == 2
+            sc_edge = self.subchannel.type[:ntot] == 1
+            vm_corner = np.sum(
+                self.sc_mfr[sc_corner] * self._sc_vel[sc_corner]) / \
+                np.sum(self.sc_mfr[sc_corner])
+            vm_edge = np.sum(self.sc_mfr[sc_edge] * self._sc_vel[sc_edge]) / \
+                np.sum(self.sc_mfr[sc_edge])
+            self.coolant_int_params['fs'][0] = vm_interior / \
+                self.coolant_int_params['vel']
+            self.coolant_int_params['fs'][1] = vm_edge / \
+                self.coolant_int_params['vel']
+            self.coolant_int_params['fs'][2] = vm_corner / \
+                self.coolant_int_params['vel']
             return vm_interior, vm_periphery
         
         vm_interior = self.coolant_int_params['fs'][0] * \
