@@ -250,8 +250,8 @@ class MixedRegion(RoddedRegion):
             self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
         # Calculate power added to coolant
         qq = self._calc_int_sc_power(q_pins, q_cool)
-        # Build known vector
-        bb = self._build_vector(qq, dz, z, nn)
+        # Build frozen part of known vector
+        bb_frozen = self._build_vector(qq, dz, z, nn)
         # Calculate initial RR using guess `delta_rho0`
         RR = self._calc_RR(delta_rho0)  
         # Verbose output header
@@ -264,8 +264,20 @@ class MixedRegion(RoddedRegion):
                               # error on delta_P
         while np.any(err_vect > self._mixed_convection_rel_tol) \
             and iter < MC_MAX_ITER:
+            # Update star quantities
+            self._vstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, nn, 'v'
+            )
+            self._hstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, nn, 'h', RR
+            )
             # Build matrix
             AA = self._build_matrix(dz, delta_v0, delta_rho0, RR, nn)
+            # Build known vector
+            bb = np.copy(bb_frozen)
+            bb[1:2*nn:2] += self._hstar * (
+                (self._sc_vel + delta_v0) * delta_rho0 + 
+                self.sc_properties['density'] * delta_v0)
             # Solve system
             xx = np.linalg.solve(AA, bb)
             # Extract deltas from solution vector
@@ -306,8 +318,6 @@ class MixedRegion(RoddedRegion):
         # Update energy balance if requested
         # Calculated as:
         # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
-        self._hstar = self._calc_star_quantity(delta_v0, delta_rho0, nn, 
-                                               'h', RR)
         if ebal:
             mcpdT_i = self.sc_mfr * self._enthalpy - mdh_old
             # Error introduced in the energy balance by h_star approximation
@@ -367,10 +377,7 @@ class MixedRegion(RoddedRegion):
              self.params['de'][self.subchannel.type[:nn]])
         # Build energy terms of the known vector
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
-            + EEX + self._hstar * ((self._sc_vel + self._delta_v)
-                                   * self._delta_rho + 
-                                   self.sc_properties['density'] * 
-                                   self._delta_v)
+            + EEX
         # Wall convection term
         self._qw = self._wall_convection() * dz 
         energy_b[self.ht['conv']['ind']] += self._qw  / self.params['area'][
@@ -577,7 +584,6 @@ class MixedRegion(RoddedRegion):
         AA : np.ndarray
             Coefficient matrix for the system to solve
         """
-        self._vstar = self._calc_star_quantity(delta_v, delta_rho, nn, 'v')
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(nn, dz, delta_v)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
