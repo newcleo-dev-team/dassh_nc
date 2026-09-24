@@ -746,8 +746,12 @@ class CoolantFlowTable(LoggedClass, DASSH_Table):
     """
 
     title = "SUBCHANNEL FLOW CHARACTERISTICS" + "\n"
-    notes = \
-        """Column heading definitions
+
+    def __init__(self, col_width=8, col0_width=4, sep='  ', t_label='averaged'):
+        """Instantiate flow parameters output table"""
+        # Decimal places for rounding, where necessary
+        self.notes = \
+            f"""Column heading definitions
     Avg. - Average coolant velocity in rod bundle or assembly
     Int. - Coolant velocity in the interior subchannel
     Edge - Coolant velocity in the edge subchannel
@@ -759,13 +763,10 @@ class CoolantFlowTable(LoggedClass, DASSH_Table):
     Eddy df. - Correlated eddy diffusivity in subchannels
 
 Notes
-- Values reported for coolant at inlet temperature
+- Values reported for coolant at {t_label} temperature
 - Flow split can be obtained as ratio of subchannel and average velocities
 - Average values reported for assemblies without rod bundle specification
 """
-
-    def __init__(self, col_width=8, col0_width=4, sep='  '):
-        """Instantiate flow parameters output table"""
         # Decimal places for rounding, where necessary
         self.dp = col_width - 6
         # Float formatting option
