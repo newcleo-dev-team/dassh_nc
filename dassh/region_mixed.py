@@ -409,7 +409,7 @@ class MixedRegion(RoddedRegion):
         np.ndarray
             Pressure drop due to spacer grid
         """
-        if any(_z > z - dz and _z < z for _z in 
+        if any(_z >= z - dz and _z < z for _z in 
                self.corr_constants['grid']['z']):
             return self.coolant_int_params['grid_loss_coeff'] \
                 * self._sc_vel**2 * self.sc_properties['density'] \
