@@ -420,8 +420,7 @@ class AssemblyPlot(object):
         """Set the axis boundaries to reflect the duct size"""
         width = self.duct['ftf'][-1][1] / 2
         height = 2 * width / np.sqrt(3)
-        mult = 1 / 10**np.floor(np.log10(height))
-        axlim = np.ceil(height * mult) / mult
+        axlim = height * 1.05
         ax.set_xlim([-axlim, axlim])
         ax.set_ylim([-axlim, axlim])
         return ax
