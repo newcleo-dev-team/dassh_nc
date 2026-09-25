@@ -1000,19 +1000,20 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         if self._mixed_convection:
             nint = self.subchannel.n_sc['coolant']['interior']
-            ntot = self.subchannel.n_sc['coolant']['total'] 
-            vm_interior = np.sum(self.sc_mfr[:nint] * self._sc_vel[:nint]) / \
-                np.sum(self.sc_mfr[:nint])
-            vm_periphery = np.sum(self.sc_mfr[nint:ntot] * 
-                                  self._sc_vel[nint:ntot]) / \
-                                      np.sum(self.sc_mfr[nint:ntot])
+            ntot = self.subchannel.n_sc['coolant']['total']
+            areas = self.params['area'][self.subchannel.type[:ntot]]
+            vm_interior = np.sum(areas[:nint] * self._sc_vel[:nint]) / \
+                np.sum(areas[:nint])
+            vm_periphery = np.sum(
+                areas[nint:ntot] * self._sc_vel[nint:ntot]) / \
+                np.sum(areas[nint:ntot])
             sc_corner = self.subchannel.type[:ntot] == 2
             sc_edge = self.subchannel.type[:ntot] == 1
             vm_corner = np.sum(
-                self.sc_mfr[sc_corner] * self._sc_vel[sc_corner]) / \
-                np.sum(self.sc_mfr[sc_corner])
-            vm_edge = np.sum(self.sc_mfr[sc_edge] * self._sc_vel[sc_edge]) / \
-                np.sum(self.sc_mfr[sc_edge])
+                areas[sc_corner] * self._sc_vel[sc_corner]) / \
+                np.sum(areas[sc_corner])
+            vm_edge = np.sum(areas[sc_edge] * self._sc_vel[sc_edge]) / \
+                np.sum(areas[sc_edge])
             self.coolant_int_params['fs'][0] = vm_interior / \
                 self.coolant_int_params['vel']
             self.coolant_int_params['fs'][1] = vm_edge / \
