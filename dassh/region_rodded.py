@@ -1207,7 +1207,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """Calculate pressure losses due to spacer grid if crossed
         in current step"""
         # Note: z = z_old + dz
-        if any(_z > z - dz and _z < z for _z in
+        if any(_z >= z - dz and _z < z for _z in
                 self.corr_constants['grid']['z']):
             return self.coolant_int_params['grid_loss_coeff'] \
                 * self.coolant.density \

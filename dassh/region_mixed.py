@@ -151,7 +151,7 @@ class MixedRegion(RoddedRegion):
                                           sf, se2, param_update_tol, 
                                           rad_isotropic=False)
 
-        self._pressure_drop = 0.0 # This overrides the attribute in RoddedRegion
+        self._pressure_drop_tot = 0.0
         self._delta_P = 1.0 # Guess on pressure drop
         self._delta_v = 0.1 * \
             np.ones(self.subchannel.n_sc['coolant']['total']) # Guess on velocity variation
@@ -311,7 +311,7 @@ class MixedRegion(RoddedRegion):
         # Update velocity, density, and pressure drop adding converged deltas
         self._sc_vel += delta_v
         self.sc_properties['density'] += delta_rho
-        self._pressure_drop -= delta_P
+        self._pressure_drop_tot -= delta_P
         # Update enthalpy converting density
         self._enthalpy = self.coolant.convert_properties(
             density=self.sc_properties['density'])
@@ -409,12 +409,12 @@ class MixedRegion(RoddedRegion):
         np.ndarray
             Pressure drop due to spacer grid
         """
-        if any(_z > z - dz and _z < z for _z in 
+        if any(_z >= z - dz and _z < z for _z in 
                self.corr_constants['grid']['z']):
             return self.coolant_int_params['grid_loss_coeff'] \
                 * self._sc_vel**2 * self.sc_properties['density'] \
                 / 2.0
-        return 0.0
+        return np.zeros_like(self._sc_vel)
         
         
     def _wall_convection(self) -> np.ndarray:
@@ -879,11 +879,36 @@ class MixedRegion(RoddedRegion):
         self.ht['old'] = const
         self.ht['cond'] = setup_conduction_constants(self, const)
         self.ht['conv'] = setup_convection_constants(self, const)
+
+    def calculate_pressure_drop(self, z: float, dz: float):
+        """
+        Update bundle pressure drop at current step.
         
+        Parameters
+        ----------
+        z : float
+            Axial position of the cell (m)
+        dz : float
+            Axial step size (m)        
+        """
+        nn = self.subchannel.n_sc['coolant']['total']
+        areas = self.params['area'][self.subchannel.type[:nn]]
+        self._pressure_drop['friction'] += np.dot(
+            self.sc_properties['density'] * dz * 0.5 *
+            self.coolant_int_params['ff_i'] * self._sc_vel**2 / 
+            self.params['de'][self.subchannel.type[:nn]], areas
+        ) / self.bundle_params['area']
+        if 'grid' in self.corr_constants.keys():
+            self._pressure_drop['spacer_grid'] += np.dot(
+                self._calculate_spacergrid_pressure_drop_mix(z, dz), areas
+            ) / self.bundle_params['area']
+        self._pressure_drop['gravity'] += np.dot(
+            self.sc_properties['density'] * dz * GRAVITY_CONST, areas
+        ) / self.bundle_params['area']
     
     @property
     def pressure_drop(self):
-        return self._pressure_drop
+        return self._pressure_drop_tot
     
         
     @property
