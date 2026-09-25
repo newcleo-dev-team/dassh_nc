@@ -929,8 +929,9 @@ class PressureDropTable(LoggedClass, DASSH_Table):
                 spacer = a.rodded._pressure_drop['spacer_grid']
                 gravity = sum(x._pressure_drop['gravity'] for x in a.region)
                 friction = sum(x._pressure_drop['friction'] for x in a.region)
-                # In mixed convection the total pressure drop is also a
-                # function of the acceleration term that is not considered here
+                # The mixed convection solver considers the total pressure drop
+                # to also be made up of the acceleration term.
+                # This term is not considered here.
                 if not reactor_obj._options['mixed_convection']:
                     assert a.pressure_drop - spacer - gravity - friction < 1e-6
                 params[-3] = self._ffmt4e.format(friction / 1e6)
