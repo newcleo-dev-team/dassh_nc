@@ -420,8 +420,7 @@ class AssemblyPlot(object):
         """Set the axis boundaries to reflect the duct size"""
         width = self.duct['ftf'][-1][1] / 2
         height = 2 * width / np.sqrt(3)
-        mult = 1 / 10**np.floor(np.log10(height))
-        axlim = np.ceil(height * mult) / mult
+        axlim = height * 1.05
         ax.set_xlim([-axlim, axlim])
         ax.set_ylim([-axlim, axlim])
         return ax
@@ -756,19 +755,18 @@ class SubchannelPlot(AssemblyPlot):
         shift = np.zeros((6, 2))
         # patches.Rectangle plots from the LOWER LEFT corner rather
         # than center - need to shift each rectangle based on angle.
-        shift[0] = [-self.sc['radius'][1][1], 0.0]
-        shift[1] = [-0.5 * self.sc['radius'][1][1],
-                    0.5 * self.sc['radius'][1][0]]
-        shift[2] = [0.5 * self.sc['radius'][1][1],
-                    np.sqrt(3) * 0.5 * self.sc['radius'][1][1]]
-        shift[3] = [self.sc['radius'][1][1], 0.0]
-        shift[4] = [0.5 * self.sc['radius'][1][1],
-                    -0.5 * self.sc['radius'][1][0]]
-        shift[5] = [-0.5 * self.sc['radius'][1][1],
-                    -np.sqrt(3) * 0.5 * self.sc['radius'][1][1]]
+        dy = self.sc['radius'][1][0] * 0.5
+        dx = self.sc['radius'][1][1] * 0.5
+        d_edge = np.sqrt(dy**2 + dx**2)
+        theta = np.arcsin(dy / d_edge)
+        angles = np.array(self.sc['angle'][1]) * np.pi / 180 + np.pi / 2
+        # Retrieve correct dx, dy displacements from the same procedure adopted
+        # in Subchannel._find_edge_xy method
+        shift[:, 0] = -np.cos(angles - theta) * d_edge
+        shift[:, 1] = -np.sin(angles - theta) * d_edge
         edge_sq = []
         for i in range(6):
-            side_xy = xy[i * sc_edge_side:(i + 1) * sc_edge_side]
+            side_xy = np.copy(xy[i * sc_edge_side:(i + 1) * sc_edge_side])
             side_xy += shift[i]
             edge_sq += [mpl.patches.Rectangle(
                 (xi, yi),
