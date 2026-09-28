@@ -1329,6 +1329,40 @@ class TestEnthalpy():
         assert tmp_asm.avg_coolant_int_temp == \
             pytest.approx(rr_data.enthalpy['T1'] + rr_data.enthalpy['dT'], 
                           abs=rr_data.enthalpy['tol'])
-        
-        
-        
+
+
+@pytest.mark.parametrize(
+        ("ftf", "n_removed"), [
+        (0.0, 0),
+        (0.000001, 1),
+        (0.008347848, 2),
+        (0.008407848, 3),
+        (0.008728848, 3),
+        (0.009049848, 3),
+        (0.010123181, 3),
+        (0.015489848, 4),
+        (0.014416515, 3),
+    ])
+def test_get_removed_rings(ftf: float, n_removed: int):
+    """
+    Test the function to check that the number of removed rings as a function of
+    the face to face distance is correct. The reference values are determined
+    using the reported pitch and diameter dimensions. These are then used to
+    calculate the face-to-face distance, based on the total number of removed
+    rings using the pitches.
+    The dimensions of the rods are then added or removed to move to the border,
+    of the pin, i.e.:
+    :math:`ftf = (2*P*\\sqrt(3)/2 - D*0.5 - Dw)*2` leads to 3 removed rings.
+
+    Parameters
+    ==========
+    ftf : float
+        Inner hexagonal hole face to face
+    n_removed : int
+        Number of removed rings
+    """
+    pitch = 0.003542
+    diam = 0.00322
+    dw = 0.000321
+    assert n_removed == dassh.region_rodded._get_removed_rings(
+        ftf, pitch, diam, dw)
