@@ -150,7 +150,7 @@ class MixedRegion(MixedClass, RoddedRegion):
         # Instantiate MixedClass object
         MixedClass.__init__(self, self.subchannel.n_sc['coolant']['total'],
                             coolant_mat)
-        
+        self._pressure_drop_tot = 0.0
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose = verbose
         # Tolerance for mixed convection solver and star quantities calculation
@@ -237,8 +237,8 @@ class MixedRegion(MixedClass, RoddedRegion):
             self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
         # Calculate power added to coolant
         qq = self._calc_int_sc_power(q_pins, q_cool)
-        # Build known vector
-        bb = self._build_vector(qq, dz, z, nn)
+        # Build frozen part of known vector
+        bb_frozen = self._build_vector(qq, dz, z, nn)
         # Calculate initial RR using guess `delta_rho0`
         RR = self._calc_RR(delta_rho0)  
         # Verbose output header
@@ -251,13 +251,25 @@ class MixedRegion(MixedClass, RoddedRegion):
                               # error on delta_P
         while np.any(err_vect > self._mixed_convection_rel_tol) \
             and iter < MC_MAX_ITER:
+            # Update star quantities
+            self._vstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, 'v'
+            )
+            self._hstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, 'h', RR
+            )
             # Build matrix
             AA = self._build_matrix(
-                dz, delta_v0, delta_rho0, RR, nn, 
+                dz, delta_v0, delta_rho0, RR, nn,
                 self.coolant_int_params['ff_i'],
                 self.params['de'][self.subchannel.type[:nn]], 
                 self.params['area'][self.subchannel.type[:nn]]
                 )
+            # Build known vector
+            bb = np.copy(bb_frozen)
+            bb[1:2*nn:2] += self._hstar * (
+                (self._sc_vel + delta_v0) * delta_rho0 + 
+                self.sc_properties['density'] * delta_v0)
             # Solve system
             xx = np.linalg.solve(AA, bb)
             # Extract deltas from solution vector
@@ -289,14 +301,13 @@ class MixedRegion(MixedClass, RoddedRegion):
         # Update velocity, density, and pressure drop adding converged deltas
         self._sc_vel += delta_v
         self.sc_properties['density'] += delta_rho
-        self._pressure_drop -= delta_P
+        self._pressure_drop_tot -= delta_P
         # Update enthalpy converting density
         self._enthalpy = self._coolant.convert_properties(
             density=self.sc_properties['density'])
         # Update energy balance if requested
         # Calculated as:
         # Q_in [from z to z+dz] - (m*delta_h)_(z+dz) + (m*delta_h)_(z) = err
-        self._hstar = self._calc_star_quantity(delta_v0, delta_rho0, 'h', RR)
         if ebal:
             mcpdT_i = self.sc_mfr * self._enthalpy - mdh_old
             # Error introduced in the energy balance by h_star approximation
@@ -334,10 +345,7 @@ class MixedRegion(MixedClass, RoddedRegion):
              self.params['de'][self.subchannel.type[:nn]])
         # Build energy terms of the known vector
         energy_b = qq * dz / self.params['area'][self.subchannel.type[:nn]] \
-            + EEX + self._hstar * ((self._sc_vel + self._delta_v)
-                                   * self._delta_rho + 
-                                   self.sc_properties['density'] * 
-                                   self._delta_v)
+            + EEX
         # Wall convection term
         self._qw = self._wall_convection() * dz 
         energy_b[self.ht['conv']['ind']] += self._qw  / self.params['area'][
@@ -369,12 +377,12 @@ class MixedRegion(MixedClass, RoddedRegion):
         np.ndarray
             Pressure drop due to spacer grid
         """
-        if any(_z > z - dz and _z < z for _z in 
+        if any(_z >= z - dz and _z < z for _z in 
                self.corr_constants['grid']['z']):
             return self.coolant_int_params['grid_loss_coeff'] \
                 * self._sc_vel**2 * self.sc_properties['density'] \
                 / 2.0
-        return 0.0
+        return np.zeros_like(self._sc_vel)
         
         
     def _wall_convection(self) -> np.ndarray:
@@ -665,11 +673,36 @@ class MixedRegion(MixedClass, RoddedRegion):
         self.ht['old'] = const
         self.ht['cond'] = setup_conduction_constants(self, const)
         self.ht['conv'] = setup_convection_constants(self, const)
+
+    def calculate_pressure_drop(self, z: float, dz: float):
+        """
+        Update bundle pressure drop at current step.
         
+        Parameters
+        ----------
+        z : float
+            Axial position of the cell (m)
+        dz : float
+            Axial step size (m)        
+        """
+        nn = self.subchannel.n_sc['coolant']['total']
+        areas = self.params['area'][self.subchannel.type[:nn]]
+        self._pressure_drop['friction'] += np.dot(
+            self.sc_properties['density'] * dz * 0.5 *
+            self.coolant_int_params['ff_i'] * self._sc_vel**2 / 
+            self.params['de'][self.subchannel.type[:nn]], areas
+        ) / self.bundle_params['area']
+        if 'grid' in self.corr_constants.keys():
+            self._pressure_drop['spacer_grid'] += np.dot(
+                self._calculate_spacergrid_pressure_drop_mix(z, dz), areas
+            ) / self.bundle_params['area']
+        self._pressure_drop['gravity'] += np.dot(
+            self.sc_properties['density'] * dz * GRAVITY_CONST, areas
+        ) / self.bundle_params['area']
     
     @property
     def pressure_drop(self):
-        return self._pressure_drop
+        return self._pressure_drop_tot
     
         
     @property

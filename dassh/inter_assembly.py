@@ -259,17 +259,29 @@ class InterAssembly(MixedClass):
         delta_rho0, delta_v0, delta_P0 = \
             self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
         # BUild known vector
-        bb = self._build_vector()
+        bb_frozen = self._build_vector()
         # Calculate initial RR using guess `delta_rho0`
         RR = self._calc_RR(delta_rho0)
         # Iterate to solve the system
         iter = 0
         err_vect = np.ones(3)
         while np.any(err_vect > 1e-3) and iter < 10:
+            # Update star quantities
+            self._hstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, 'h', RR
+                )
+            self._vstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, 'v'
+                )
             # Build matrix
             AA = self._build_matrix(self._dz, delta_v0, delta_rho0, RR, 
                                     self._n_sc, self._ff, self._de, 
                                     self._areas)
+            # Build known vector
+            bb = np.copy(bb_frozen)
+            bb[1:2*self._n_sc:2] += self._hstar * (
+                (self._sc_vel + delta_v0) * delta_rho0 +
+                self.sc_properties['density'] * delta_v0)
             # Solve system
             xx = np.linalg.solve(AA, bb)
             # Extract deltas
@@ -297,9 +309,6 @@ class InterAssembly(MixedClass):
         # Update enthalpy using converting density
         self._enthalpy = self._coolant.convert_properties(
             density=self.sc_properties['density'])
-        # Update hstar
-        self._hstar = self._calc_star_quantity(self._delta_v, self._delta_rho,
-                                               'h', RR)
     
     
     def _build_vector(self) -> np.ndarray:
@@ -311,14 +320,11 @@ class InterAssembly(MixedClass):
             (GRAVITY_CONST + self._ff * self._sc_vel**2 / 2 / self._de)
         # Build energy terms of the known vector
         EEX = self._conduction_adj_sc() * self._dz / self._areas
-        STAR = (self._sc_vel + self._delta_v) * self._hstar \
-            * self._delta_rho + self.sc_properties['density'] \
-                * self._hstar * self._delta_v
         # Wall convection term
         qwall = self._convection_duct_wall() * self._dz / self._areas
         # Assemble known vector
         bb = np.zeros(2 * self._n_sc + 1)
-        bb[1:2*self._n_sc:2] = STAR + qwall + EEX
+        bb[1:2*self._n_sc:2] = qwall + EEX
         bb[0:2*self._n_sc:2] = GG
         return bb
         

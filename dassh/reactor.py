@@ -1013,10 +1013,7 @@ class Reactor(LoggedClass):
         self._options['dump']['cols'] = {}
         self._options['dump']['cols']['average'] = 10
         self._options['dump']['cols']['maximum'] = 7
-        if self._options['mixed_convection']:
-            self._options['dump']['cols']['pressure_drop'] = 4
-        else:
-            self._options['dump']['cols']['pressure_drop'] = 7
+        self._options['dump']['cols']['pressure_drop'] = 7
         self._options['dump']['cols']['coolant_int'] = 3 + max(
             [a.rodded.subchannel.n_sc['coolant']['total']
              if a.has_rodded else 1 for a in self.assemblies])
@@ -1303,7 +1300,11 @@ class Reactor(LoggedClass):
         out += power.generate(self)
 
         # Flow summary
-        flow = dassh.table.CoolantFlowTable()
+        if self._options['mixed_convection']:
+            t_label = 'inlet'
+        else:
+            t_label = 'averaged'
+        flow = dassh.table.CoolantFlowTable(t_label=t_label)
         out += flow.generate(self)
 
         # Write to output file
@@ -1336,6 +1337,10 @@ class Reactor(LoggedClass):
         duct_table = dassh.table.DuctTempTable()
         out += duct_table.generate(self)
 
+        # Flow summary
+        if self._options['mixed_convection']:
+            flow = dassh.table.CoolantFlowTable(t_label='outlet')
+            out += flow.generate(self)
         # Peak pin temperatures
         # First, figure out which peak temperatures to include.
         # By default, clad MW and fuel CL will be included.

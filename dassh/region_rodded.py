@@ -989,7 +989,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     def _calc_average_velocities(self) -> tuple[float]:
         """
         Calculate average velocities in interior and periphery regions
-        of the rodded assembly
+        of the rodded assembly. In the case of the mixed convection solver, the
+        value of the flow-split coefficients is updated according to the
+        current flow field, without relying on the correlation functions.
         
         Returns
         -------
@@ -998,12 +1000,26 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         if self._mixed_convection:
             nint = self.subchannel.n_sc['coolant']['interior']
-            ntot = self.subchannel.n_sc['coolant']['total'] 
-            vm_interior = np.sum(self.sc_mfr[:nint] * self._sc_vel[:nint]) / \
-                np.sum(self.sc_mfr[:nint])
-            vm_periphery = np.sum(self.sc_mfr[nint:ntot] * 
-                                  self._sc_vel[nint:ntot]) / \
-                                      np.sum(self.sc_mfr[nint:ntot])
+            ntot = self.subchannel.n_sc['coolant']['total']
+            areas = self.params['area'][self.subchannel.type[:ntot]]
+            vm_interior = np.sum(areas[:nint] * self._sc_vel[:nint]) / \
+                np.sum(areas[:nint])
+            vm_periphery = np.sum(
+                areas[nint:ntot] * self._sc_vel[nint:ntot]) / \
+                np.sum(areas[nint:ntot])
+            sc_corner = self.subchannel.type[:ntot] == 2
+            sc_edge = self.subchannel.type[:ntot] == 1
+            vm_corner = np.sum(
+                areas[sc_corner] * self._sc_vel[sc_corner]) / \
+                np.sum(areas[sc_corner])
+            vm_edge = np.sum(areas[sc_edge] * self._sc_vel[sc_edge]) / \
+                np.sum(areas[sc_edge])
+            self.coolant_int_params['fs'][0] = vm_interior / \
+                self.coolant_int_params['vel']
+            self.coolant_int_params['fs'][1] = vm_edge / \
+                self.coolant_int_params['vel']
+            self.coolant_int_params['fs'][2] = vm_corner / \
+                self.coolant_int_params['vel']
             return vm_interior, vm_periphery
         
         vm_interior = self.coolant_int_params['fs'][0] * \
@@ -1191,7 +1207,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """Calculate pressure losses due to spacer grid if crossed
         in current step"""
         # Note: z = z_old + dz
-        if any(_z > z - dz and _z < z for _z in
+        if any(_z >= z - dz and _z < z for _z in
                 self.corr_constants['grid']['z']):
             return self.coolant_int_params['grid_loss_coeff'] \
                 * self.coolant.density \
