@@ -48,6 +48,9 @@ def main(args=None):
     parser.add_argument('--no_power_calc',
                         action='store_false',
                         help='Skip VARPOW calculation if done previously')
+    parser.add_argument('--plot_only_geom',
+                        action='store_true',
+                        help='Plot only assembly lattice IDs before sweep')
     args = parser.parse_args(args)
 
     # Enable the profiler, if desired
@@ -74,7 +77,8 @@ def main(args=None):
         arg_dict = {
             'save_reactor': args.save_reactor,
             'verbose': args.verbose,
-            'no_power_calc': args.no_power_calc
+            'no_power_calc': args.no_power_calc,
+            'plot_only_geom': args.plot_only_geom,
         }
         run_dassh(dassh_input, arg_dict)
 
@@ -213,6 +217,7 @@ def _run_dassh(dassh_inp, args, timestep, wdir, link=None):
                             calc_power=args['no_power_calc'],
                             path=wdir,
                             timestep=timestep,
+                            plot_only_geom=args['plot_only_geom'],
                             write_output=True)
     # Perform the sweep
     dassh_logger.log(_log_info, 'Performing temperature sweep...')

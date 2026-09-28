@@ -91,7 +91,7 @@ class Reactor(LoggedClass):
 
     """
     def __init__(self, dassh_input, path=None, calc_power=True,
-                 timestep=0, **kwargs):
+                 timestep=0, plot_only_geom=False, **kwargs):
         """Initialize Reactor object for DASSH simulation
 
         Parameters
@@ -107,6 +107,9 @@ class Reactor(LoggedClass):
         timestep : int (optional)
             Indicate timestep for which to generate power distributions
             (default = 0)
+        plot_only_geom : boolean (optional)
+            Indicate whether to generate only the map containing the SC and
+            pins ID in hexagonal lattice (default = False)
         kwargs : dict
             Many; see "_setup_options" method for more
 
@@ -139,9 +142,22 @@ class Reactor(LoggedClass):
         # cloning them into each specified position in the core
         self.log('info', 'Generating Assembly objects')
         self._setup_asm_templates(dassh_input)
-        asm_power = self._setup_asm_power(dassh_input)
-        est_Tout, est_fr = self._setup_asm_bc(dassh_input, asm_power)
+        if not plot_only_geom:
+            asm_power = self._setup_asm_power(dassh_input)
+            est_Tout, est_fr = self._setup_asm_bc(dassh_input, asm_power)
+        else:
+            n_asmb = len(dassh_input.data['Assignment']['ByPosition'])
+            asm_power = None
+            est_Tout = [dassh_input.data['Core']['coolant_inlet_temp']] * n_asmb
+            est_fr = [3.5] * n_asmb  # Dummy value
         self._setup_asm(dassh_input, asm_power, est_Tout, est_fr)
+        if plot_only_geom:
+            self.log('info', 'Generating Assembly ID Maps')
+            plot_data = dassh_input.data['Plot']
+            dassh.plot.make_SubchannelMap(self, plot_data)
+            dassh.plot.make_PinMap(self, plot_data)
+            self.log('info', 'Exit from plot_only_geom option')
+            sys.exit(0)
 
         # Determine whether inter-assembly heat transfer is necessary,
         # then set up assembly axial mesh size requirement
@@ -669,21 +685,22 @@ class Reactor(LoggedClass):
             # Clone assembly object from template using flow rate
             # and assign power profiles
             asm = self.asm_templates[atype].clone(loc, new_flowrate=fr[i])
-            bundle_bnd = get_rod_bundle_bnds(asm_power[i][3], asm_data)
-            asm.power = dassh.power.AssemblyPower(asm_power[i][0],
-                                                  asm_power[i][1],
-                                                  asm_power[i][3],
-                                                  bundle_bnd,
-                                                  scale=power_scalar)
-            # Check assembly power against core and assembly specs
-            m = dassh.power._check_core_len(asm.power, self.core_length)
-            if m[0] is False:
-                self.log('error', m[1].format(i + 1))
-            m = dassh.power._check_assembly(asm.power, asm)
-            if m[0] is False:
-                self.log('error', m[1].format(i + 1))
-            asm.total_power = asm_power[i][2]
-            asm._estimated_T_out = To[i]
+            if asm_power is not None:
+                bundle_bnd = get_rod_bundle_bnds(asm_power[i][3], asm_data)
+                asm.power = dassh.power.AssemblyPower(asm_power[i][0],
+                                                      asm_power[i][1],
+                                                      asm_power[i][3],
+                                                      bundle_bnd,
+                                                      scale=power_scalar)
+                # Check assembly power against core and assembly specs
+                m = dassh.power._check_core_len(asm.power, self.core_length)
+                if m[0] is False:
+                    self.log('error', m[1].format(i + 1))
+                m = dassh.power._check_assembly(asm.power, asm)
+                if m[0] is False:
+                    self.log('error', m[1].format(i + 1))
+                asm.total_power = asm_power[i][2]
+                asm._estimated_T_out = To[i]
 
             # Calculate the friction factor and flow split parameters
             # for each region at the assembly axial-average temperature

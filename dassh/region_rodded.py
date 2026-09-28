@@ -39,6 +39,47 @@ from dassh._commons import SQRT3, SQRT3OVER3, Q_P2SC, PROPS_NAME
 
 module_logger = logging.getLogger(__name__)
 
+
+def _get_removed_rings(
+        inner_hex_ftf, pin_pitch, pin_diameter, dwire, tol=1.0e-6
+    ):
+    """Determine the number of pin rings removed by an inner hexagonal hole
+
+    Parameters
+    ----------
+    inner_hex_ftf : float
+        Physical flat-to-flat distance of the inner hexagonal hole
+    pin_pitch : float
+        Pin pitch
+    pin_diameter : float
+        Pin diameter
+    dwire : float
+        Diameter of the wire
+    tol : float, optional
+        Absolute tolerance for matching the physical hole flat-to-flat distance
+
+    Returns
+    -------
+    int
+        Number of complete pin rings removed.
+    """
+    if inner_hex_ftf <= 1e-9:
+        return 0
+    # Estimate the number of removed rings from the requested
+    _sqrt3over2  = np.sqrt(3) * 0.5
+    tol = 0.0 if dwire > 0 else tol
+    minimum_ftf = pin_pitch * _sqrt3over2 - pin_diameter * 0.5 - dwire - tol
+    if inner_hex_ftf < minimum_ftf * 2:
+        return 1  # Return a value for get an error from LoggedClass
+    n_removed = np.floor(inner_hex_ftf * 0.5 / (pin_pitch * _sqrt3over2))
+    sigma = (inner_hex_ftf * 0.5) % (pin_pitch * _sqrt3over2)
+    if sigma > (pin_pitch * _sqrt3over2) - pin_diameter * 0.5 - dwire - tol:
+        n_removed += 1
+    # Central pin counts as a ring
+    n_removed += 1
+    return int(n_removed)
+
+
 def specify_region_details(rr: RoddedRegion, 
                            inp: dict[str, dict[str, float]], 
                            mat: dict[str, Material]) -> RoddedRegion:
@@ -159,7 +200,8 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0, gravity=False,
                       update_tol,
                       gravity, 
                       rad_isotropic,
-                      solve_enthalpy)
+                      solve_enthalpy,
+                      inp['inner_hole_ftf'])
     return specify_region_details(rr, inp, mat)
 
 
@@ -287,6 +329,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Parameters characterizing subchannels w/ wire wrap
     bundle_params : dict
         Bundle-average subchannel parameters
+    inner_hole_ftf: float
+        Flat to flat distance inner shaft
 
     Notes
     -----
@@ -308,7 +352,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
                  param_update_tol=0.0, gravity=False, rad_isotropic=True,
-                 solve_enthalpy=False):
+                 solve_enthalpy=False, inner_hole_ftf=0.0):
         """Instantiate RoddedRegion object"""        
         # Flag for non-isotropic coolant properties (radially)
         self._rad_isotropic = rad_isotropic
@@ -371,6 +415,18 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         else:
             self.htc_params['duct'] = [0.023, 0.8, 0.4, 7.0]
 
+        # Find number of removed inner rings
+        self.rings_removed = _get_removed_rings(
+            inner_hole_ftf, pin_pitch, pin_diam, wire_diam)
+        self.inner_duct = inner_hole_ftf
+        self.nsc_cool_type = 3 if self.rings_removed < 1 else 5
+        if self.rings_removed == 1:
+            self.log('error',
+                     'Number of allowed removed rings must be higher than 1')
+        if self.rings_removed > n_ring - 1:
+            self.log('error',
+                     "Incompatible inner hexagon face to face distance,"
+                     " no pin resulting in the assembly.")
         # Pin and subchannel objects; contain maps and adjacency arrays
         self.pin_lattice = PinLattice(n_ring, pin_pitch, pin_diam)
         self.n_pin = self.pin_lattice.n_pin
