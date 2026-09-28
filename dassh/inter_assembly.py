@@ -305,7 +305,7 @@ class InterAssembly(MixedClass):
         # Update velocity, density, pressure drop adding convergence deltas
         self._sc_vel += self._delta_v
         self.sc_properties['density'] += self._delta_rho
-        self._pressure_drop -= self._delta_P
+        # self._pressure_drop_tot -= self._delta_P
         # Update enthalpy using converting density
         self._enthalpy = self._coolant.convert_properties(
             density=self.sc_properties['density'])
