@@ -109,7 +109,7 @@ class Reactor(LoggedClass):
             (default = 0)
         plot_only_geom : boolean (optional)
             Indicate whether to generate only the map containing the SC and
-            pins ID in hexagonal lattice (default = False)
+            pin IDs in hexagonal lattice (default = False)
         kwargs : dict
             Many; see "_setup_options" method for more
 
@@ -149,10 +149,11 @@ class Reactor(LoggedClass):
             n_asmb = len(dassh_input.data['Assignment']['ByPosition'])
             asm_power = None
             est_Tout = [dassh_input.data['Core']['coolant_inlet_temp']] * n_asmb
-            est_fr = [3.5] * n_asmb  # Dummy value
+            est_fr = [1.0] * n_asmb  # Dummy value
         self._setup_asm(dassh_input, asm_power, est_Tout, est_fr)
         if plot_only_geom:
-            self.log('info', 'Generating Assembly ID Maps')
+            self.log('info', 'plot_only_geom selected: '
+                     'generating Assembly ID Maps')
             plot_data = dassh_input.data['Plot']
             dassh.plot.make_SubchannelMap(self, plot_data)
             dassh.plot.make_PinMap(self, plot_data)

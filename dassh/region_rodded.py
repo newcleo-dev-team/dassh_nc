@@ -56,24 +56,24 @@ def _get_removed_rings(
     dwire : float
         Diameter of the wire
     tol : float, optional
-        Absolute tolerance for matching the physical hole flat-to-flat distance
+        Minimum distance to be left between the wall and the pins when there
+        is no wire
 
     Returns
     -------
     int
-        Number of complete pin rings removed.
+        Number of pin rings removed.
     """
-    if inner_hex_ftf <= 1e-9:
+    if inner_hex_ftf <= 2.0 * np.finfo(float).eps:
         return 0
-    # Estimate the number of removed rings from the requested
-    _sqrt3over2  = np.sqrt(3) * 0.5
+    # Estimate the number of removed rings
+    pitch_sqrt3over2  = pin_pitch * np.sqrt(3) * 0.5
     tol = 0.0 if dwire > 0 else tol
-    minimum_ftf = pin_pitch * _sqrt3over2 - pin_diameter * 0.5 - dwire - tol
+    minimum_ftf = pitch_sqrt3over2 - pin_diameter * 0.5 - dwire - tol
     if inner_hex_ftf < minimum_ftf * 2:
-        return 1  # Return a value for get an error from LoggedClass
-    n_removed = np.floor(inner_hex_ftf * 0.5 / (pin_pitch * _sqrt3over2))
-    sigma = (inner_hex_ftf * 0.5) % (pin_pitch * _sqrt3over2)
-    if sigma > (pin_pitch * _sqrt3over2) - pin_diameter * 0.5 - dwire - tol:
+        return 1  # Return a value to raise an exception in LoggedClass
+    n_removed, sigma = divmod(inner_hex_ftf * 0.5, pitch_sqrt3over2)
+    if sigma > pitch_sqrt3over2 - pin_diameter * 0.5 - dwire - tol:
         n_removed += 1
     # Central pin counts as a ring
     n_removed += 1
@@ -329,8 +329,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Parameters characterizing subchannels w/ wire wrap
     bundle_params : dict
         Bundle-average subchannel parameters
-    inner_hole_ftf: float
-        Flat to flat distance inner shaft
+    inner_hole_ftf : float
+        Flat to flat distance of the inner hexagonal hole
 
     Notes
     -----
@@ -422,7 +422,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self.nsc_cool_type = 3 if self.rings_removed < 1 else 5
         if self.rings_removed == 1:
             self.log('error',
-                     'Number of allowed removed rings must be higher than 1')
+                     'Incompatible inner hexagon face to face distance. '
+                     'The number of removed rings must be greater than 1.')
         if self.rings_removed > n_ring - 1:
             self.log('error',
                      "Incompatible inner hexagon face to face distance,"

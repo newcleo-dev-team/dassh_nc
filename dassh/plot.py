@@ -548,8 +548,6 @@ class SubchannelPlot(AssemblyPlot):
             Indicate whether to plot pins over subchannels
         pin_alpha : float
             Indicate the opacity of the pin fill
-        fontsize : int
-            Indicate the font size of the labels
         linestyle : float
             The linestyle of the subchannel patches
         edgecolor: str

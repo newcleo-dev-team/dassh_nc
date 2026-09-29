@@ -50,7 +50,8 @@ def main(args=None):
                         help='Skip VARPOW calculation if done previously')
     parser.add_argument('--plot_only_geom',
                         action='store_true',
-                        help='Plot only assembly lattice IDs before sweep')
+                        help='Only plot the assembly lattice (pin + subchannel)'
+                        ', and then exit')
     args = parser.parse_args(args)
 
     # Enable the profiler, if desired

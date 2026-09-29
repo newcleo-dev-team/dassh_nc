@@ -1345,19 +1345,15 @@ class TestEnthalpy():
     ])
 def test_get_removed_rings(ftf: float, n_removed: int):
     """
-    Test the function to check that the number of removed rings as a function of
-    the face to face distance is correct. The reference values are determined
-    using the reported pitch and diameter dimensions. These are then used to
-    calculate the face-to-face distance, based on the total number of removed
-    rings using the pitches.
-    The dimensions of the rods are then added or removed to move to the border,
-    of the pin, i.e.:
-    :math:`ftf = (2*P*\\sqrt(3)/2 - D*0.5 - Dw)*2` leads to 3 removed rings.
+    Check that the number of rings removed is calculated correctly as a function
+    of the face-to-face distance. The values used as a reference are determined
+    using the hard-coded pitch, diameter and wire diameter dimensions in the
+    test code.
 
     Parameters
-    ==========
+    ----------
     ftf : float
-        Inner hexagonal hole face to face
+        Face-to-face distance of the inner hexagonal hole
     n_removed : int
         Number of removed rings
     """
