@@ -57,9 +57,9 @@ class Subchannel(object):
     duct_ftf : list
         List of tuples containing inner and outer duct
         flat-to-flat distances
-    inner_hole_ftf : float
+    inner_hole_ftf : float (optional)
         Flat to flat distance of the inner hexagonal hole (default = 0.0)
-    n_rings_removed : int
+    n_rings_removed : int (optional)
         Number of pin rings removed (default = 0)
     test: bool (optional)
         If testing, do not run all the instantiation methods; instead,
