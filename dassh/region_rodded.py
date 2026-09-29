@@ -429,7 +429,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                      "Incompatible inner hexagon face to face distance,"
                      " no pin resulting in the assembly.")
         # Pin and subchannel objects; contain maps and adjacency arrays
-        self.pin_lattice = PinLattice(n_ring, pin_pitch, pin_diam)
+        self.pin_lattice = PinLattice(
+            n_ring, pin_pitch, pin_diam, n_ring_removed=self.rings_removed)
         self.n_pin = self.pin_lattice.n_pin
         self.subchannel = Subchannel(n_ring, pin_pitch, pin_diam,
                                      self.pin_lattice.map,
