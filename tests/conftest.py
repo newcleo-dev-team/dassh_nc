@@ -346,6 +346,16 @@ def pinlattice_2ring_full():
     return dassh.PinLattice(n_ring, pitch, d_pin)
 
 
+@pytest.fixture(scope='module')
+def pinlattice_5ring_2removed():
+    """5-ring pin cell lattice with central hexagonal hole replacing 2-rings"""
+    n_ring = 5
+    pitch = 2.0
+    d_pin = 1.5
+    n_ring_removed = 2
+    return dassh.PinLattice(n_ring, pitch, d_pin, n_ring_removed=n_ring_removed)
+
+
 ########################################################################
 # Subchannel
 ########################################################################
