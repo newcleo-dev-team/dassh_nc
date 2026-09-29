@@ -72,12 +72,12 @@ def _get_removed_rings(
     minimum_ftf = pitch_sqrt3over2 - pin_diameter * 0.5 - dwire - tol
     if inner_hex_ftf < minimum_ftf * 2:
         return 1  # Return a value to raise an exception in LoggedClass
-    n_removed, sigma = divmod(inner_hex_ftf * 0.5, pitch_sqrt3over2)
+    n_rings_removed, sigma = divmod(inner_hex_ftf * 0.5, pitch_sqrt3over2)
     if sigma > pitch_sqrt3over2 - pin_diameter * 0.5 - dwire - tol:
-        n_removed += 1
+        n_rings_removed += 1
     # Central pin counts as a ring
-    n_removed += 1
-    return int(n_removed)
+    n_rings_removed += 1
+    return int(n_rings_removed)
 
 
 def specify_region_details(rr: RoddedRegion, 
@@ -430,7 +430,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                      " no pin resulting in the assembly.")
         # Pin and subchannel objects; contain maps and adjacency arrays
         self.pin_lattice = PinLattice(
-            n_ring, pin_pitch, pin_diam, n_ring_removed=self.rings_removed)
+            n_ring, pin_pitch, pin_diam, n_rings_removed=self.rings_removed)
         self.n_pin = self.pin_lattice.n_pin
         self.subchannel = Subchannel(n_ring, pin_pitch, pin_diam,
                                      self.pin_lattice.map,

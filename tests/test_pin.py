@@ -159,14 +159,15 @@ def test_neighbors_hole(pinlattice_5ring_2removed: dassh.PinLattice):
     n_pins_rem = dassh.count_pins(n_ring_rem)
     # Array rows and cols
     assert adj.shape == (pinlattice_5ring_2removed.n_pin, 6)
-    # Check on inner-corner inner-edge nearest pins. Pins lying on the
-    # inner hexagon hole's vertices have 5 nearby pins.
-    # get_end_pin function calculate the number of pins without considering the
-    # number of pins removed by the hole. Need to shift indexes according to
-    # n_pins_rem
+    # Check the pins surrounding the "inner-corner" and "inner-edge"
+    # subchannels. Pins lying on the inner hexagon hole's vertices have 5
+    # surrounding pins. The function get_end_pin() calculates the number of
+    # pins including those removed by the hole. Then, there is the need to
+    # shift indices accordingly
     assert all([len(adj[adj == i]) == 5 for i in
                     range(1, dassh.get_end_pin(n_ring_rem + 1)-n_pins_rem, 2)])
-    # The pins on the inner hexagonal side of the hole have 4 nearby pins.
+    # The pins on the outer wall of the inner hexagonal hole have 4 surrounding
+    # pins
     assert all([len(adj[adj == i]) == 4 for i in
                     range(2, dassh.get_end_pin(n_ring_rem + 1)-n_pins_rem, 2)])
     # Interior pins should touch 6 others (will show up 6x in array)
@@ -174,7 +175,7 @@ def test_neighbors_hole(pinlattice_5ring_2removed: dassh.PinLattice):
                 range(dassh.get_end_pin(n_ring_rem + 1) - n_pins_rem + 1,
                       dassh.get_end_pin(ring - 1) - n_pins_rem)])
     # All corners on outer ring should touch only 3 pins
-    assert all([len(adj[adj == i]) == n_ring_rem + 1 for i in
+    assert all([len(adj[adj == i]) == 3 for i in
                 dassh.get_corners(ring) - n_pins_rem])
     # Direct comparison on a portion of the array
     assert np.array_equal(

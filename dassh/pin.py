@@ -55,8 +55,9 @@ class PinLattice(object):
         If testing, do not run all the instantiation methods; instead,
         allow the object to be instantiated without calling them so
         they can be called incrementally and independently
-    n_ring_removed : int (optional)
-        Number of innermost rings removed (default = 0)
+    n_rings_removed : int (optional)
+        Number of pin rings removed as covered by the inner hexagonal hole
+        (default = 0)
 
     Attributes
     ----------
@@ -72,7 +73,7 @@ class PinLattice(object):
     """
 
     def __init__(self, n_ring, pitch, pin_diameter, origin=(0.0, 0.0),
-                 n_ring_removed=0, test=False):
+                 n_rings_removed=0, test=False):
         """Initialize PinLattice object"""
         self.n_pin = count_pins(n_ring)
         # Make transition matrix
@@ -80,8 +81,8 @@ class PinLattice(object):
         # Get pin X-Y coordinates
         self.xy = self.map_pin_xy(n_ring, pitch, origin)
         # If assembly has a central hole, consider only real pins
-        if n_removed > 0:
-            n_removed = count_pins(n_removed)
+        if n_rings_removed > 0:
+            n_removed = count_pins(n_rings_removed)
             self.n_pin -= n_removed
             self.map = np.maximum(self.map - n_removed, 0)
             self.xy = self.xy[n_removed:, :]

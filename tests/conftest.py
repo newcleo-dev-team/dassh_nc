@@ -352,8 +352,9 @@ def pinlattice_5ring_2removed():
     n_ring = 5
     pitch = 2.0
     d_pin = 1.5
-    n_ring_removed = 2
-    return dassh.PinLattice(n_ring, pitch, d_pin, n_ring_removed=n_ring_removed)
+    n_rings_removed  = 2
+    return dassh.PinLattice(
+        n_ring, pitch, d_pin, n_rings_removed=n_rings_removed )
 
 
 ########################################################################
