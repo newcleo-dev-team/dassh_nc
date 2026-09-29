@@ -1329,6 +1329,36 @@ class TestEnthalpy():
         assert tmp_asm.avg_coolant_int_temp == \
             pytest.approx(rr_data.enthalpy['T1'] + rr_data.enthalpy['dT'], 
                           abs=rr_data.enthalpy['tol'])
-        
-        
-        
+
+
+@pytest.mark.parametrize(
+        ("ftf", "n_removed"), [
+        (0.0, 0),
+        (0.000001, 1),
+        (0.008347848, 2),
+        (0.008407848, 3),
+        (0.008728848, 3),
+        (0.009049848, 3),
+        (0.010123181, 3),
+        (0.015489848, 4),
+        (0.014416515, 3),
+    ])
+def test_get_removed_rings(ftf: float, n_removed: int):
+    """
+    Check that the number of rings removed is calculated correctly as a function
+    of the face-to-face distance. The values used as a reference are determined
+    using the hard-coded pitch, diameter and wire diameter dimensions in the
+    test code.
+
+    Parameters
+    ----------
+    ftf : float
+        Face-to-face distance of the inner hexagonal hole
+    n_removed : int
+        Number of removed rings
+    """
+    pitch = 0.003542
+    diam = 0.00322
+    dw = 0.000321
+    assert n_removed == dassh.region_rodded._get_removed_rings(
+        ftf, pitch, diam, dw)

@@ -90,6 +90,7 @@
         wire_diameter = float(min=0.0)
         wire_direction = option('clockwise', 'counterclockwise', default='counterclockwise')
         duct_ftf = float_list(min=2)
+        inner_hole_ftf = float(min=0.0, default=0.0)
         duct_material = string
         clad_thickness = float
         corr_mixing = option('MIT', 'CTD', 'UCTD', 'KC-BARE', default='CTD')

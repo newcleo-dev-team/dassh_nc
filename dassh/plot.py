@@ -263,6 +263,52 @@ def make_CoreHexPlot(dassh_reactor, plot_data, plot_name):
                     dassh_reactor, plot_data, v, plot_name)
 
 
+def make_PinMap(dassh_reactor, plot_info: dict):
+    """Generate the assembly pin IDs map figures"""
+    for asm in dassh_reactor.assemblies:
+        pp = PinPlot(asm)
+        if pp._skip_plotting_simple_model(asm):
+            continue
+        if pp._check_for_fuel_model(asm):
+            continue
+        plot_data = {'dpi': 200}
+        for plt_name in plot_info.keys():
+            if plot_info[plt_name]["type"] == 'PinPlot' and \
+                    asm.id+1 in plot_info[plt_name]["assembly_id"]:
+                plot_data = plot_info[plt_name]
+                if 'cmap' in plot_data.keys():
+                    plot_data.pop('cmap')
+                break
+        pp.map(**plot_data)
+        plot_filename = 'pinMap'
+        plot_filename += '_asm=' + asm.name
+        plot_filename += '.png'
+        plot_filename = os.path.join(dassh_reactor.path, plot_filename)
+        _save_and_close(plot_filename, plot_data['dpi'])
+
+
+def make_SubchannelMap(dassh_reactor, plot_info: dict):
+    """Generate the assembly subchannel IDs map figures"""
+    for asm in dassh_reactor.assemblies:
+        ascp = SubchannelPlot(asm)
+        if ascp._skip_plotting_simple_model(asm):
+            continue
+        plot_data = {'dpi': 200}
+        for plt_name in plot_info.keys():
+            if plot_info[plt_name]["type"] == 'SubchannelPlot' and \
+                    asm.id+1 in plot_info[plt_name]["assembly_id"]:
+                plot_data = plot_info[plt_name]
+                if 'cmap' in plot_data.keys():
+                    plot_data.pop('cmap')
+                break
+        ascp.map(**plot_data)
+        plot_filename = 'subchannelMap'
+        plot_filename += '_asm=' + asm.name
+        plot_filename += '.png'
+        plot_filename = os.path.join(dassh_reactor.path, plot_filename)
+        _save_and_close(plot_filename, plot_data['dpi'])
+
+
 ########################################################################
 # PLOT DASSH ASSEMBLIES
 ########################################################################
@@ -310,6 +356,7 @@ class AssemblyPlot(object):
                                 None]
             # Pin characteristics
             self.pin = {}
+            self.pin['n_pins'] = dassh_asm.rodded.n_pin
             self.pin['xy'] = dassh_asm.rodded.pin_lattice.xy
             self.pin['radius'] = dassh_asm.rodded.pin_diameter / 2
             self.pin['pitch'] = dassh_asm.rodded.pin_pitch
@@ -501,6 +548,10 @@ class SubchannelPlot(AssemblyPlot):
             Indicate whether to plot pins over subchannels
         pin_alpha : float
             Indicate the opacity of the pin fill
+        linestyle : float
+            The linestyle of the subchannel patches
+        edgecolor: str
+            Set the subchannel patches edge color
 
         Returns
         -------
@@ -559,18 +610,18 @@ class SubchannelPlot(AssemblyPlot):
 
         kwargs
         ------
-        cmap : matploblib.cm object
-            Color map with which to color the subchannel temperatures
-        norm : matplotlib.colors.TwoSlopNorm object, or another norm
-            option from matplotlib.colors
-        cbar_label : str
-            Label for the color bar
-        lw : float
+        linewidth : float
             Border line width to apply to the subchannel patches
         pins : boolean
             Indicate whether to plot pins over subchannels
         pin_alpha : float
             Indicate the opacity of the pin fill
+        fontsize : int
+            Indicate the font size of the labels
+        linestyle : str
+            The linestyle of the subchannel patches
+        edgecolor: str
+            Set the subchannel patches edge color
 
         Returns
         -------
@@ -593,7 +644,7 @@ class SubchannelPlot(AssemblyPlot):
         ax = fig.add_subplot(111, aspect='equal')
 
         # 0. Add duct walls
-        ax = self._add_duct_walls(ax, color='1.0')
+        ax = self._add_duct_walls(ax)
 
         # 1. Add corner channels (hexagons)
         ax = self._add_corner_sc(ax, data, **patch_kwargs)
@@ -1419,6 +1470,60 @@ class PinPlot(AssemblyPlot):
         if kwargs.get('cbar_label'):
             txt = kwargs['cbar_label']
         ax = _add_colorbar(ax, txt, kwargs['cmap'], kwargs['norm'])
+        return ax
+
+    def map(self, **kwargs):
+        """Plot the pin ID map
+
+        kwargs
+        ------
+        linewidth : float
+            Border line width to apply to the subchannel patches
+        fontsize : int
+            Indicate the font size of the labels.
+        linestyle : str
+            The linestyle of the subchannel patches
+    
+        Returns
+        -------
+        matplotlib.axes.Axes object
+
+        """
+        # Set default arguments
+        data = np.ones(self.pin['n_pins'])
+        kwargs = self.parse_args(data, 0.0, 2.0, 1.0, cmap='bwr', **kwargs)
+
+        # isolate the patch kwargs
+        patch_kwargs = {'cmap': kwargs['cmap'],
+                        'norm': kwargs['norm'],
+                        'linewidth': kwargs['linewidth'],
+                        'linestyle': kwargs['linestyle'],
+                        'edgecolor': 'k'}
+
+        # Setup the figure and add duct walls and pins
+        fig = plt.figure()
+        ax = fig.add_subplot(111, aspect='equal')
+        ax = self._add_duct_walls(ax)
+        ax = self._add_pins(ax, data, **patch_kwargs)
+        # Add labels
+        lab = np.arange(1, self.pin['n_pins'] + 1, 1)
+        xy = self.pin['xy']
+        if kwargs.get('fontsize'):
+            fontsize = kwargs['fontsize']
+        else:
+            fontsize = 6
+        textcolor = 'r'
+        for i in range(lab.shape[0]):
+            txt = ax.annotate(str(lab[i].astype(int)),
+                                xy[i],
+                                size=fontsize,
+                                ha='center',
+                                va='center',
+                                weight='bold',
+                                color=textcolor)
+        # Format figure and return
+        plt.axis('off')
+        ax = self._set_ax_bnds(ax)
         return ax
 
     def _add_pins(self, ax, data, xy_shift=None, **kwargs):
