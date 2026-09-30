@@ -564,10 +564,10 @@ class MixedRegion(RoddedRegion):
         swirl_consts : np.ndarray
             Swirl exchange constants for edge/corner subchannels
         indexes: str
-            Define the list the near wall subchannels.
+            Identifier of interior 'ind' or inner 'ind-inner' subchannels
         side: int
-            Index that identify the columns in the adjacency matrix as a
-            function of swirl rotation.
+            Identifier of the columns in the adjacency matrix according to the
+            swirl rotation
         is_mom : bool
             Indicate whether to calculate momentum (True) or energy (False)
             

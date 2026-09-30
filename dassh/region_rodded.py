@@ -265,6 +265,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     gravity (optional) : boolean
         Indicates whether gravity head losses should be included in
         pressure drop calculation (default: False)
+    inner_hole_ftf : float
+        Flat to flat distance of the inner hexagonal hole
 
     Attributes
     ----------
@@ -331,6 +333,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Bundle-average subchannel parameters
     inner_hole_ftf : float
         Flat to flat distance of the inner hexagonal hole
+    nsc_cool_type : int
+        Number of SC coolant type
+    rings_removed : int
+        Number of rings removed by the central hexagonal hole
 
     Notes
     -----
@@ -418,7 +424,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Find number of removed inner rings
         self.rings_removed = _get_removed_rings(
             inner_hole_ftf, pin_pitch, pin_diam, wire_diam)
-        self.inner_duct = inner_hole_ftf
+        self.inner_hole_ftf = inner_hole_ftf
         self.nsc_cool_type = 3 if self.rings_removed < 1 else 5
         if self.rings_removed == 1:
             self.log('error',
@@ -753,7 +759,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     + f'for pin bundle "{self.name}" is too large '
                     + 'to be acceptable by CTD/UCTD correlations. '
                     + 'Consider modifying pin bundle dimensions.'
-                    self.log('error')
+                    self.log('error', msg)
                 if self.nsc_cool_type > 3 and self.edge_inner_pitch \
                     / self.pin_diameter > w2d_limit:
                     msg = 'ERROR: Gap between pin bundle and inner duct '
@@ -1135,16 +1141,14 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self.coolant_int_params['vel']
         if self.nsc_cool_type > 3:
             vm_inner = (
-                self.coolant_int_params['fs'][3]**2 * 
-                self.subchannel.n_sc['coolant']['inner-edge'] * 
-                self.params['area'][3] + 
-                self.coolant_int_params['fs'][4]**2 * 
-                self.subchannel.n_sc['coolant']['inner-corner'] *
-                self.params['area'][4]) / \
-            (   self.coolant_int_params['fs'][3] * 
+                self.coolant_int_params['fs'][3] * 
                 self.subchannel.n_sc['coolant']['inner-edge'] * 
                 self.params['area'][3] + 
                 self.coolant_int_params['fs'][4] * 
+                self.subchannel.n_sc['coolant']['inner-corner'] *
+                self.params['area'][4]) / \
+            (   self.subchannel.n_sc['coolant']['inner-edge'] * 
+                self.params['area'][3] + 
                 self.subchannel.n_sc['coolant']['inner-corner'] *
                 self.params['area'][4]
             ) * self.coolant_int_params['vel']
@@ -2407,7 +2411,7 @@ def calculate_ht_constants(rr, mixed=False):
     # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ,
     #   Edge <- Inner-Edge,       Edge <- Inner-Corner             ]
     # [ 0               ,     Corner <- Edge,   Corner <- Corner ,
-    #   0,                                               ]
+    #   0,                  , 0                                    ]
     # [ Inner-Edge <- Interior,     Inner-Edge <- Edge,         0,
     #   Inner-Edge <- Inner-Edge,     Inner-Edge <- Inner-Corner   ]
     # [ Inner-Corner <- Interior, Inner-Corner <- Edge,         0,

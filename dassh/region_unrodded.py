@@ -861,7 +861,8 @@ class _RREquivalent(RoddedRegion):
                      '_sf',
                      '_spacer_grid',
                      '_rad_isotropic',
-                     '_mixed_convection']
+                     '_mixed_convection',
+                     'nsc_cool_type',]
 
     def __init__(self, asm_input, mat_dict, fr, se2geo=False):
         """Instantiate RoddedRegion object and pull out useful attr"""
@@ -901,7 +902,6 @@ class _RREquivalent(RoddedRegion):
 
         for item in to_delete:
             delattr(self, item)
-        self.nsc_cool_type = 3
 
     def clone(self, new_flowrate=None):
         """Clone the rodded region into another assembly object;
