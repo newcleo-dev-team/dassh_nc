@@ -435,7 +435,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self.subchannel = Subchannel(n_ring, pin_pitch, pin_diam,
                                      self.pin_lattice.map,
                                      self.pin_lattice.xy,
-                                     self.duct_ftf)
+                                     self.duct_ftf,
+                                     inner_hole_ftf=inner_hole_ftf,
+                                     n_rings_removed=self.rings_removed)
 
         # Bypass flow rate parameters; need to store as
         # attributes so I can pass them to clones
