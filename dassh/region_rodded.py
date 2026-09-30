@@ -265,6 +265,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
     gravity (optional) : boolean
         Indicates whether gravity head losses should be included in
         pressure drop calculation (default: False)
+    inner_hole_ftf : float
+        Flat to flat distance of the inner hexagonal hole
 
     Attributes
     ----------
@@ -331,6 +333,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         Bundle-average subchannel parameters
     inner_hole_ftf : float
         Flat to flat distance of the inner hexagonal hole
+    nsc_cool_type : int
+        Number of SC coolant type
+    rings_removed : int
+        Number of rings removed by the central hexagonal hole
 
     Notes
     -----
@@ -418,7 +424,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Find number of removed inner rings
         self.rings_removed = _get_removed_rings(
             inner_hole_ftf, pin_pitch, pin_diam, wire_diam)
-        self.inner_duct = inner_hole_ftf
+        self.inner_hole_ftf = inner_hole_ftf
         self.nsc_cool_type = 3 if self.rings_removed < 1 else 5
         if self.rings_removed == 1:
             self.log('error',
@@ -448,10 +454,12 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # BUNDLE GEOMETRY
         n_sc = np.array([self.subchannel.n_sc['coolant']['interior'],
                          self.subchannel.n_sc['coolant']['edge'],
-                         self.subchannel.n_sc['coolant']['corner']])
+                         self.subchannel.n_sc['coolant']['corner'],
+                         self.subchannel.n_sc['coolant']['inner-edge'],
+                         self.subchannel.n_sc['coolant']['inner-corner']])
         tmp = calculate_geometry(n_ring, pin_pitch, pin_diam,
                                  wire_pitch, wire_diam, self.duct_ftf,
-                                 n_sc, se2)
+                                 n_sc, inner_hole_ftf, self.rings_removed, se2)
         for k in tmp.keys():
             setattr(self, k, tmp[k])
 
@@ -463,7 +471,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             self._duct_idx[sci] = \
                 self.subchannel.type[
                     sci + self.subchannel.n_sc['coolant']['total']]
-        self._duct_idx -= 3
+        self._duct_idx -= 5
 
         # --------------------------------------------------------------
         # Set up x-points for treating mesh disagreement; this is for
@@ -499,8 +507,10 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         self.wire_direction = wwdir
         if wwdir == 'clockwise':
             self._adj_sw = 3
+            self._adj_sw_inner = 6
         else:
             self._adj_sw = 4
+            self._adj_sw_inner = 5
 
         # --------------------------------------------------------------
         # Set up _MatTracker object
@@ -558,7 +568,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # methods to calculate average temperatures, and the ability
         # to activate itself within the Assembly child class.
         coolant_area = np.array([self.params['area'][i] for i in
-                                 self.subchannel.type if i <= 2])
+                                 self.subchannel.type if
+                                 i <= self.nsc_cool_type - 1])
         duct_area = np.zeros((self.n_duct,
                               self.subchannel.n_sc['duct']['total']))
         for i in range(self.n_duct):
@@ -566,7 +577,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                      + 2 * i * self.subchannel.n_sc['duct']['total'])
             for j in range(self.subchannel.n_sc['duct']['total']):
                 typ = self.subchannel.type[j + start]
-                duct_area[i, j] = self.duct_params['area'][i, typ - 3]
+                duct_area[i, j] = self.duct_params['area'][i, typ - 5]
 
         if self.n_bypass > 0:
             byp_area = np.zeros((self.n_bypass,
@@ -577,7 +588,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                          + i * 2 * self.subchannel.n_sc['duct']['total'])
                 for j in range(self.subchannel.n_sc['bypass']['total']):
                     typ = self.subchannel.type[j + start]
-                    byp_area[i][j] = self.bypass_params['area'][i][typ - 5]
+                    byp_area[i][j] = self.bypass_params['area'][i][typ - 7]
         else:
             byp_area = None
 
@@ -604,7 +615,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         x_bnds = np.zeros(self.subchannel.n_sc['duct']['total'] + 2)
         typ = self.subchannel.type[
             -self.subchannel.n_sc['duct']['total']:].copy()
-        typ -= 3
+        typ -= 5
         typ = np.roll(typ, 1)
         dx = np.array([self.pin_pitch, 2 * self.d['wcorner'][-1, 1]])
         x_bnds[1:-1] = np.cumsum(dx[typ]) - 0.5 * dx[1]
@@ -669,7 +680,11 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 self.subchannel.type[
                     :self.subchannel.n_sc['coolant']['total']]]
         self.ht['inv_q_denom'] = 1 / self.ht['inv_q_denom']
-        self.ht['swirl'] = (self.d['pin-wall']
+        pin_wall_dist = np.array([self.d['pin-wall']] * 3)
+        if self.nsc_cool_type > 3:
+            pin_wall_dist = np.append(
+                pin_wall_dist, [self.d['pin-inner-wall']]*2)
+        self.ht['swirl'] = (pin_wall_dist
                             * self.bundle_params['area']
                             / self.params['area']
                             / self.int_flow_rate)
@@ -701,13 +716,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                         self._mixed_convection)
         self.coolant_int_params = \
             {'Re': 0.0,  # bundle-average Reynolds number
-             'Re_sc': np.zeros(3),  # subchannel Reynolds numbers
+             'Re_sc': np.zeros(self.nsc_cool_type),  # subchannel Reynolds numbers
              'vel': 0.0,  # bundle-average coolant velocity
-             'fs': np.ones(3),  # subchannel flow split parameters
-             'ff': np.zeros(3),  # subchannel friction factors
+             'fs': np.ones(self.nsc_cool_type),  # subchannel flow split parameters
+             'ff': np.zeros(self.nsc_cool_type),  # subchannel friction factors
              'eddy': 0.0,  # eddy diffusivity
-             'swirl': np.zeros(3),  # swirl velocity.
-             'htc': np.zeros(3)}  # heat transfer coefficient
+             'swirl': np.zeros(self.nsc_cool_type),  # swirl velocity.
+             'htc': np.zeros(self.nsc_cool_type)}  # heat transfer coefficient
         if not self._rad_isotropic:
             self.coolant_int_params['sc_htc'] = \
                 np.zeros(self.subchannel.n_sc['coolant']['total'])            
@@ -744,7 +759,14 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                     + f'for pin bundle "{self.name}" is too large '
                     + 'to be acceptable by CTD/UCTD correlations. '
                     + 'Consider modifying pin bundle dimensions.'
-                    self.log('error')
+                    self.log('error', msg)
+                if self.nsc_cool_type > 3 and self.edge_inner_pitch \
+                    / self.pin_diameter > w2d_limit:
+                    msg = 'ERROR: Gap between pin bundle and inner duct '
+                    + f'for pin bundle "{self.name}" is too large '
+                    + 'to be acceptable by CTD/UCTD correlations. '
+                    + 'Consider modifying pin bundle dimensions.'
+                    self.log('error', msg)
 
     def _setup_spacer_grid(self, input_grid):
         """Set up an attribute for spacer grid pressure losses
@@ -1041,10 +1063,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Mixing params - these come dimensionless, need to adjust
         if self.corr['mix']:
             mix = self.corr['mix'](self)   
-            vm_interior, vm_periphery = self._calc_average_velocities()
+            vm_interior, vm_periphery, vm_inner = self._calc_average_velocities()
             self.coolant_int_params['eddy'] = mix[0] * vm_interior
             self.coolant_int_params['swirl'][1] = mix[1] * vm_periphery
             self.coolant_int_params['swirl'][2] = mix[1] * vm_periphery
+            if self.nsc_cool_type > 3:
+                self.coolant_int_params['swirl'][3] = mix[2] * vm_inner
+                self.coolant_int_params['swirl'][4] = mix[2] * vm_inner
         
     def _calc_average_velocities(self) -> tuple[float]:
         """
@@ -1059,11 +1084,39 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             Average velocity in interior and periphery regions
         """
         if self._mixed_convection:
-            nint = self.subchannel.n_sc['coolant']['interior']
+            n_add = self.subchannel.n_sc['coolant']['inner-corner'] + \
+                self.subchannel.n_sc['coolant']['inner-edge']
+            nint = n_add + self.subchannel.n_sc['coolant']['interior']
             ntot = self.subchannel.n_sc['coolant']['total']
             areas = self.params['area'][self.subchannel.type[:ntot]]
-            vm_interior = np.sum(areas[:nint] * self._sc_vel[:nint]) / \
-                np.sum(areas[:nint])
+            # If there are no interior, I need anyway a representative velocity
+            # to calculate the eddy diffusivity
+            if nint-n_add > 0:
+                vm_interior = np.sum(
+                    areas[n_add:nint] * self._sc_vel[n_add:nint]) / \
+                    np.sum(areas[n_add:nint])
+            else:
+                vm_interior = np.sum(areas[:ntot] * self._sc_vel[:ntot]) / \
+                    np.sum(areas[:ntot])
+            if self.nsc_cool_type > 3:
+                vm_inner = np.sum(areas[:n_add] * self._sc_vel[:n_add]) / \
+                    np.sum(areas[:n_add])
+                # Update flow split const. for output info
+                sc_in_corner = self.subchannel.type[:ntot] == 4
+                vm_in_corner = np.sum(
+                    areas[sc_in_corner] * self._sc_vel[sc_in_corner]) / \
+                    np.sum(areas[sc_in_corner])
+                self.coolant_int_params['fs'][4] = vm_in_corner / \
+                    self.coolant_int_params['vel']
+                sc_in_edge = self.subchannel.type[:ntot] == 3
+                if np.any(sc_in_edge):
+                    vm_in_edge = np.sum(
+                        areas[sc_in_edge] * self._sc_vel[sc_in_edge]) / \
+                        np.sum(areas[sc_in_edge])
+                    self.coolant_int_params['fs'][3] = vm_in_edge / \
+                        self.coolant_int_params['vel']
+            else:
+                vm_inner = 0.0
             vm_periphery = np.sum(
                 areas[nint:ntot] * self._sc_vel[nint:ntot]) / \
                 np.sum(areas[nint:ntot])
@@ -1080,13 +1133,28 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 self.coolant_int_params['vel']
             self.coolant_int_params['fs'][2] = vm_corner / \
                 self.coolant_int_params['vel']
-            return vm_interior, vm_periphery
+            return vm_interior, vm_periphery, vm_inner
         
         vm_interior = self.coolant_int_params['fs'][0] * \
             self.coolant_int_params['vel']
         vm_periphery = self.coolant_int_params['fs'][1] * \
             self.coolant_int_params['vel']
-        return vm_interior, vm_periphery
+        if self.nsc_cool_type > 3:
+            vm_inner = (
+                self.coolant_int_params['fs'][3] * 
+                self.subchannel.n_sc['coolant']['inner-edge'] * 
+                self.params['area'][3] + 
+                self.coolant_int_params['fs'][4] * 
+                self.subchannel.n_sc['coolant']['inner-corner'] *
+                self.params['area'][4]) / \
+            (   self.subchannel.n_sc['coolant']['inner-edge'] * 
+                self.params['area'][3] + 
+                self.subchannel.n_sc['coolant']['inner-corner'] *
+                self.params['area'][4]
+            ) * self.coolant_int_params['vel']
+        else:
+            vm_inner = 0.0
+        return vm_interior, vm_periphery, vm_inner
             
             
     def _calculate_htc(self, sc_vel: np.ndarray = None) -> None:
@@ -1139,7 +1207,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         """
         Re_partial = self.coolant.density * self.coolant_int_params['vel'] \
                / self.coolant.viscosity
-        for i in range(3):
+        for i in range(self.nsc_cool_type):
             self.coolant_int_params['Re_sc'][i] = \
                 Re_partial * self.coolant_int_params['fs'][i] * \
                     self.params['de'][i]
@@ -1467,37 +1535,44 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # wise direction is 27; the preceding one is 25.
         # - clockwise: use 25 as the swirl adjacent sc
         # - counterclockwise: use 27 as the swirl adjacent sc
-        swirl_consts = (self.ht['swirl'] / self.coolant_int_params['fs']) * \
+        swirl_ind_key = ['ind']
+        swirl_type_key = ['type']
+        swirl_side = [self._adj_sw]
+        if self.nsc_cool_type > 3:
+            swirl_ind_key.append('ind_inner')
+            swirl_type_key.append('type_inner')
+            swirl_side.append(self._adj_sw_inner)
+        swirl_term = (self.ht['swirl'] / self.coolant_int_params['fs']) * \
             self.coolant_int_params['swirl']  
-        swirl_consts = swirl_consts[self.ht['conv']['type']]
-        if self._rad_isotropic:
-            swirl_consts *= self.coolant.density 
-            swirl_exchange = (swirl_consts*
-                (self.temp['coolant_int'][self.subchannel.sc_adj[
-                 self.ht['conv']['ind'], self._adj_sw]]
-                 - self.temp['coolant_int'][self.ht['conv']['ind']]))
-        elif self._ent:
-            swirl_exchange = swirl_consts* \
-                (self.sc_properties['density'][self.subchannel.sc_adj[
-                    self.ht['conv']['ind'], self._adj_sw]] 
-                    * self._enthalpy[self.subchannel.sc_adj[
-                        self.ht['conv']['ind'], self._adj_sw]]
-                    - self.sc_properties['density'][self.ht['conv']['ind']]
-                    * self._enthalpy[self.ht['conv']['ind']])   
-        else:
-            swirl_exchange = swirl_consts* \
-                (self.sc_properties['density'][self.subchannel.sc_adj[
-                    self.ht['conv']['ind'], self._adj_sw]]
-                * self.temp['coolant_int'][self.subchannel.sc_adj[
-                    self.ht['conv']['ind'], self._adj_sw]]
-                * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[
-                    self.ht['conv']['ind'], self._adj_sw]]
-                - self.sc_properties['density'][self.ht['conv']['ind']]
-                * self.sc_properties['heat_capacity'][self.ht['conv']['ind']]
-                * self.temp['coolant_int'][self.ht['conv']['ind']]) \
-                / self.sc_properties['heat_capacity'][self.ht['conv']['ind']]            
-            
-        dT_or_dh[self.ht['conv']['ind']] += swirl_exchange
+        for ind, typer, side in zip(swirl_ind_key, swirl_type_key, swirl_side):
+            swirl_consts = swirl_term[self.ht['conv'][typer]]
+            if self._rad_isotropic:
+                swirl_consts *= self.coolant.density 
+                swirl_exchange = (swirl_consts*
+                    (self.temp['coolant_int'][self.subchannel.sc_adj[
+                    self.ht['conv'][ind], side]]
+                    - self.temp['coolant_int'][self.ht['conv'][ind]]))
+            elif self._ent:
+                swirl_exchange = swirl_consts* \
+                    (self.sc_properties['density'][self.subchannel.sc_adj[
+                        self.ht['conv'][ind], side]] 
+                        * self._enthalpy[self.subchannel.sc_adj[
+                            self.ht['conv'][ind], side]]
+                        - self.sc_properties['density'][self.ht['conv'][ind]]
+                        * self._enthalpy[self.ht['conv'][ind]])   
+            else:
+                swirl_exchange = swirl_consts* \
+                    (self.sc_properties['density'][self.subchannel.sc_adj[
+                        self.ht['conv'][ind], side]]
+                    * self.temp['coolant_int'][self.subchannel.sc_adj[
+                        self.ht['conv'][ind], side]]
+                    * self.sc_properties['heat_capacity'][self.subchannel.sc_adj[
+                        self.ht['conv'][ind], side]]
+                    - self.sc_properties['density'][self.ht['conv'][ind]]
+                    * self.sc_properties['heat_capacity'][self.ht['conv'][ind]]
+                    * self.temp['coolant_int'][self.ht['conv'][ind]]) \
+                    / self.sc_properties['heat_capacity'][self.ht['conv'][ind]]            
+            dT_or_dh[self.ht['conv'][ind]] += swirl_exchange
 
         if ebal:
             qduct = self.ht['conv']['ebal'] * dT_conv_over_R
@@ -1540,7 +1615,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         between the subchannels.
         """
         cond_temp_difference = np.zeros((
-            self.subchannel.n_sc['coolant']['total'], 3))
+            self.subchannel.n_sc['coolant']['total'], self.nsc_cool_type))
         if not self._rad_isotropic:
             for i in range(self.subchannel.n_sc['coolant']['total']):
                 for k in range(3):
@@ -1638,11 +1713,19 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             q = pin_power[self.subchannel.rev_pin_adj]
             q[self.subchannel.rev_pin_adj < 0] = 0
             # q = np.sum(q, axis=1)
-            q = q[:, 0] + q[:, 1] + q[:, 2]
-            q *= self._q_p2sc
+            q_1d = q[:, 0] + q[:, 1] + q[:, 2]
+            q_1d *= self._q_p2sc
+            if self.nsc_cool_type > 3:
+                indexes = np.where(self.subchannel.type == 4)[0]
+                left_pointing = indexes[0::2]
+                q_1d[left_pointing] = q[left_pointing, 0] * Q_P2SC[0] + \
+                    q[left_pointing, 1] * Q_P2SC[3]
+                right_pointing = indexes[1::2]
+                q_1d[right_pointing] = q[right_pointing, 0] * Q_P2SC[3] + \
+                    q[right_pointing, 1] * Q_P2SC[0]
             if cool_power is not None:
-                q += cool_power
-            return q
+                q_1d += cool_power
+            return q_1d
 
     def _calc_coolant_byp_temp(self, dz, ebal=False):
         """Calculate the coolant temperatures in the assembly bypass
@@ -1689,19 +1772,19 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                      + i * self.subchannel.n_sc['duct']['total'])
             end = start + self.subchannel.n_sc['bypass']['total']
             type_i = self.subchannel.type[start:end]
-            htc_i = self.coolant_byp_params['htc'][i, type_i - 5]
-            # byp_conv_consti = byp_conv_const[type_i - 5]
+            htc_i = self.coolant_byp_params['htc'][i, type_i - 7]
+            # byp_conv_consti = byp_conv_const[type_i - 7]
             byp_conv_const = np.array([[self.L[1][1], self.L[1][1]],
                                        [2 * self.d['wcorner'][i, 1],
                                         2 * self.d['wcorner'][i + 1, 1]]])
             # byp_conv_const = np.array([[self.L[1][1], self.L[1][1]],
             #                            [2 * self.d['wcorner_m'][i],
             #                             2 * self.d['wcorner_m'][i + 1]]])
-            byp_conv_const = byp_conv_const[type_i - 5]
+            byp_conv_const = byp_conv_const[type_i - 7]
             byp_fr_const = (self.bypass_params['total area'][i]
                             / self.byp_flow_rate[i]
                             / self.bypass_params['area'][i])
-            byp_fr_const = byp_fr_const[type_i - 5]
+            byp_fr_const = byp_fr_const[type_i - 7]
 
             # Heat transfer to/from adjacent duct walls
             if self._conv_approx:
@@ -1745,7 +1828,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 # Heat transfer to/from adjacent subchannels
                 for adj in self.subchannel.sc_adj[sci + start]:
                     type_a = self.subchannel.type[adj]
-                    if 3 <= type_a <= 4:
+                    if 5 <= type_a <= 6:
                         continue
                     else:
                         sc_adj = adj - start
@@ -1870,9 +1953,13 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             if i == 0:  # inner-most duct, inner htc is asm interior
                 # Get rid of interior temps, only want edge/corner
                 t_in = self.temp['coolant_int'][
+                    self.subchannel.n_sc['coolant']['inner-edge']+
+                    self.subchannel.n_sc['coolant']['inner-corner']+
                     self.subchannel.n_sc['coolant']['interior']:]
                 if not self._rad_isotropic:
                     htc_in = self.coolant_int_params['sc_htc'][
+                        self.subchannel.n_sc['coolant']['inner-edge']+
+                        self.subchannel.n_sc['coolant']['inner-corner']+
                         self.subchannel.n_sc['coolant']['interior']:]
                 else:
                     htc_in = self.coolant_int_params['htc'][1:]
@@ -1963,12 +2050,40 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         # Check for nonspecified pin power
         if pin_powers is None:
             pin_powers = np.zeros(self.n_pin)
-
+        # Calculate pin-adjacent average coolant temperatures
+        T_scaled = self.temp['coolant_int'] * self._q_p2sc
+        Tc_avg = T_scaled[self.subchannel.pin_adj]
+        if self.nsc_cool_type > 3:
+            ids = np.flatnonzero(self.subchannel.type == 4)
+            is_corner = np.isin(self.subchannel.pin_adj, ids)
+            corner_rows, corner_cols = np.where(is_corner)
+            row_sel = is_corner.sum(axis=1)
+            multiple = row_sel[corner_rows] > 1
+            rows2 = corner_rows[multiple]
+            cols2 = corner_cols[multiple]
+            rows1 = corner_rows[~multiple]
+            cols1 = corner_cols[~multiple]
+            weight_2_missing = (1.0 - np.sum(
+                self._q_p2sc[self.subchannel.pin_adj[rows2, :]], axis=1,
+                where=self.subchannel.pin_adj[rows2, :] >= 0)
+                ) / 2
+            Tc_avg[rows2, cols2] = self.temp['coolant_int'][
+                self.subchannel.pin_adj[rows2, cols2]] * weight_2_missing
+            Tc_avg[rows1, cols1] = self.temp['coolant_int'][
+                self.subchannel.pin_adj[rows1, cols1]] * Q_P2SC[3]
+        Tc_avg = np.ma.masked_array(Tc_avg, self.subchannel.pin_adj < 0)
+        Tc_avg = np.sum(Tc_avg, axis=1)
         # Heat transfer coefficient (via Nu) for clad-coolant
         if not self._rad_isotropic:
-            htc_scaled = self._calculate_htc_rad_non_isotropic(
-                self.pin_model.htc_params) * self._q_p2sc 
+            htc_raw = self._calculate_htc_rad_non_isotropic(
+                self.pin_model.htc_params)
+            htc_scaled = htc_raw * self._q_p2sc
             htc = htc_scaled[self.subchannel.pin_adj]
+            if self.nsc_cool_type > 3:
+                htc[rows2, cols2] = htc_raw[
+                    self.subchannel.pin_adj[rows2, cols2]] * weight_2_missing
+                htc[rows1, cols1] = htc_raw[
+                    self.subchannel.pin_adj[rows1, cols1]] * Q_P2SC[3]
             htc = np.ma.masked_array(htc, self.subchannel.pin_adj < 0)
             htc = np.sum(htc, axis=1) 
         else:
@@ -1977,12 +2092,6 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                                         self.pin_model.htc_params)
             htc = (self.coolant.thermal_conductivity * pin_nu
                 / self.bundle_params['de'])
-        # Calculate pin-adjacent average coolant temperatures
-        T_scaled = self.temp['coolant_int'] * self._q_p2sc
-        Tc_avg = T_scaled[self.subchannel.pin_adj]
-        Tc_avg = np.ma.masked_array(Tc_avg, self.subchannel.pin_adj < 0)
-        Tc_avg = np.sum(Tc_avg, axis=1)
-
         # With maximum adjacent subchannel coolant temperature and
         # subchannel specific HTC
         # t = self.temp['coolant_int'][self.subchannel.pin_adj]
@@ -2294,40 +2403,49 @@ def calculate_ht_constants(rr, mixed=False):
 
     """
     # HEAT TRANSFER CONSTANTS - set up similarly to self.L
-    ht_consts = [[0.0] * 7 for i in range(7)]
+    ht_consts = [[0.0] * 9 for i in range(9)]
 
     # Conduction between coolant channels (units: s/kg)
-    # [ Interior <- Interior, Interior <- Edge, 0                ]
-    # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ]
-    # [ 0               ,     Corner <- Edge,   Corner <- Corner ]
+    # [ Interior <- Interior, Interior <- Edge,                 0,
+    #   Interior <- Inner-Edge, Interior <- Inner-Corner           ]
+    # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ,
+    #   Edge <- Inner-Edge,       Edge <- Inner-Corner             ]
+    # [ 0               ,     Corner <- Edge,   Corner <- Corner ,
+    #   0,                  , 0                                    ]
+    # [ Inner-Edge <- Interior,     Inner-Edge <- Edge,         0,
+    #   Inner-Edge <- Inner-Edge,     Inner-Edge <- Inner-Corner   ]
+    # [ Inner-Corner <- Interior, Inner-Corner <- Edge,         0,
+    #   Inner-Corner <- Inner-Edge, Inner-Corner <- Inner-Corner   ]
     # if self.n_pin > 1:
-
-    for i in range(3): 
-        for j in range(3):  
+    n_coolant = rr.nsc_cool_type
+    for i in range(n_coolant): 
+        for j in range(n_coolant):  
             if rr.L[i][j] != 0.0:  # excludes int <--> corner
                 ht_consts[i][j] = 1 / rr.L[i][j]
-                if i == 0 or j == 0:
+                if i == 0 or j == 0 or j >= i+2 or i >= j+2:
                     ht_consts[i][j] *= rr.d['pin-pin']
-                else:
+                elif i < 3 and j < 3:
                     ht_consts[i][j] *= rr.d['pin-wall']
+                else:
+                    ht_consts[i][j] *= rr.d['pin-inner-wall']
                 if not mixed:
                     ht_consts[i][j] *= rr.bundle_params['area'] / \
                         rr.int_flow_rate / rr.params['area'][i]
     
     # Convection from interior coolant to duct wall (units: m-s/kg)
     # Edge -> wall 1
-    ht_consts[1][3] = rr.L[1][1]
+    ht_consts[1][5] = rr.L[1][1]
     if not mixed:
-        ht_consts[1][3] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+        ht_consts[1][5] *= rr.bundle_params['area'] / rr.int_flow_rate / \
             rr.params['area'][1]
-    ht_consts[3][1] = ht_consts[1][3]
+    ht_consts[5][1] = ht_consts[1][5]
 
     # Corner -> wall 1
-    ht_consts[2][4] = 2 * rr.d['wcorner'][0, 1]
+    ht_consts[2][6] = 2 * rr.d['wcorner'][0, 1]
     if not mixed:
-        ht_consts[2][4] *= rr.bundle_params['area'] / rr.int_flow_rate / \
+        ht_consts[2][6] *= rr.bundle_params['area'] / rr.int_flow_rate / \
             rr.params['area'][2]
-    ht_consts[4][2] = ht_consts[2][4]
+    ht_consts[6][2] = ht_consts[2][6]
 
     # Bypass convection and conduction
     if rr.n_bypass > 0 and np.sum(rr.byp_flow_rate) > 0:
@@ -2338,70 +2456,70 @@ def calculate_ht_constants(rr, mixed=False):
         # The edge connections are the same everywhere
         # The corner connections change b/c the "flat" parts of
         # the channel get longer as you walk radially outward
-        ht_consts[3][5] = [[0.0] * 2 for i in range(rr.n_bypass)]
-        ht_consts[4][6] = [[0.0] * 2 for i in range(rr.n_bypass)]
+        ht_consts[5][7] = [[0.0] * 2 for i in range(rr.n_bypass)]
+        ht_consts[6][8] = [[0.0] * 2 for i in range(rr.n_bypass)]
         for i in range(0, rr.n_bypass):
             # bypass edge -> wall 1
             if rr.n_pin > 1:
-                ht_consts[3][5][i][0] = \
+                ht_consts[5][7][i][0] = \
                     (rr.L[1][1]
                      * rr.bypass_params['total area'][i]
                      / rr.byp_flow_rate[i]
                      / rr.bypass_params['area'][i, 0])
                 # bypass edge -> wall 2 (same as wall 1)
-                ht_consts[3][5][i][1] = ht_consts[3][5][i][0]
+                ht_consts[5][7][i][1] = ht_consts[5][7][i][0]
             # bypass corner -> wall 1
-            ht_consts[4][6][i][0] = \
+            ht_consts[6][8][i][0] = \
                 (2 * rr.d['wcorner'][i, 1]
                  * rr.bypass_params['total area'][i]
                  / rr.byp_flow_rate[i]
                  / rr.bypass_params['area'][i, 1])
-            # ht_consts[4][6][i][0] = \
+            # ht_consts[6][8][i][0] = \
             #     (2 * self.d['wcorner_m'][i]
             #      * self.bypass_params['total area'][i]
             #      / self.byp_flow_rate[i]
             #      / self.bypass_params['area'][i, 1])
             # bypass corner -> wall 2
-            ht_consts[4][6][i][1] = \
+            ht_consts[6][8][i][1] = \
                 (2 * rr.d['wcorner'][i + 1, 1]
                  * rr.bypass_params['total area'][i]
                  / rr.byp_flow_rate[i]
                  / rr.bypass_params['area'][i, 1])
-            # ht_consts[4][6][i][1] = \
+            # ht_consts[6][8][i][1] = \
             #     (2 * self.d['wcorner_m'][i + 1]
             #      * self.bypass_params['total area'][i]
             #      / self.byp_flow_rate[i]
             #      / self.bypass_params['area'][i, 1])
-        ht_consts[5][3] = ht_consts[3][5]
-        ht_consts[6][4] = ht_consts[4][6]
+        ht_consts[7][5] = ht_consts[5][7]
+        ht_consts[8][6] = ht_consts[6][8]
 
         # Conduction between bypass coolant channels
-        ht_consts[5][5] = [0.0] * rr.n_bypass
-        ht_consts[5][6] = [0.0] * rr.n_bypass
-        ht_consts[6][5] = [0.0] * rr.n_bypass
-        ht_consts[6][6] = [0.0] * rr.n_bypass
+        ht_consts[7][7] = [0.0] * rr.n_bypass
+        ht_consts[7][8] = [0.0] * rr.n_bypass
+        ht_consts[8][7] = [0.0] * rr.n_bypass
+        ht_consts[8][8] = [0.0] * rr.n_bypass
         for i in range(0, rr.n_bypass):
             if rr.n_pin > 1:
-                ht_consts[5][5][i] = \
+                ht_consts[7][7][i] = \
                     (rr.d['bypass'][i]
                      * rr.bypass_params['total area'][i]
-                     / rr.L[5][5][i] / rr.byp_flow_rate[i]
+                     / rr.L[7][7][i] / rr.byp_flow_rate[i]
                      / rr.bypass_params['area'][i, 0])
-                ht_consts[5][6][i] = \
+                ht_consts[7][8][i] = \
                     (rr.d['bypass'][i]
                      * rr.bypass_params['total area'][i]
-                     / rr.L[5][6][i] / rr.byp_flow_rate[i]
+                     / rr.L[7][8][i] / rr.byp_flow_rate[i]
                      / rr.bypass_params['area'][i, 0])
-                ht_consts[6][5][i] = \
+                ht_consts[8][7][i] = \
                     (rr.d['bypass'][i]
                      * rr.bypass_params['total area'][i]
-                     / rr.L[5][6][i] / rr.byp_flow_rate[i]
+                     / rr.L[7][8][i] / rr.byp_flow_rate[i]
                      / rr.bypass_params['area'][i, 1])
-                # ht_consts[6][5] = ht_consts[5][6]
-            ht_consts[6][6][i] = \
+                # ht_consts[8][7] = ht_consts[7][8]
+            ht_consts[8][8][i] = \
                 (rr.d['bypass'][i]
                  * rr.bypass_params['total area'][i]
-                 / rr.L[6][6][i] / rr.byp_flow_rate[i]
+                 / rr.L[8][8][i] / rr.byp_flow_rate[i]
                  / rr.bypass_params['area'][i, 1])
     return ht_consts
 
@@ -2431,8 +2549,7 @@ def setup_conduction_constants(rr, ht_consts):
     # _cond['adj'] = self.subchannel.sc_adj[
     #     :self.subchannel.n_sc['coolant']['total'], :-2]
     _cond['adj'] = rr.subchannel.sc_adj[
-        :rr.subchannel.n_sc['coolant']['total'], :5]
-
+        :rr.subchannel.n_sc['coolant']['total'], :7]
     # Temporary arrays for coolant subchannel type and adjacent
     # coolant subchannel type
     cool_type = rr.subchannel.type[
@@ -2448,8 +2565,8 @@ def setup_conduction_constants(rr, ht_consts):
         cool2cool_adj1[i, :len(tmp)] = tmp
 
     # Set up temporary array to get easily usable HT constants
-    hc = np.vstack([ht_consts[i][:3] for i in range(3)])  # 3x3
-    # hc = np.array(ht_consts)[:3, :3]
+    hc = np.vstack([ht_consts[i][:5] for i in range(5)])  # 5x5
+    # hc = np.array(ht_consts)[:5, :5]
     _cond['const'] = np.zeros(
         (rr.subchannel.n_sc['coolant']['total'], 3))
     for i in range(rr.subchannel.n_sc['coolant']['total']):
@@ -2470,20 +2587,30 @@ def setup_convection_constants(rr, ht_consts):
 
     # Edge and corner subchannel indices
     _conv['ind'] = np.arange(
+        rr.subchannel.n_sc['coolant']['inner-edge']+
+        rr.subchannel.n_sc['coolant']['inner-corner']+
         rr.subchannel.n_sc['coolant']['interior'],
         rr.subchannel.n_sc['coolant']['total'],
         1)
-
+    _conv['ind_inner'] = np.arange(
+        0,
+        rr.subchannel.n_sc['coolant']['inner-edge']+
+        rr.subchannel.n_sc['coolant']['inner-corner'],
+        1)
     # Edge and corner subchannel types
     _conv['type'] = rr.subchannel.type[
+        rr.subchannel.n_sc['coolant']['inner-edge']+
+        rr.subchannel.n_sc['coolant']['inner-corner']+
         rr.subchannel.n_sc['coolant']['interior']:
         rr.subchannel.n_sc['coolant']['total']]
-
+    _conv['type_inner'] = rr.subchannel.type[0:
+        rr.subchannel.n_sc['coolant']['inner-edge']+
+        rr.subchannel.n_sc['coolant']['inner-corner']]
     # Adjacent wall indices
     _conv['adj'] = np.arange(0, len(_conv['ind']), 1)
 
     # Convection HT constants
-    c = np.array([ht_consts[i][i + 2] for i in range(3)])
+    c = np.array([ht_consts[i][i + 4] for i in range(3)])
     _conv['const'] = c[_conv['type']]
 
     # Set up duct wall energy balance constants

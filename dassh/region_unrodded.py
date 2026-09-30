@@ -861,7 +861,8 @@ class _RREquivalent(RoddedRegion):
                      '_sf',
                      '_spacer_grid',
                      '_rad_isotropic',
-                     '_mixed_convection']
+                     '_mixed_convection',
+                     'nsc_cool_type',]
 
     def __init__(self, asm_input, mat_dict, fr, se2geo=False):
         """Instantiate RoddedRegion object and pull out useful attr"""
