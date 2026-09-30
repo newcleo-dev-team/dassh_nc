@@ -2114,7 +2114,8 @@ class RoddedRegion(LoggedClass, DASSH_Region):
 ########################################################################
 
 
-def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
+def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
+                       n_rmvd=0, se2=False):
     """Calculate bundle geometry parameters based on definitions
     provided in Cheng-Todreas (1986)"""
 
@@ -2126,12 +2127,14 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
     # --------------------------------------------------------------
     # "d" : DISTANCES ACROSS THINGS
     # --------------------------------------------------------------
-
+    ntype_cool = 5 if n_rmvd > 0 else 3
     d = {}
     # Pin-to-pin distance
     d['pin-pin'] = P - D
     # Pin-to-wall distance
     d['pin-wall'] = edge_pin2duct - 0.5 * D
+    d['pin-inner-wall'] = 0.5 * (
+        - inner_hole_ftf + SQRT3 * n_rmvd * P - D) if n_rmvd > 0 else 0.0
     # Wall thickness(es)
     d['wall'] = np.zeros(n_duct)
     for i in range(0, n_duct):  # for all duct walls
@@ -2143,6 +2146,8 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
             d['bypass'][i] = 0.5 * (dftf[i + 1][0] - dftf[i][1])
     # Corner cell wall perimeters
     d['wcorner'] = np.zeros((n_duct, 2))
+    d['wcorner-inner'] = max(
+        0.0, (inner_hole_ftf/SQRT3 - n_sc[3]/6 * P)/2) if n_rmvd > 0 else 0.0
     # Corner subchannel inside/outside wall lengths
     d['wcorner'][0, 0] = (0.5 * D + d['pin-wall']) / SQRT3
     d['wcorner'][0, 1] = d['wcorner'][0, 0] + d['wall'][0] / SQRT3
@@ -2162,7 +2167,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
 
     # Needs to be weird list rather than array because some entries
     # will themselves be lists if there are bypass channels
-    L = [[0.0] * 7 for i in range(7)]
+    L = [[0.0] * 9 for i in range(9)]
     # From interior (to interior, edge)
     L[0][0] = SQRT3OVER3 * P   # interior-interior
     L[0][1] = 0.5 * (L[0][0] + D * 0.5 + d['pin-wall'])  # edge-int
@@ -2173,25 +2178,55 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
     # From corner (corner-edge, corner-corner)
     L[2][1] = L[1][2]  # corner - edge
     L[2][2] = (D + d['pin-wall']) / SQRT3
+    if n_rmvd > 0:
+        dy_corner = (
+            P**2 + P * d['wcorner-inner'] + d['wcorner-inner']**2) / 3.0 \
+            / (d['wcorner-inner'] + P)
+        dx_corner = (0.5 * D + d['pin-inner-wall']) / 3.0 * (
+            P + 2.0 * d['wcorner-inner']) / (P + d['wcorner-inner'])
+        # From interior
+        L[0][3] = 0.5 * (L[0][0] + D * 0.5 + d['pin-inner-wall']) # inner edge-int
+        L[0][4] = np.sqrt((0.5 * L[0][0] + dx_corner)**2 +
+                          (dy_corner - P*0.5)**2) # inner corner-int
+        # From edge 
+        L[1][3] = 0.5 * (d['pin-wall'] + D + d['pin-inner-wall']) # inner edge-edge
+        L[1][4] = np.sqrt((0.5 * (d['pin-wall'] + D * 0.5) + dx_corner)**2 +
+                          (dy_corner - P*0.5)**2) # inner edge-edge
+        # Inner edge
+        L[3][0] = L[0][3]
+        L[3][1] = L[1][3]
+        L[3][3] = P
+        L[3][4] = np.sqrt((P*0.5 + dy_corner)**2 +
+            ((0.5 * D + d['pin-wall'])*0.5 - dx_corner)**2)
+        # Inner corner
+        L[4][0] = L[0][4]
+        L[4][1] = L[1][4]
+        L[4][3] = L[3][4]
+        L[4][4] = 2*dy_corner  # This quantity is approximated for SCs that are
+        # specular on the oblique side.
+        # The correct value should be the distance between centroids. However,
+        # this is not easy to be determined, thus, it is approximated with the
+        # correct distance between two inner corners that are specular on the
+        # side that is perpendicular to the outer wall of the inner hole.
     # Duct wall - no heat conduction between duct wall segments
     # Bypass gaps (gap edge, gap corner)
     if n_bypass > 0:
-        L[5][5] = [P for byp in range(n_bypass)]  # edge-edge
-        L[5][6] = [0.0 for byp in range(n_bypass)]
+        L[7][7] = [P for byp in range(n_bypass)]  # edge-edge
+        L[7][8] = [0.0 for byp in range(n_bypass)]
         x = 0.5 * D + d['pin-wall'] + d['wall'][0] + 0.5 * d['bypass'][0]
-        L[5][6][0] = (x / SQRT3 + (0.5 * P))
-        L[6][6] = [0.0 * n_bypass]
-        L[6][6][0] = 2 * (x / SQRT3)
+        L[7][8][0] = (x / SQRT3 + (0.5 * P))
+        L[8][8] = [0.0 * n_bypass]
+        L[8][8][0] = 2 * (x / SQRT3)
         for i in range(1, n_bypass):
-            L[5][6][i] = (L[5][6][i - 1]
+            L[7][8][i] = (L[7][8][i - 1]
                           + (0.5 * d['bypass'][i - 1]
                              + d['wall'][i]
                              + 0.5 * d['bypass'][i]) / SQRT3)
-            L[6][6][i] = (L[6][6][i - 1]
+            L[8][8][i] = (L[8][8][i - 1]
                           + (d['bypass'][i - 1]
                              + 2 * d['wall'][i]
                              + d['bypass'][i]) / SQRT3)
-    L[6][5] = L[5][6]
+    L[8][7] = L[7][8]
 
     # --------------------------------------------------------------
     # BARE ROD SUBCHANNEL PARAMETERS
@@ -2227,20 +2262,30 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
         cos_theta = Pw / np.sqrt(Pw**2 + (np.pi * (D + Dw))**2)
         sc_ww['theta'] = np.arccos(cos_theta)
     # Flow area
-    sc_ww['area'] = np.zeros(3)
+    sc_ww['area'] = np.zeros(ntype_cool)
     sc_ww['area'][0] = SQRT3 * 0.25 * P**2 - 0.125 * np.pi * D**2
     sc_ww['area'][0] -= 0.125 * np.pi * Dw**2 / cos_theta
     sc_ww['area'][1] = P * edge_pin2duct - np.pi * D**2 / 8
     sc_ww['area'][1] -= 0.125 * np.pi * Dw**2 / cos_theta
     sc_ww['area'][2] = edge_pin2duct**2 / SQRT3 - np.pi * D**2 / 24
     sc_ww['area'][2] -= np.pi * Dw**2 / 24 / cos_theta
+    if n_rmvd > 0:
+        sc_ww['area'][3] = P * (d['pin-inner-wall'] + 0.5*D) - np.pi * D**2 / 8
+        sc_ww['area'][3] -= 0.125 * np.pi * Dw**2 / cos_theta
+        sc_ww['area'][4] = (P + d['wcorner-inner']) * (
+            d['pin-inner-wall'] + 0.5 * D) * 0.5 - np.pi * D**2 * 5.0 / 48.0
+        sc_ww['area'][4] -= 5.0 / 48.0 * np.pi * Dw**2 / cos_theta
     # Wetted perimeter
-    sc_ww['wp'] = np.zeros(3)
+    sc_ww['wp'] = np.zeros(ntype_cool)
     sc_ww['wp'][0] = np.pi * D / 2 + np.pi * Dw / 2 / cos_theta
     sc_ww['wp'][1] = P + np.pi * D / 2 + np.pi * Dw / 2 / cos_theta
     sc_ww['wp'][2] = (np.pi * D / 6
                       + (2 * edge_pin2duct / SQRT3)
                       + np.pi * Dw / 6 / cos_theta)
+    if n_rmvd > 0:
+        sc_ww['wp'][3] = P + np.pi * D / 2.0 + np.pi * Dw / 2.0 / cos_theta
+        sc_ww['wp'][4] = d['wcorner-inner'] + np.pi * D * 5.0 / 12.0 + (
+            np.pi * Dw * 5.0 / 12.0 / cos_theta)
     # Hydraulic diameter
     sc_ww['de'] = 4 * sc_ww['area'] / sc_ww['wp']
     # Projection of wire area into flow path
@@ -2262,7 +2307,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
     bundle = {}
     bundle['area'] = 0.0
     bundle['wp'] = 0.0
-    for sci in range(3):
+    for sci in range(ntype_cool):
         bundle['area'] += sc_ww['area'][sci] * n_sc[sci]
         bundle['wp'] += sc_ww['wp'][sci] * n_sc[sci]
     bundle['de'] = 4 * bundle['area'] / bundle['wp']
@@ -2281,7 +2326,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
         for i in range(n_bypass):
             bypass['total area'][i] = \
                 0.5 * SQRT3 * (dftf[i + 1][0]**2 - dftf[i][1]**2)
-            bypass['area'][i, 0] = L[5][5][i] * d['bypass'][i]
+            bypass['area'][i, 0] = L[7][7][i] * d['bypass'][i]
             bypass['area'][i, 1] = (d['bypass'][i]
                                     * (d['wcorner'][i + 1, 0]
                                        + d['wcorner'][i, 1]))
@@ -2328,6 +2373,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, se2=False):
 
     params = {}
     params['edge_pitch'] = edge_pitch
+    params['edge_inner_pitch'] = d['pin-inner-wall'] + D if n_rmvd > 0 else 0.
     params['d'] = d
     params['L'] = L
     # params['bare_params'] = sc_bare
