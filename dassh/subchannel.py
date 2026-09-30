@@ -935,7 +935,7 @@ class Subchannel(object):
         # coords are appended to it.
         sc_xy = np.zeros((self.n_sc['coolant']['total'], 2))
         # COOLANT SUBCHANNELS -----------------------------------------
-        sc_xy = self._find_inner_shaft_xy(
+        sc_xy = self._find_inner_sc_xy(
             sc_xy, pin_xy, n_rings_removed, pin_pitch, inner_hole_ftf)
         sc_xy = self._find_interior_xy(sc_xy, pin_xy, pin_pitch)
         sc_xy = self._find_edge_xy(sc_xy, pin_xy, n_ring, pin_pitch,
@@ -1052,7 +1052,7 @@ class Subchannel(object):
             corner += 1  # advance the corner index
         return scxy
 
-    def _find_inner_shaft_xy(
+    def _find_inner_sc_xy(
             self, scxy, pin_xy, n_rings_removed, pitch, inner_hole_ftf):
         """Determine the X-Y locations of the inner subchannels.
 
