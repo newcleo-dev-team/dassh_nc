@@ -19,6 +19,7 @@ author: matz
 Test the subchannel.py module and the Subchannel object
 """
 ########################################################################
+import copy
 import numpy as np
 import pytest
 import dassh
@@ -48,6 +49,26 @@ def test_sc_instantiation(sc_5ring):
     assert sc_5ring.n_sc['duct']['total'] == 30
 
 
+def test_sc_instantiation_hole(sc_4ring_2removed: dassh.Subchannel):
+    """
+    Test the number of SCs in the 4-ring subchannel object with 2 removed rings.
+
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    assert sc_4ring_2removed.n_sc['coolant']['interior'] == 30
+    assert sc_4ring_2removed.n_sc['coolant']['edge'] == 18
+    assert sc_4ring_2removed.n_sc['coolant']['corner'] == 6
+    assert sc_4ring_2removed.n_sc['coolant']['inner-edge'] == 0
+    assert sc_4ring_2removed.n_sc['coolant']['inner-corner'] == 12
+    assert sc_4ring_2removed.n_sc['coolant']['total'] == 66
+    assert sc_4ring_2removed.n_sc['duct']['total'] == 24
+
+
 ########################################################################
 # SUBCHANNEL TYPES
 ########################################################################
@@ -59,8 +80,8 @@ def test_sc_typing_direct(sc_2ring, sc_2ring_args):
     assert np.array_equal(test2, np.array([1, 1, 1, 1, 1, 1,
                                            2, 3, 2, 3, 2, 3,
                                            2, 3, 2, 3, 2, 3,
-                                           4, 5, 4, 5, 4, 5,
-                                           4, 5, 4, 5, 4, 5]))
+                                           6, 7, 6, 7, 6, 7,
+                                           6, 7, 6, 7, 6, 7]))
 
 
 def test_sc_typing_indirect(sc_5ring, sc_5ring_args):
@@ -73,11 +94,38 @@ def test_sc_typing_indirect(sc_5ring, sc_5ring_args):
     assert (len(test5[test5 == 2])
             == sc_5ring.n_sc['coolant']['edge'])
     assert len(test5[test5 == 3]) == 6
-    assert (len(test5[test5 == 4])
+    assert (len(test5[test5 == 6])
             == sc_5ring.n_sc['duct']['total'] - 6)
-    assert len(test5[test5 == 5]) == 6
+    assert len(test5[test5 == 7]) == 6
 
 
+
+def test_sc_typing_indirect_hole(sc_4ring_2removed: dassh.Subchannel):
+    """
+    Test the assignment of SCs type in the 4-ring subchannel object with
+    2 removed rings.
+
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    sc_type = sc_4ring_2removed.setup_sc_type(4, [(11.0, 12.0)])
+    assert len(sc_type) == sc_4ring_2removed.n_sc['total']
+    assert (len(sc_type[sc_type == 1])
+            == sc_4ring_2removed.n_sc['coolant']['interior'])
+    assert (len(sc_type[sc_type == 2])
+            == sc_4ring_2removed.n_sc['coolant']['edge'])
+    assert len(sc_type[sc_type == 3]) == 6
+    assert (len(sc_type[sc_type == 4])
+            == sc_4ring_2removed.n_sc['coolant']['inner-edge'])
+    assert (len(sc_type[sc_type == 5])
+            == sc_4ring_2removed.n_sc['coolant']['inner-corner'])
+    assert (len(sc_type[sc_type == 6])
+            == sc_4ring_2removed.n_sc['duct']['total'] - 6)
+    assert len(sc_type[sc_type == 7]) == 6
 ########################################################################
 # SUBCHANNEL MAP
 ########################################################################
@@ -200,6 +248,36 @@ def test_sc_step_method(sc_2ring):
     assert np.array_equal(test_mat, np.array([[4, 1], [3, 2]]))
 
 
+def test_sc_full_map_hole(sc_4ring_2removed: dassh.Subchannel):
+    """
+    Indirect tests for the map of coolant subchannels in the 4-rings
+    configuration with central hole.
+
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    assert np.array_equal(sc_4ring_2removed._map, np.array([
+        [ 0,  0,  0,  0, 66,  0,  0,  0],
+        [ 0,  0,  0, 65, 43,  0,  0,  0],
+        [ 0,  0, 64, 42, 13, 44,  0,  0],
+        [62, 63, 40, 41, 14, 15, 45,  0],
+        [ 0, 38, 39, 12,  1, 16, 17, 46],
+        [61, 37, 11,  0,  0,  2, 18, 47],
+        [ 0, 36, 10,  0,  0,  3, 19,  0],
+        [60, 35,  0,  0,  0,  0, 20, 48],
+        [ 0, 34,  9,  0,  0,  4, 21,  0],
+        [59, 33,  8,  0,  0,  5, 22, 49],
+        [58, 32, 31,  7,  6, 24, 23,  0],
+        [ 0, 57, 30, 29, 26, 25, 51, 50],
+        [ 0,  0, 56, 28, 27, 52,  0,  0],
+        [ 0,  0,  0, 55, 53,  0,  0,  0],
+        [ 0,  0,  0, 54,  0,  0,  0,  0],]))
+
+
 ########################################################################
 # SUBCHANNEL NEIGHBORS
 # To do (3):
@@ -210,36 +288,36 @@ def test_sc_step_method(sc_2ring):
 def test_sc_sc_neighbors(sc_2ring_map, sc_2ring_args):
     """Direct test the neighbors between subchannels"""
     n_ring = 2
-    ans = np.array([[0, 2, 6, 7, 0, 0, 0],
-                    [1, 3, 0, 9, 0, 0, 0],
-                    [2, 0, 4, 11, 0, 0, 0],
-                    [5, 0, 3, 13, 0, 0, 0],
-                    [6, 4, 0, 15, 0, 0, 0],
-                    [0, 5, 1, 17, 0, 0, 0],
-                    [1, 0, 0, 18, 8, 19, 0],
-                    [0, 0, 0, 7, 9, 20, 0],
-                    [2, 0, 0, 8, 10, 21, 0],
-                    [0, 0, 0, 9, 11, 22, 0],
-                    [3, 0, 0, 10, 12, 23, 0],
-                    [0, 0, 0, 11, 13, 24, 0],
-                    [4, 0, 0, 12, 14, 25, 0],
-                    [0, 0, 0, 13, 15, 26, 0],
-                    [5, 0, 0, 14, 16, 27, 0],
-                    [0, 0, 0, 15, 17, 28, 0],
-                    [6, 0, 0, 16, 18, 29, 0],
-                    [0, 0, 0, 17, 7, 30, 0],
-                    [0, 0, 0, 0, 7, 30, 20],
-                    [0, 0, 0, 0, 8, 19, 21],
-                    [0, 0, 0, 0, 9, 20, 22],
-                    [0, 0, 0, 0, 10, 21, 23],
-                    [0, 0, 0, 0, 11, 22, 24],
-                    [0, 0, 0, 0, 12, 23, 25],
-                    [0, 0, 0, 0, 13, 24, 26],
-                    [0, 0, 0, 0, 14, 25, 27],
-                    [0, 0, 0, 0, 15, 26, 28],
-                    [0, 0, 0, 0, 16, 27, 29],
-                    [0, 0, 0, 0, 17, 28, 30],
-                    [0, 0, 0, 0, 18, 29, 19]])
+    ans = np.array([[0, 2, 6, 7, 0,  0, 0, 0, 0],
+                    [1, 3, 0, 9, 0,  0, 0, 0, 0],
+                    [2, 0, 4, 11, 0, 0, 0, 0, 0],
+                    [5, 0, 3, 13, 0, 0, 0, 0, 0],
+                    [6, 4, 0, 15, 0, 0, 0, 0, 0],
+                    [0, 5, 1, 17, 0, 0, 0, 0, 0],
+                    [1, 0, 0, 18, 8, 0, 0, 19, 0],
+                    [0, 0, 0, 7, 9, 0, 0, 20, 0],
+                    [2, 0, 0, 8, 10, 0, 0, 21, 0],
+                    [0, 0, 0, 9, 11, 0, 0, 22, 0],
+                    [3, 0, 0, 10, 12, 0, 0, 23, 0],
+                    [0, 0, 0, 11, 13, 0, 0, 24, 0],
+                    [4, 0, 0, 12, 14, 0, 0, 25, 0],
+                    [0, 0, 0, 13, 15, 0, 0, 26, 0],
+                    [5, 0, 0, 14, 16, 0, 0, 27, 0],
+                    [0, 0, 0, 15, 17, 0, 0, 28, 0],
+                    [6, 0, 0, 16, 18, 0, 0, 29, 0],
+                    [0, 0, 0, 17, 7, 0, 0, 30, 0],
+                    [0, 0, 0, 0, 7, 0, 0, 30, 20],
+                    [0, 0, 0, 0, 8, 0, 0, 19, 21],
+                    [0, 0, 0, 0, 9, 0, 0, 20, 22],
+                    [0, 0, 0, 0, 10, 0, 0, 21, 23],
+                    [0, 0, 0, 0, 11, 0, 0, 22, 24],
+                    [0, 0, 0, 0, 12, 0, 0, 23, 25],
+                    [0, 0, 0, 0, 13, 0, 0, 24, 26],
+                    [0, 0, 0, 0, 14, 0, 0, 25, 27],
+                    [0, 0, 0, 0, 15, 0, 0, 26, 28],
+                    [0, 0, 0, 0, 16, 0, 0, 27, 29],
+                    [0, 0, 0, 0, 17, 0, 0, 28, 30],
+                    [0, 0, 0, 0, 18, 0, 0, 29, 19]])
     test2 = sc_2ring_map.find_sc_sc_neighbors(n_ring,
                                               sc_2ring_args['duct_ftf'])
     print(test2)
@@ -588,6 +666,114 @@ def test_sc_int_coolant_adj_5ring(sc_5ring_args):
         assert all([sca in sc_obj.sc_adj[sc] for sca in ans[sc]]), msg
 
 
+def test_sc_adj_map_hole(sc_4ring_2removed: dassh.Subchannel):
+    """
+    Indirect tests for the map of coolant subchannels in the 4-rings
+    configuration with central hole.
+
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    asc = copy.deepcopy(sc_4ring_2removed)
+    asc.type = asc.type + 1
+    test = asc.find_sc_sc_neighbors(4, [(11.0, 12.0)])
+    assert np.array_equal(test, np.array([
+        [14,  0,  0,  0,  0, 12,  2,  0,  0],
+        [16,  0,  0,  0,  0,  1,  3,  0,  0],
+        [ 0,  0, 19,  0,  0,  2,  4,  0,  0],
+        [ 0,  0, 21,  0,  0,  3,  5,  0,  0],
+        [ 0, 24,  0,  0,  0,  4,  6,  0,  0],
+        [ 0, 26,  0,  0,  0,  5,  7,  0,  0],
+        [ 0, 29,  0,  0,  0,  6,  8,  0,  0],
+        [ 0, 31,  0,  0,  0,  7,  9,  0,  0],
+        [ 0,  0, 34,  0,  0,  8, 10,  0,  0],
+        [ 0,  0, 36,  0,  0,  9, 11,  0,  0],
+        [39,  0,  0,  0,  0, 10, 12,  0,  0],
+        [41,  0,  0,  0,  0, 11,  1,  0,  0],
+        [ 0, 14, 42, 43,  0,  0,  0,  0,  0],
+        [13,  0, 15,  0,  0,  0,  1,  0,  0],
+        [ 0, 16, 14, 44,  0,  0,  0,  0,  0],
+        [15,  0, 17,  0,  0,  0,  2,  0,  0],
+        [ 0, 18, 16, 45,  0,  0,  0,  0,  0],
+        [17, 19,  0, 47,  0,  0,  0,  0,  0],
+        [18, 20,  0,  0,  0,  0,  3,  0,  0],
+        [19, 21,  0, 48,  0,  0,  0,  0,  0],
+        [20, 22,  0,  0,  0,  0,  4,  0,  0],
+        [21, 23,  0, 49,  0,  0,  0,  0,  0],
+        [22,  0, 24, 51,  0,  0,  0,  0,  0],
+        [ 0, 25, 23,  0,  0,  5,  0,  0,  0],
+        [24,  0, 26, 52,  0,  0,  0,  0,  0],
+        [ 0, 27, 25,  0,  0,  6,  0,  0,  0],
+        [26,  0, 28, 53,  0,  0,  0,  0,  0],
+        [29,  0, 27, 55,  0,  0,  0,  0,  0],
+        [ 0, 28, 30,  0,  0,  7,  0,  0,  0],
+        [31,  0, 29, 56,  0,  0,  0,  0,  0],
+        [ 0, 30, 32,  0,  0,  8,  0,  0,  0],
+        [33,  0, 31, 57,  0,  0,  0,  0,  0],
+        [34, 32,  0, 59,  0,  0,  0,  0,  0],
+        [35, 33,  0,  0,  0,  0,  9,  0,  0],
+        [36, 34,  0, 60,  0,  0,  0,  0,  0],
+        [37, 35,  0,  0,  0,  0, 10,  0,  0],
+        [38, 36,  0, 61,  0,  0,  0,  0,  0],
+        [ 0, 37, 39, 63,  0,  0,  0,  0,  0],
+        [40,  0, 38,  0,  0,  0, 11,  0,  0],
+        [ 0, 39, 41, 64,  0,  0,  0,  0,  0],
+        [42,  0, 40,  0,  0,  0, 12,  0,  0],
+        [ 0, 41, 13, 65,  0,  0,  0,  0,  0],
+        [13,  0,  0, 66, 44,  0,  0, 67,  0],
+        [15,  0,  0, 43, 45,  0,  0, 68,  0],
+        [17,  0,  0, 44, 46,  0,  0, 69,  0],
+        [ 0,  0,  0, 45, 47,  0,  0, 70,  0],
+        [18,  0,  0, 46, 48,  0,  0, 71,  0],
+        [20,  0,  0, 47, 49,  0,  0, 72,  0],
+        [22,  0,  0, 48, 50,  0,  0, 73,  0],
+        [ 0,  0,  0, 49, 51,  0,  0, 74,  0],
+        [23,  0,  0, 50, 52,  0,  0, 75,  0],
+        [25,  0,  0, 51, 53,  0,  0, 76,  0],
+        [27,  0,  0, 52, 54,  0,  0, 77,  0],
+        [ 0,  0,  0, 53, 55,  0,  0, 78,  0],
+        [28,  0,  0, 54, 56,  0,  0, 79,  0],
+        [30,  0,  0, 55, 57,  0,  0, 80,  0],
+        [32,  0,  0, 56, 58,  0,  0, 81,  0],
+        [ 0,  0,  0, 57, 59,  0,  0, 82,  0],
+        [33,  0,  0, 58, 60,  0,  0, 83,  0],
+        [35,  0,  0, 59, 61,  0,  0, 84,  0],
+        [37,  0,  0, 60, 62,  0,  0, 85,  0],
+        [ 0,  0,  0, 61, 63,  0,  0, 86,  0],
+        [38,  0,  0, 62, 64,  0,  0, 87,  0],
+        [40,  0,  0, 63, 65,  0,  0, 88,  0],
+        [42,  0,  0, 64, 66,  0,  0, 89,  0],
+        [ 0,  0,  0, 65, 43,  0,  0, 90,  0],
+        [ 0,  0,  0,  0, 43,  0,  0, 90, 68],
+        [ 0,  0,  0,  0, 44,  0,  0, 67, 69],
+        [ 0,  0,  0,  0, 45,  0,  0, 68, 70],
+        [ 0,  0,  0,  0, 46,  0,  0, 69, 71],
+        [ 0,  0,  0,  0, 47,  0,  0, 70, 72],
+        [ 0,  0,  0,  0, 48,  0,  0, 71, 73],
+        [ 0,  0,  0,  0, 49,  0,  0, 72, 74],
+        [ 0,  0,  0,  0, 50,  0,  0, 73, 75],
+        [ 0,  0,  0,  0, 51,  0,  0, 74, 76],
+        [ 0,  0,  0,  0, 52,  0,  0, 75, 77],
+        [ 0,  0,  0,  0, 53,  0,  0, 76, 78],
+        [ 0,  0,  0,  0, 54,  0,  0, 77, 79],
+        [ 0,  0,  0,  0, 55,  0,  0, 78, 80],
+        [ 0,  0,  0,  0, 56,  0,  0, 79, 81],
+        [ 0,  0,  0,  0, 57,  0,  0, 80, 82],
+        [ 0,  0,  0,  0, 58,  0,  0, 81, 83],
+        [ 0,  0,  0,  0, 59,  0,  0, 82, 84],
+        [ 0,  0,  0,  0, 60,  0,  0, 83, 85],
+        [ 0,  0,  0,  0, 61,  0,  0, 84, 86],
+        [ 0,  0,  0,  0, 62,  0,  0, 85, 87],
+        [ 0,  0,  0,  0, 63,  0,  0, 86, 88],
+        [ 0,  0,  0,  0, 64,  0,  0, 87, 89],
+        [ 0,  0,  0,  0, 65,  0,  0, 88, 90],
+        [ 0,  0,  0,  0, 66,  0,  0, 89, 67],]))
+
+
 # def test_interior_exterior_sc_connection():
 #     """Test connection between interior and edge/corner sc neighbors"""
 #     pass
@@ -639,6 +825,98 @@ def test_reverse_pin_sc_neighbors(sc_2ring_pinadj):
                     print("sc =", sc, "pin =", pin)
                     print(rev_pin_adj[pin])
                     print(tmp_pin_adj.pin_adj[pin])
+                    assert 0
+
+
+def test_pin_sc_neighbors_hole(sc_4ring_2removed):
+    """
+    Test the connection between coolant subchannels and pins in a 4-ring
+    configuration with 2 rings removed by the central hexagonal hole.
+    
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    test = sc_4ring_2removed.pin_adj + 1
+    assert np.array_equal(test, np.array([
+        [13, 14,  1, 12, 41, 42],
+        [15, 16,  2,  0,  1, 14],
+        [17, 18, 19,  3,  2, 16],
+        [19, 20, 21,  4,  0,  3],
+        [21, 22, 23, 24,  5,  4],
+        [ 5, 24, 25, 26,  6,  0],
+        [ 6, 26, 27, 28, 29,  7],
+        [ 0,  7, 29, 30, 31,  8],
+        [ 9,  8, 31, 32, 33, 34],
+        [10,  0,  9, 34, 35, 36],
+        [39, 11, 10, 36, 37, 38],
+        [41, 12,  0, 11, 39, 40],
+        [66, 43, 13, 42, 65,  0],
+        [ 0, 44, 15, 14, 13, 43],
+        [ 0, 45, 17, 16, 15, 44],
+        [ 0, 46, 47, 18, 17, 45],
+        [47,  0, 48, 20, 19, 18],
+        [48,  0, 49, 22, 21, 20],
+        [49,  0, 50, 51, 23, 22],
+        [23, 51,  0, 52, 25, 24],
+        [25, 52,  0, 53, 27, 26],
+        [27, 53,  0, 54, 55, 28],
+        [29, 28, 55,  0, 56, 30],
+        [31, 30, 56,  0, 57, 32],
+        [33, 32, 57,  0, 58, 59],
+        [35, 34, 33, 59,  0, 60],
+        [37, 36, 35, 60,  0, 61],
+        [63, 38, 37, 61,  0, 62],
+        [64, 40, 39, 38, 63,  0],
+        [65, 42, 41, 40, 64,  0],]))
+
+
+def test_reverse_pin_sc_neighbors_hole(sc_4ring_2removed):
+    """
+    Test that the inverse subchannel-pin adjacency is correct in a 4-ring
+    configuration with 2 rings removed by the central hexagonal hole.
+    
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    rev_pin_adj = sc_4ring_2removed.rev_pin_adj
+    pin_adj = sc_4ring_2removed.pin_adj
+    for sc in range(len(rev_pin_adj)):
+        for pin in rev_pin_adj[sc]:
+            if pin >= 0:
+                if sc not in pin_adj[pin]:
+                    print("sc =", sc, "pin =", pin)
+                    print(rev_pin_adj[pin])
+                    assert 0
+
+
+def test_pin_sc_adjacency_hole(sc_4ring_2removed):
+    """
+    Test that the pin-subchannel adjacency is correct in a 4-ring
+    configuration with 2 rings removed by the central hexagonal hole.
+    
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    rev_pin_adj = sc_4ring_2removed.rev_pin_adj
+    pin_adj = sc_4ring_2removed.pin_adj
+    for pin in range(len(pin_adj)):
+        for sc in pin_adj[pin]:
+            if sc >= 0:
+                if pin not in rev_pin_adj[sc]:
+                    print("sc =", sc, "pin =", pin)
+                    print(pin_adj[sc])
                     assert 0
 
 

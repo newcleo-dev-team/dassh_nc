@@ -25,9 +25,9 @@ import numpy as np
 
 
 # _sqrt3over2 = 0.866025403784439
-_invSqrt3over2 = 1.154700538379252
-_sqrt3over3 = 0.5773502691896257
-_sqrt3 = 1.7320508075688772
+_invSqrt3over2 = float(2.0/(np.sqrt(3.0)))
+_sqrt3over3 = float(np.sqrt(3.0)/3.0)
+_sqrt3 = float(np.sqrt(3.0))
 
 
 class Subchannel(object):
@@ -57,6 +57,11 @@ class Subchannel(object):
     duct_ftf : list
         List of tuples containing inner and outer duct
         flat-to-flat distances
+    inner_hole_ftf : float (optional)
+        Flat to flat distance of the inner hexagonal hole (default = 0.0)
+    n_rings_removed : int (optional)
+        Number of pin rings removed when there is an inner hexagonal hole
+        (default = 0)
     test: bool (optional)
         If testing, do not run all the instantiation methods; instead,
         allow the object to be instantiated without calling them so
@@ -84,17 +89,29 @@ class Subchannel(object):
                      7 * np.pi / 6, 5 * np.pi / 6, np.pi / 2]
 
     def __init__(self, n_ring, pin_pitch, pin_diameter,
-                 pin_map, pin_xy, duct_ftf, test=False):
+                 pin_map, pin_xy, duct_ftf, inner_hole_ftf=0.0,
+                 n_rings_removed=0, test=False):
         """Instantiate a subchannelSetup object."""
+        self.inner_hole_ftf = inner_hole_ftf
+        self.n_rings_removed = n_rings_removed
         # Count the different types of subchannels
         self.n_sc = {}
         self.n_sc['coolant'] = {}
-        self.n_sc['coolant']['interior'] = 6 * (n_ring - 1)**2
+        self.n_sc['coolant']['interior'] = 6 * (
+            (n_ring - 1)**2 - (self.n_rings_removed)**2)
         self.n_sc['coolant']['edge'] = (n_ring - 1) * 6
         self.n_sc['coolant']['corner'] = 6
-        self.n_sc['coolant']['total'] = 6 * (n_ring**2
-                                             - n_ring + 1)
-
+        self.n_sc['coolant']['inner-edge'] = max(
+            0, (self.n_rings_removed - 2) * 6)
+        self.n_sc['coolant']['inner-corner'] = \
+            0 if self.n_rings_removed == 0 else 12
+        self.n_sc['coolant']['total'] = (
+            self.n_sc['coolant']['interior']
+            + self.n_sc['coolant']['inner-edge']
+            + self.n_sc['coolant']['inner-corner']
+            + self.n_sc['coolant']['edge']
+            + self.n_sc['coolant']['corner']
+        )
         # Assemblies with multiple ducts have the same number of SC
         # in each duct/bypass
         self.n_sc['duct'] = {}
@@ -127,6 +144,15 @@ class Subchannel(object):
 
         # Subchannel map
         self._int_map = self._make_interior_sc_map(n_ring)
+        if self.n_rings_removed > 0:
+            additional = self.n_sc['coolant']['inner-edge'] + \
+                self.n_sc['coolant']['inner-corner']
+            self._int_map = np.maximum(
+                self._int_map - 6 * (self.n_rings_removed)**2 + additional, 0)
+            self._int_map[self._int_map <= additional] = 0
+            self._int_map = self._make_inner_sc_map(
+                self._int_map, n_ring, self.n_rings_removed
+            )
         self._ext_map = self._make_exterior_sc_map(n_ring)
         self._map = np.add(self._int_map, self._ext_map)
 
@@ -145,8 +171,8 @@ class Subchannel(object):
 
         # Subchannel X-Y position
         self.xy = self.find_sc_xy(n_ring, pin_pitch, pin_diameter,
-                                  pin_xy, duct_ftf)
-
+                                  pin_xy, duct_ftf, self.n_rings_removed,
+                                  inner_hole_ftf)
         # UPDATE ARRAYS TO PYTHON INDEXING (Type 1 --> Type 0)
         self.type -= 1
         self.sc_adj -= 1
@@ -170,8 +196,9 @@ class Subchannel(object):
         Notes
         -----
         Coolant:    (1) Interior  (2) Edge      (3) Corner
-        Duct:       (4) Edge      (5) Corner
-        Bypass:     (6) Edge      (7) Corner
+        Inner side: (4) Inner-edge      (5) Inner-corner
+        Duct:       (6) Edge      (7) Corner
+        Bypass:     (8) Edge      (9) Corner
 
         (Inter-asm gap not attributed to any assembly)
 
@@ -182,9 +209,9 @@ class Subchannel(object):
         ext = np.append(ext, np.array([3], dtype="int"))
         for side in range(0, 6):  # loop over hex sides
             sc_type = np.append(sc_type, ext)
-        # Append duct wall SC types 4,5 for each side; same number of
+        # Append duct wall SC types 6,7 for each side; same number of
         # SC as for edge/corner coolant channels with same arrangement
-        duct = ext + 2
+        duct = ext + 2 + 2
         bypass = duct + 2
         for i in range(0, len(duct_ftf)):
             if i > 0:  # bypass only occurs within outer ducts i > 0
@@ -192,6 +219,14 @@ class Subchannel(object):
                     sc_type = np.append(sc_type, bypass)
             for side in range(0, 6):  # loop over hex sides
                 sc_type = np.append(sc_type, duct)
+        if self.n_rings_removed > 0:
+            # Append inner-hole SC types 4,5 for each side;
+            inner = np.array([5], dtype="int")
+            inner = np.append(inner, np.ones(
+                max(0, (self.n_rings_removed - 2)), dtype="int") * 4)
+            inner = np.append(inner, np.array([5], dtype="int"))
+            for _ in range(0, 6):
+                sc_type = np.insert(sc_type, 0, inner)
         assert len(sc_type) == self.n_sc['total']
         return sc_type
 
@@ -287,6 +322,66 @@ class Subchannel(object):
             loc, map, sc_id = cls._step(loc, 'up', map, sc_id)
         return map
 
+    def _make_inner_sc_map(self, sc_map, n_ring, n_rings_removed):
+        """Update the subchannel map around the inner hexagonal hole.
+        The inner boundary is generated using the same 2-D map topology
+        as the existing interior/exterior maps.
+
+        Parameters
+        ----------
+        sc_map : np.ndarray
+            Original interior map.
+        n_ring : int
+            Number of pin rings removed when there is an inner hexagonal hole.
+        n_rings_removed : int
+            Number of removed central pin rings.
+
+        Returns
+        -------
+        numpy.ndarray
+            Map containing the inner subchannels.
+        """
+        if n_rings_removed == 0:
+            return sc_map
+        # First surviving pin ring
+        ring = n_rings_removed + 1
+        # Starting location.
+        loc = ((n_ring - ring) * 2 + 2, n_ring)
+        # Starting SC ID
+        sc_id = 1
+        sc_map[loc] = sc_id
+        # Move around the first real ring
+        # First side
+        for _ in range(ring - 2):
+            loc = self._move(loc, 'down')
+            loc, sc_map, sc_id = self._step(loc, 'right', sc_map, sc_id)
+        loc, sc_map, sc_id = self._step(loc, 'down', sc_map, sc_id)
+        # Second side
+        for _ in range(ring - 2):
+            loc = self._move(loc, 'down')
+            loc, sc_map, sc_id = self._step(loc, 'down', sc_map, sc_id)
+        loc, sc_map, sc_id = self._step(loc, 'down', sc_map, sc_id)
+        # Third side
+        for _ in range(ring - 2):
+            loc = self._move(loc, 'left')
+            loc, sc_map, sc_id = self._step(loc, 'down', sc_map, sc_id)
+        loc, sc_map, sc_id = self._step(loc, 'left', sc_map, sc_id)
+        # Fourth side
+        for _ in range(ring - 2):
+            loc = self._move(loc, 'up')
+            loc, sc_map, sc_id = self._step(loc, 'left', sc_map, sc_id)
+        loc, sc_map, sc_id = self._step(loc, 'up', sc_map, sc_id)
+        # Fifth side
+        for _ in range(ring - 2):
+            loc = self._move(loc, 'up')
+            loc, sc_map, sc_id = self._step(loc, 'up', sc_map, sc_id)
+        loc, sc_map, sc_id = self._step(loc, 'up', sc_map, sc_id)
+        # Sixth side
+        for _ in range(ring - 2):
+            loc = self._move(loc, 'right')
+            loc, sc_map, sc_id = self._step(loc, 'up', sc_map, sc_id)
+        return sc_map
+
     def _make_exterior_sc_map(self, n_ring):
         r"""Generate map of the exterior (edge and corner) subchannels.
 
@@ -351,7 +446,9 @@ class Subchannel(object):
 
         """
         map = np.zeros((4 * n_ring - 1, 2 * n_ring), dtype="int")
-        sc_id = self.n_sc['coolant']['interior']
+        sc_id = self.n_sc['coolant']['interior'] +\
+            self.n_sc['coolant']['inner-edge'] +\
+            self.n_sc['coolant']['inner-corner']
         loc = (1, n_ring - 1)  # starting location
         for i in range(0, n_ring):  # NE side: skip "sector 1"
             loc, map, sc_id = self._step(loc, 'right', map, sc_id)
@@ -470,18 +567,25 @@ class Subchannel(object):
             which may be corners; corner subchannels always touch two
             edge subchannels. Interior subchannels along the assembly
             periphery will be in contact with one edge subchannels.
-        Columns 5 - 6: Connection with duct subchannels
-        Columns 7 - 8: Connection with bypass subchannels (optional)
-        Columns 9 - 10: Connection with outer duct (optional)
+        Columns 6 - 7: Connection with inner subchannels
+        Columns 8 - 9: Connection with duct subchannels
+        Columns 10 - 11: Connection with bypass subchannels (optional)
+        Columns 12 - 13: Connection with outer duct (optional)
         ...
 
         """
-        # Array has 5 columns for interior coolant subchannels
+        # Array has 7 columns for interior coolant subchannels
         # First duct ring adds 2 cols; every subsequent duct ring
         # adds 4 more (2 for the duct, 2 for the bypass flow).
-        ncol = 5 + 4 * len(duct_ftf) - 2  # 5 cols for coolant subchannels
+        ncol = 5 + 2 + 4 * len(duct_ftf) - 2  # 7 cols for coolant subchannels
         sc_sc = np.zeros((self.n_sc['total'], ncol), dtype="int")
         sc_sc = self._connect_int_sc(sc_sc)
+        if self.n_rings_removed > 0:
+            # if the number of actual rings is only 1, the output of
+            # _connect_int_sc is wrong in col 5 for inner subchannels
+            sc_sc[:self.n_sc['coolant']['inner-edge'] +
+                  self.n_sc['coolant']['inner-corner'], 4] = 0
+            sc_sc = self._connect_inner_inner_sc(sc_sc)
         # print(sc_sc)
         sc_sc = self._connect_int_ext_sc(sc_sc)
         # print(sc_sc)
@@ -512,11 +616,15 @@ class Subchannel(object):
                 continue
             else:
                 for i in range(1, len(temp) - 1):
-                    sc_adj[temp[i] - 1, 0] = temp[i - 1]
-                    sc_adj[temp[i] - 1, 1] = temp[i + 1]
+                    ind = 0 if self.type[temp[i - 1]-1] == 1 else 5
+                    sc_adj[temp[i] - 1, ind+0] = temp[i - 1]
+                    ind = 0 if self.type[temp[i + 1]-1] == 1 else 5
+                    sc_adj[temp[i] - 1, ind+1] = temp[i + 1]
                 # first and last entries from "temp" are separate
-                sc_adj[temp[0] - 1, 1] = temp[1]
-                sc_adj[temp[-1] - 1, 0] = temp[-2]
+                ind = 0 if self.type[temp[1]-1] == 1 else 5
+                sc_adj[temp[0] - 1, ind+1] = temp[1]
+                ind = 0 if self.type[temp[-2]-1] == 1 else 5
+                sc_adj[temp[-1] - 1, ind+0] = temp[-2]
             # Horizontal connections (at most 1); we are mapping the
             # connections between the current column ("j") and column
             # "j+1". The first row with a connection is the one for
@@ -535,8 +643,33 @@ class Subchannel(object):
                     if sc_i == 0 or sc_ip1 == 0:
                         continue
                     else:
-                        sc_adj[sc_i - 1, 2] = sc_ip1
-                        sc_adj[sc_ip1 - 1, 2] = sc_i
+                        ind = 0 if self.type[sc_ip1-1] == 1 else 4
+                        sc_adj[sc_i - 1, ind+2] = sc_ip1
+                        ind = 0 if self.type[sc_i-1] == 1 else 4
+                        sc_adj[sc_ip1 - 1, ind+2] = sc_i
+        return sc_adj
+
+    def _connect_inner_inner_sc(self, sc_adj):
+        """Connect inner subchannels to the inner subchannels
+
+        Parameters
+        ----------
+        sc_adj : numpy.ndarray
+            Array defining subchannel neighbors
+
+        Returns
+        -------
+        numpy.ndarray
+            Updated subchannel neighbor definitions
+        """
+        ext_sc = np.arange(1,
+            self.n_sc['coolant']['inner-edge']+
+            self.n_sc['coolant']['inner-corner'] + 1, 1)
+        for i in range(-1, len(ext_sc) - 1):
+            # backward connection: i+1 back to i
+            sc_adj[ext_sc[i + 1] - 1, 5] = ext_sc[i]
+            # forward connection: i forward to i+1
+            sc_adj[ext_sc[i] - 1, 6] = ext_sc[i + 1]
         return sc_adj
 
     def _connect_int_ext_sc(self, sc_adj):
@@ -564,30 +697,47 @@ class Subchannel(object):
         # connections; connect only via interior-edge subchannels
         n_missing_total = self.n_sc['coolant']['edge']
         idx_missing = 0
-        for i in range(0, self.n_sc['coolant']['interior']):
+        for i in range(0, self.n_sc['coolant']['interior']+
+                       self.n_sc['coolant']['inner-edge']+
+                       self.n_sc['coolant']['inner-corner']):
             # Find subchannel with missing value in map
             row, col = np.where(self._map == i + 1)
             # Looking for missing connections in the first three cols
-            missing = np.where(sc_adj[i][:3] == 0)
+            missing = np.where(np.logical_and(
+                sc_adj[i][:3] == 0, np.count_nonzero(sc_adj[i][:]) < 3))
             if len(missing[0]) > 0:  # some missing, count that
                 idx_missing += 1
-            for idx in range(0, len(missing[0])):
-                if missing[0][idx] == 0:  # look upward for value
-                    sc_adj[i, idx + 3] = self._map[row - 1, col].item()
-                    sc_adj[self._map[row - 1, col] - 1, idx] = i + 1
-                elif missing[0][idx] == 1:  # look down
-                    sc_adj[i, idx + 3] = self._map[row + 1, col].item()
-                    sc_adj[self._map[row + 1, col] - 1, idx] = i + 1
-                else:  # look horizontallyf
-                    # Because we're going clockwise, if we're on the
-                    # first half of subchannels w/ missing connections
-                    # we're on the RIGHT side of the asm
-                    if idx_missing < n_missing_total / 2:
-                        sc_adj[i, idx + 3] = self._map[row, col + 1].item()
-                        sc_adj[self._map[row, col + 1] - 1, idx] = i + 1
-                    else:  # SC on the left side of asm (higher numbers)
-                        sc_adj[i, idx + 3] = self._map[row, col - 1].item()
-                        sc_adj[self._map[row, col - 1] - 1, idx] = i + 1
+            if self.n_sc['coolant']['interior'] > 0:
+                for idx in range(0, len(missing[0])):
+                    if missing[0][idx] == 0:  # look upward
+                        sc_adj[i, idx + 3] = self._map[row - 1, col].item()
+                        sc_adj[self._map[row - 1, col] - 1, idx] = i + 1
+                    elif missing[0][idx] == 1:  # look down
+                        sc_adj[i, idx + 3] = self._map[row + 1, col].item()
+                        sc_adj[self._map[row + 1, col] - 1, idx] = i + 1
+                    else:  # look horizontally
+                        # Because we're going clockwise, if we're on the
+                        # first half of subchannels w/ missing connections
+                        # we're on the RIGHT side of the asm
+                        if idx_missing < n_missing_total / 2:
+                            sc_adj[i, idx + 3] = self._map[row, col + 1].item()
+                            sc_adj[self._map[row, col + 1] - 1, idx] = i + 1
+                        else:  # SC on the left side of asm (higher numbers)
+                            sc_adj[i, idx + 3] = self._map[row, col - 1].item()
+                            sc_adj[self._map[row, col - 1] - 1, idx] = i + 1
+            else:
+                if self._map[row - 1, col] not in sc_adj[i][:]:  # look upward
+                    sc_adj[i, 3] = self._map[row - 1, col].item()
+                    sc_adj[self._map[row - 1, col] - 1, 5] = i + 1
+                elif self._map[row + 1, col] not in sc_adj[i][:]:  # look down
+                    sc_adj[i, 3] = self._map[row + 1, col].item()
+                    sc_adj[self._map[row + 1, col] - 1, 5] = i + 1
+                elif self._map[row, col + 1] not in sc_adj[i][:]:
+                    sc_adj[i, 3] = self._map[row, col + 1].item()
+                    sc_adj[self._map[row, col + 1] - 1, 5] = i + 1
+                else:  # SC on the left side of asm (higher numbers)
+                    sc_adj[i, 3] = self._map[row, col - 1].item()
+                    sc_adj[self._map[row, col - 1] - 1, 5] = i + 1
         return sc_adj
 
     def _connect_ext_sc(self, sc_adj):
@@ -610,7 +760,10 @@ class Subchannel(object):
         behind it
 
         """
-        ext_sc = np.arange(self.n_sc['coolant']['interior'] + 1,
+        ext_sc = np.arange(
+            self.n_sc['coolant']['interior']+
+            self.n_sc['coolant']['inner-edge']+
+            self.n_sc['coolant']['inner-corner'] + 1,
                            self.n_sc['coolant']['total'] + 1, 1)
         for i in range(-1, len(ext_sc) - 1):
             # backward connection: i+1 back to i
@@ -647,18 +800,18 @@ class Subchannel(object):
         sc = (np.arange(1, self.n_sc['duct']['total'] + 1, 1)
               + self.n_sc['coolant']['total'])
         for r in range(1, 2 * len(duct_ftf)):  # r:ring
-            # duct ring 1: cols 5-6; bypass ring 1: cols 7-8, ...
-            # relationship between ring and cols: 2r+3, 2r+4
+            # duct ring 1: cols 8-9; bypass ring 1: cols 10-11, ...
+            # relationship between ring and cols: 2r+5, 2r+6
             for i in range(-1, len(sc) - 1):  # i is current sc
                 # backward connection: i+1 back to i (ring r)
-                sc_adj[sc[i + 1] - 1, 2 * r + 3] = sc[i]
+                sc_adj[sc[i + 1] - 1, 2 * r + 3 + 2] = sc[i]
                 # forward connection: i forward to i+1 (ring r)
-                sc_adj[sc[i] - 1, 2 * r + 4] = sc[i + 1]
+                sc_adj[sc[i] - 1, 2 * r + 4 + 2] = sc[i + 1]
                 # inward connection: i+1 (ring r) to i+1 (ring r-1)
-                sc_adj[sc[i + 1] - 1, 2 * r + 2] = \
+                sc_adj[sc[i + 1] - 1, 3 * r + 1] = \
                     sc[i + 1] - 6 * n_ring
                 # outward connection i+1 (ring r-1) up to i+1 (ring r)
-                sc_adj[sc[i] - 1 - 6 * n_ring, 2 * r + 3] = sc[i]
+                sc_adj[sc[i] - 1 - 6 * n_ring, 2 * r + 3 + 2] = sc[i]
             sc = sc + 6 * n_ring
         return sc_adj
 
@@ -742,7 +895,7 @@ class Subchannel(object):
     ####################################################################
 
     def find_sc_xy(self, n_ring, pin_pitch, pin_diameter,
-                   pin_xy, duct_ftf):
+                   pin_xy, duct_ftf, n_rings_removed, inner_hole_ftf):
         """Determine X-Y coordinates of the subchannels.
 
         Parameters
@@ -759,6 +912,10 @@ class Subchannel(object):
             List of tuples containing the inner and outer flat-to-
             flat distances of the duct walls, ordered from inner
             to outer ducts.
+        n_rings_removed : int
+            Number of removed rings
+        inner_hole_ftf : float
+            Flat to flat distance of the inner hexagonal hole
 
         Returns
         -------
@@ -778,6 +935,8 @@ class Subchannel(object):
         # coords are appended to it.
         sc_xy = np.zeros((self.n_sc['coolant']['total'], 2))
         # COOLANT SUBCHANNELS -----------------------------------------
+        sc_xy = self._find_inner_sc_xy(
+            sc_xy, pin_xy, n_rings_removed, pin_pitch, inner_hole_ftf)
         sc_xy = self._find_interior_xy(sc_xy, pin_xy, pin_pitch)
         sc_xy = self._find_edge_xy(sc_xy, pin_xy, n_ring, pin_pitch,
                                    min(duct_ftf[0]))
@@ -818,7 +977,11 @@ class Subchannel(object):
         # 120 degrees (clockwise), respectively.
         int_angle = [np.pi / 3, 0.0, 5 * np.pi / 3,
                      4 * np.pi / 3, np.pi, 2 * np.pi / 3]
-        for i in range(1, self.n_sc['coolant']['interior'] + 1):
+        for i in range(self.n_sc['coolant']['inner-edge'] +
+                       self.n_sc['coolant']['inner-corner'] + 1,
+                       self.n_sc['coolant']['interior'] +
+                       self.n_sc['coolant']['inner-edge'] +
+                       self.n_sc['coolant']['inner-corner'] + 1):
             loc = np.where(self.pin_adj == i)
             p = loc[0][0]  # take the first value
             sector = loc[1][0]  # location relative to pin
@@ -889,6 +1052,73 @@ class Subchannel(object):
             corner += 1  # advance the corner index
         return scxy
 
+    def _find_inner_sc_xy(
+            self, scxy, pin_xy, n_rings_removed, pitch, inner_hole_ftf):
+        """Determine the X-Y locations of the inner subchannels.
+
+        Parameters
+        ----------
+        scxy : numpy.ndarray
+            Array (N_sc x 2) of subchannel X-Y coordinates
+        pin_xy : numpy.ndarray
+            Array (Npin x 2) of pin X-Y coordinates
+        n_rings_removed : int
+            Number of removed pin rings
+        pitch : float
+            Pin center-to-center distance
+        inner_hole_ftf : float
+            Flat to flat distance of the inner hexagonal hole
+
+        Returns
+        -------
+        numpy.ndarray
+            Updated array (N_sc x 2) of subchannel X-Y coordinates
+        """
+        # Edge type geometrical info
+        dy_edge = 0.5 * pitch
+        dx_edge = 0.25 * (- inner_hole_ftf + _sqrt3 * n_rings_removed * pitch)
+        d_edge = np.sqrt(dy_edge**2 + dx_edge**2)
+        theta_edge = np.arcsin(dy_edge / d_edge)
+        # Corner type geometrical info
+        w_dist = (inner_hole_ftf/_sqrt3 - self.n_sc['coolant']['inner-edge']/6.0
+                  * pitch) / 2.0
+        if w_dist < 0:
+            raise ValueError("negative distance")
+        dy_corner = (
+            pitch**2 + pitch * w_dist + w_dist**2) / 3.0 / (w_dist + pitch)
+        dx_corner = 2.0*dx_edge / 3.0 * (pitch + w_dist * 2) / (pitch + w_dist)
+        d_corner = np.sqrt(dy_corner**2 + dx_corner**2)
+        theta_corner = np.arcsin(dy_corner /d_corner)
+        face = 0  # track the outward hex face
+        cnt_corner = 0  # track the number of corner SC per hex face
+        for i in range(1, self.n_sc['coolant']['inner-edge'] +
+                       self.n_sc['coolant']['inner-corner'] + 1):
+            # advance to the next pin, pin and SC index are the same
+            x0, y0 = pin_xy[i-1]
+            if self.type[i - 1] == 5:  # inner-corner subchannel
+                if cnt_corner == 0:  # first inner-corner subchannel
+                    x0, y0 = pin_xy[i]
+                    dx = np.cos(
+                        np.pi+self._edge_angle[face] - theta_corner) * d_corner
+                    dy = np.sin(
+                        np.pi+self._edge_angle[face] - theta_corner) * d_corner
+                    cnt_corner += 1
+                else:
+                    dx = np.cos(
+                        np.pi+self._edge_angle[face] + theta_corner) * d_corner
+                    dy = np.sin(
+                        np.pi+self._edge_angle[face] + theta_corner) * d_corner
+                    cnt_corner = 0  # reset inner-corner count
+                    face += 1  # advance the face index
+            elif self.type[i - 1] == 4:  # inner-edge subchannel
+                dx = np.cos(np.pi+self._edge_angle[face] + theta_edge) * d_edge
+                dy = np.sin(np.pi+self._edge_angle[face] + theta_edge) * d_edge
+            else:
+                raise ValueError('Bad subchannel type')
+            scxy[i - 1, 0] = x0 + dx
+            scxy[i - 1, 1] = y0 + dy
+        return scxy
+
     def _find_edge_xy(self, scxy, pin_xy, n_ring, pitch, dftf):
         """Determine the X-Y locations of the edge subchannels.
 
@@ -935,8 +1165,12 @@ class Subchannel(object):
         # first pin in the outer ring but instead by this method
         # comes from the last.
         p = np.where(self.pin_adj
-                     == self.n_sc['coolant']['interior'] + 1)[0][0]
-        for i in range(self.n_sc['coolant']['interior'] + 1,
+                     == self.n_sc['coolant']['inner-edge']+
+                        self.n_sc['coolant']['inner-corner']+
+                        self.n_sc['coolant']['interior'] + 1)[0][0]
+        for i in range(self.n_sc['coolant']['inner-edge']+
+                       self.n_sc['coolant']['inner-corner'] + 
+                       self.n_sc['coolant']['interior'] + 1,
                        self.n_sc['coolant']['total']):
             x0, y0 = pin_xy[p]
             if self.type[i - 1] == 3:  # corner subchannel
@@ -990,9 +1224,9 @@ class Subchannel(object):
         # find first instance of outer coolant sc (type == 2 or 3)
         start = np.min(np.concatenate((np.where(self.type == 2)[0],
                                        np.where(self.type == 3)[0])))
-        # Find the ID of the first duct subchannel (type==4 or 5)
-        type_idx = np.min(np.concatenate((np.where(self.type == 4)[0],
-                                          np.where(self.type == 5)[0])))
+        # Find the ID of the first duct subchannel (type==6 or 7)
+        type_idx = np.min(np.concatenate((np.where(self.type == 6)[0],
+                                          np.where(self.type == 7)[0])))
         # Can define the first duct X-Y coords outside the loop
         de, dc = self._get_ring0_c2c(n_ring, ftf[0], pitch, dpin)
         inner = self._get_ring_xy(scxy[start:], n_ring,
@@ -1048,7 +1282,7 @@ class Subchannel(object):
         type_idx = starting_idx
         face = 0
         for sci in range(0, 6 * n_ring):
-            if self.type[type_idx] in [5, 7]:  # corner-type
+            if self.type[type_idx] in [7, 9]:  # corner-type
                 dx = np.cos(self._corner_angle[face]) * d_corner
                 dy = np.sin(self._corner_angle[face]) * d_corner
                 face += 1

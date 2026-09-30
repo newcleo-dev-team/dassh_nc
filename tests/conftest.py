@@ -531,6 +531,21 @@ def sc_5ring_map(sc_5ring_type):
     return sc_5ring_type
 
 
+@pytest.fixture(scope='module')
+def sc_4ring_2removed():
+    """
+    Subchannel setup for 4-rings assembly with central hole replacing 2 rings.
+    """
+    n_ring = 4
+    pitch = 2.0
+    d_pin = 1.0
+    n_rings_removed = 2
+    pl = dassh.PinLattice(n_ring, pitch, d_pin, n_rings_removed=n_rings_removed)
+    return dassh.Subchannel(n_ring, pitch, d_pin, pl.map,
+                            pl.xy, [(11.0, 12.0)], inner_hole_ftf=3.5,
+                            n_rings_removed=n_rings_removed)
+
+
 ########################################################################
 # Materials
 ########################################################################
