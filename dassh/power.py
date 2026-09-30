@@ -438,11 +438,11 @@ class Power(LoggedClass):
         xy['pins'] = evaluate_xy_mono(asm_obj.pin_lattice.xy,
                                       self.mono_exp,
                                       self.asm_scaling_factor)
-        tmp = np.where(np.isin(asm_obj.subchannel.type, [3, 4]))
+        tmp = np.where(np.isin(asm_obj.subchannel.type, [5, 6]))
         xy['duct'] = evaluate_xy_mono(asm_obj.subchannel.xy[tmp],
                                       self.mono_exp,
                                       self.asm_scaling_factor)
-        tmp = np.where(np.isin(asm_obj.subchannel.type, [0, 1, 2]))
+        tmp = np.where(np.isin(asm_obj.subchannel.type, [0, 1, 2, 3, 4]))
         if not simple_coolant:
             xy['cool'] = evaluate_xy_mono(asm_obj.subchannel.xy[tmp],
                                           self.mono_exp,

@@ -57,7 +57,7 @@ def make(inp, name, mat, fr, se2geo=False, update_tol=0.0,
                      inp['SpacerGrid'], inp['bypass_gap_flow_fraction'],
                      inp['bypass_gap_loss_coeff'], inp['wire_direction'], 
                      inp['shape_factor'], se2geo, update_tol,
-                     mixed_convection_rel_tol)
+                     mixed_convection_rel_tol, inp['inner_hole_ftf'])
     return specify_region_details(rr, inp, mat)
 
 
@@ -138,7 +138,8 @@ class MixedRegion(RoddedRegion):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3):
+                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3,
+                 inner_hole_ftf=0.0):
         # Instantiate RoddedRegion object
         super(MixedRegion, self).__init__(name, n_ring, pin_pitch, pin_diam,
                                           wire_pitch, wire_diam, 
@@ -149,7 +150,8 @@ class MixedRegion(RoddedRegion):
                                           corr_nusselt, corr_shapefactor, 
                                           spacer_grid, byp_ff, byp_k, wwdir, 
                                           sf, se2, param_update_tol, 
-                                          rad_isotropic=False)
+                                          rad_isotropic=False,
+                                          inner_hole_ftf=inner_hole_ftf)
 
         self._pressure_drop_tot = 0.0
         self._delta_P = 1.0 # Guess on pressure drop
@@ -507,8 +509,11 @@ class MixedRegion(RoddedRegion):
             EEX[i] = ene_exchange
             MEX[i] = mom_exchange
         # Swirl mixing term constants
-        swirl_consts = self.d['pin-wall'] * \
-            self.coolant_int_params['swirl'][self.ht['conv']['type']]
+        pin_wall_dist = np.array([self.d['pin-wall']] * 3)
+        if self.rings_removed > 0:
+            pin_wall_dist = np.append(
+                pin_wall_dist, [self.d['pin-inner-wall']]*2)
+        swirl_consts = pin_wall_dist * self.coolant_int_params['swirl']
         # Add swirl terms to total exchange terms, and multiply by dz/area   
         self._finalize(EEX, swirl_consts, nn, dz)
         self._finalize(MEX, swirl_consts, nn, dz, is_mom=True)
@@ -526,7 +531,7 @@ class MixedRegion(RoddedRegion):
         EX : np.ndarray
             Energy or momentum exchange term between adjacent subchannels
         swirl_consts : np.ndarray
-            Swirl exchange constants for edge/corner subchannels
+            Swirl exchange constants for near wall subchannels
         nn : int
             Number of coolant subchannels
         dz : float 
@@ -534,12 +539,22 @@ class MixedRegion(RoddedRegion):
         is_mom : bool
             Indicate whether to calculate momentum (True) or energy (False)
         """
-        EX[self.ht['conv']['ind']] += self._calc_swirl_term(swirl_consts, 
-                                                            is_mom)
+        swirl_ind_key = ['ind']
+        swirl_type_key = ['type']
+        swirl_side = [self._adj_sw]
+        if self.rings_removed > 0:
+            swirl_ind_key.append('ind_inner')
+            swirl_type_key.append('type_inner')
+            swirl_side.append(self._adj_sw_inner)
+        for indexes, typer, side in zip(
+            swirl_ind_key, swirl_type_key, swirl_side):
+            EX[self.ht['conv'][indexes]] += self._calc_swirl_term(
+                swirl_consts[self.ht['conv'][typer]], indexes, side, is_mom)
         EX *= dz / self.params['area'][self.subchannel.type[:nn]]
 
     
-    def _calc_swirl_term(self, swirl_consts: np.ndarray, 
+    def _calc_swirl_term(self, swirl_consts: np.ndarray,
+                         indexes: str, side: int,
                          is_mom: bool = False) -> np.ndarray:
         """
         Calculate swirl exchange term for either energy or momentum equation
@@ -548,6 +563,11 @@ class MixedRegion(RoddedRegion):
         ----------
         swirl_consts : np.ndarray
             Swirl exchange constants for edge/corner subchannels
+        indexes: str
+            Define the list the near wall subchannels.
+        side: int
+            Index that identify the columns in the adjacency matrix as a
+            function of swirl rotation.
         is_mom : bool
             Indicate whether to calculate momentum (True) or energy (False)
             
@@ -556,12 +576,12 @@ class MixedRegion(RoddedRegion):
         np.ndarray
             Swirl exchange term for energy or momentum equation
         """
-        adj_ind = self.subchannel.sc_adj[self.ht['conv']['ind'], self._adj_sw]
+        adj_ind = self.subchannel.sc_adj[self.ht['conv'][indexes], side]
         var = self._sc_vel if is_mom else self._enthalpy
         return swirl_consts * \
             (self.sc_properties['density'][adj_ind] * var[adj_ind] 
-             - self.sc_properties['density'][self.ht['conv']['ind']]
-             * var[self.ht['conv']['ind']])
+             - self.sc_properties['density'][self.ht['conv'][indexes]]
+             * var[self.ht['conv'][indexes]])
 
 
     def _build_matrix(self, dz: float, delta_v: np.ndarray,
@@ -673,7 +693,7 @@ class MixedRegion(RoddedRegion):
         for i in range(nn):
             denominator = 0.0
             num = 0.0
-            for k in range(3):
+            for k in range(self.nsc_cool_type):
                 j = self.ht['cond']['adj'][i][k]
                 if i in self.ht['conv']['ind'][self.ht['conv']['type'] == 2] \
                     and k == 2:

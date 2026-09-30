@@ -901,6 +901,7 @@ class _RREquivalent(RoddedRegion):
 
         for item in to_delete:
             delattr(self, item)
+        self.nsc_cool_type = 3
 
     def clone(self, new_flowrate=None):
         """Clone the rodded region into another assembly object;
