@@ -2073,7 +2073,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
     L[2][2] = (D + d['pin-wall']) / SQRT3
     if n_rmvd > 0:
         dy_corner = (
-            2.0 * P**2 + P * d['wcorner-inner'] - d['wcorner-inner']**2) / 3.0 \
+            P**2 + P * d['wcorner-inner'] + d['wcorner-inner']**2) / 3.0 \
             / (d['wcorner-inner'] + P)
         dx_corner = (0.5 * D + d['pin-inner-wall']) / 3.0 * (
             P + 2.0 * d['wcorner-inner']) / (P + d['wcorner-inner'])
