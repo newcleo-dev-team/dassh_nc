@@ -54,11 +54,11 @@ def test_sc_instantiation_hole(sc_4ring_2removed: dassh.Subchannel):
     Test the number of SCs in the 4-ring subchannel object with 2 removed rings.
 
     Parameters
-    ==========
-    sc_4ring_2removed: dassh.Subchannel
-        Subchannel lattice data for a 4-rings configuration with 2 removed rings
-        by the presence of the central hexagonal hole, provided by the fixture
-        sc_4ring_2removed.
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
     """
     assert sc_4ring_2removed.n_sc['coolant']['interior'] == 30
     assert sc_4ring_2removed.n_sc['coolant']['edge'] == 18
@@ -106,13 +106,13 @@ def test_sc_typing_indirect_hole(sc_4ring_2removed: dassh.Subchannel):
     2 removed rings.
 
     Parameters
-    ==========
-    sc_4ring_2removed: dassh.Subchannel
-        Subchannel lattice data for a 4-rings configuration with 2 removed rings
-        by the presence of the central hexagonal hole, provided by the fixture
-        sc_4ring_2removed.
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
     """
-    sc_type = sc_4ring_2removed.type + 1
+    sc_type = sc_4ring_2removed.setup_sc_type(4, [(11.0, 12.0)])
     assert len(sc_type) == sc_4ring_2removed.n_sc['total']
     assert (len(sc_type[sc_type == 1])
             == sc_4ring_2removed.n_sc['coolant']['interior'])
@@ -254,11 +254,11 @@ def test_sc_full_map_hole(sc_4ring_2removed: dassh.Subchannel):
     configuration with central hole.
 
     Parameters
-    ==========
-    sc_4ring_2removed: dassh.Subchannel
-        Subchannel lattice data for a 4-rings configuration with 2 removed rings
-        by the presence of the central hexagonal hole, provided by the fixture
-        sc_4ring_2removed.
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
     """
     assert np.array_equal(sc_4ring_2removed._map, np.array([
         [ 0,  0,  0,  0, 66,  0,  0,  0],
@@ -672,11 +672,11 @@ def test_sc_adj_map_hole(sc_4ring_2removed: dassh.Subchannel):
     configuration with central hole.
 
     Parameters
-    ==========
-    sc_4ring_2removed: dassh.Subchannel
-        Subchannel lattice data for a 4-rings configuration with 2 removed rings
-        by the presence of the central hexagonal hole, provided by the fixture
-        sc_4ring_2removed.
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
     """
     asc = copy.deepcopy(sc_4ring_2removed)
     asc.type = asc.type + 1
@@ -830,15 +830,15 @@ def test_reverse_pin_sc_neighbors(sc_2ring_pinadj):
 
 def test_pin_sc_neighbors_hole(sc_4ring_2removed):
     """
-    Test the connection between coolant sc and pins in a 4-rings configuration
-    with 2 removed rings by the central hexagonal hole.
+    Test the connection between coolant subchannels and pins in a 4-ring
+    configuration with 2 rings removed by the central hexagonal hole.
     
     Parameters
-    ==========
-    sc_4ring_2removed: dassh.Subchannel
-        Subchannel lattice data for a 4-rings configuration with 2 removed rings
-        by the presence of the central hexagonal hole, provided by the fixture
-        sc_4ring_2removed.
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
     """
     test = sc_4ring_2removed.pin_adj + 1
     assert np.array_equal(test, np.array([
@@ -876,15 +876,15 @@ def test_pin_sc_neighbors_hole(sc_4ring_2removed):
 
 def test_reverse_pin_sc_neighbors_hole(sc_4ring_2removed):
     """
-    Test that the inverse subchannel-pin adjacency is correct in a 4-rings
-    configuration with 2 removed rings by the central hexagonal hole.
+    Test that the inverse subchannel-pin adjacency is correct in a 4-ring
+    configuration with 2 rings removed by the central hexagonal hole.
     
     Parameters
-    ==========
-    sc_4ring_2removed: dassh.Subchannel
-        Subchannel lattice data for a 4-rings configuration with 2 removed rings
-        by the presence of the central hexagonal hole, provided by the fixture
-        sc_4ring_2removed.
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
     """
     rev_pin_adj = sc_4ring_2removed.rev_pin_adj
     pin_adj = sc_4ring_2removed.pin_adj
@@ -894,6 +894,29 @@ def test_reverse_pin_sc_neighbors_hole(sc_4ring_2removed):
                 if sc not in pin_adj[pin]:
                     print("sc =", sc, "pin =", pin)
                     print(rev_pin_adj[pin])
+                    assert 0
+
+
+def test_pin_sc_adjacency_hole(sc_4ring_2removed):
+    """
+    Test that the pin-subchannel adjacency is correct in a 4-ring
+    configuration with 2 rings removed by the central hexagonal hole.
+    
+    Parameters
+    ----------
+    sc_4ring_2removed : dassh.Subchannel
+        Subchannel lattice data for a 4-ring configuration with 2 rings removed
+        by the presence of the central hexagonal hole: this configuration is
+        provided by the fixture sc_4ring_2removed.
+    """
+    rev_pin_adj = sc_4ring_2removed.rev_pin_adj
+    pin_adj = sc_4ring_2removed.pin_adj
+    for pin in range(len(pin_adj)):
+        for sc in pin_adj[pin]:
+            if sc >= 0:
+                if pin not in rev_pin_adj[sc]:
+                    print("sc =", sc, "pin =", pin)
+                    print(pin_adj[sc])
                     assert 0
 
 
