@@ -2028,8 +2028,8 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
     d['pin-pin'] = P - D
     # Pin-to-wall distance
     d['pin-wall'] = edge_pin2duct - 0.5 * D
-    d['pin-inner-wall'] = 0.5 * (- inner_hole_ftf + SQRT3 * n_rmvd * P) - 0.5 *\
-        D if n_rmvd > 0 else 0.0
+    d['pin-inner-wall'] = 0.5 * (
+        - inner_hole_ftf + SQRT3 * n_rmvd * P - D) if n_rmvd > 0 else 0.0
     # Wall thickness(es)
     d['wall'] = np.zeros(n_duct)
     for i in range(0, n_duct):  # for all duct walls
@@ -2081,10 +2081,12 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
             P + 2.0 * d['wcorner-inner']) / (P + d['wcorner-inner'])
         # From interior
         L[0][3] = 0.5 * (L[0][0] + D * 0.5 + d['pin-inner-wall']) # inner edge-int
-        L[0][4] = 0.5 * L[0][0] + dx_corner  # inner corner-int
+        L[0][4] = np.sqrt((0.5 * L[0][0] + dx_corner)**2 +
+                          (dy_corner - P*0.5)**2) # inner corner-int
         # From edge 
         L[1][3] = 0.5 * (d['pin-wall'] + D + d['pin-inner-wall']) # inner edge-edge
-        L[1][4] = 0.5 * (d['pin-wall'] + D * 0.5) + dx_corner # inner edge-edge
+        L[1][4] = np.sqrt((0.5 * (d['pin-wall'] + D * 0.5) + dx_corner)**2 +
+                          (dy_corner - P*0.5)**2) # inner edge-edge
         # Inner edge
         L[3][0] = L[0][3]
         L[3][1] = L[1][3]
@@ -2092,7 +2094,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
         L[3][4] = np.sqrt((P*0.5 + dy_corner)**2 +
             ((0.5 * D + d['pin-wall'])*0.5 - dx_corner)**2)
         # Inner corner
-        L[4][0] = L[1][3]
+        L[4][0] = L[0][4]
         L[4][1] = L[1][4]
         L[4][3] = L[3][4]
         L[4][4] = 2*dy_corner  # This quantity is approximated for SCs that are
@@ -2100,7 +2102,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
         # The correct value should be the distance between centroids. However,
         # this is not easy to be determined, thus, it is approximated with the
         # correct distance between two inner corners that are specular on the
-        # perpendicular side.
+        # side that is perpendicular to the outer wall of the inner hole.
     # Duct wall - no heat conduction between duct wall segments
     # Bypass gaps (gap edge, gap corner)
     if n_bypass > 0:
