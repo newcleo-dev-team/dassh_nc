@@ -2165,7 +2165,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
         sc_ww['area'][3] -= 0.125 * np.pi * Dw**2 / cos_theta
         sc_ww['area'][4] = (P + d['wcorner-inner']) * (
             d['pin-inner-wall'] + 0.5 * D) * 0.5 - np.pi * D**2 * 5.0 / 48.0
-        sc_ww['area'][4] -= 5.0 / 24.0 * np.pi * Dw**2 / cos_theta
+        sc_ww['area'][4] -= 5.0 / 48.0 * np.pi * Dw**2 / cos_theta
     # Wetted perimeter
     sc_ww['wp'] = np.zeros(ntype_cool)
     sc_ww['wp'][0] = np.pi * D / 2 + np.pi * Dw / 2 / cos_theta
@@ -2176,7 +2176,7 @@ def calculate_geometry(n_ring, P, D, Pw, Dw, dftf, n_sc, inner_hole_ftf=0.,
     if n_rmvd > 0:
         sc_ww['wp'][3] = P + np.pi * D / 2.0 + np.pi * Dw / 2.0 / cos_theta
         sc_ww['wp'][4] = d['wcorner-inner'] + np.pi * D * 5.0 / 12.0 + (
-            np.pi * Dw * 5.0 / 6.0 / cos_theta)
+            np.pi * Dw * 5.0 / 12.0 / cos_theta)
     # Hydraulic diameter
     sc_ww['de'] = 4 * sc_ww['area'] / sc_ww['wp']
     # Projection of wire area into flow path
