@@ -2402,11 +2402,16 @@ def calculate_ht_constants(rr, mixed=False):
     ht_consts = [[0.0] * 9 for i in range(9)]
 
     # Conduction between coolant channels (units: s/kg)
-    # [ Interior <- Interior, Interior <- Edge, 0                , Interior <- Inner-Edge, Interior <- Inner-Corner]
-    # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   , Edge <- Inner-Edge,       Edge <- Inner-Corner ]
-    # [ 0               ,     Corner <- Edge,   Corner <- Corner ,         0,         0]
-    # [ Inner-Edge <- Interior,     Inner-Edge <- Edge,        0, Inner-Edge <- Inner-Edge,     Inner-Edge <- Inner-Corner]
-    # [ Inner-Corner <- Interior, Inner-Corner <- Edge,        0, Inner-Corner <- Inner-Edge, Inner-Corner <- Inner-Corner]
+    # [ Interior <- Interior, Interior <- Edge,                 0,
+    #   Interior <- Inner-Edge, Interior <- Inner-Corner           ]
+    # [ Edge <- Interior,     Edge <- Edge,     Edge <- Corner   ,
+    #   Edge <- Inner-Edge,       Edge <- Inner-Corner             ]
+    # [ 0               ,     Corner <- Edge,   Corner <- Corner ,
+    #   0,                                               ]
+    # [ Inner-Edge <- Interior,     Inner-Edge <- Edge,         0,
+    #   Inner-Edge <- Inner-Edge,     Inner-Edge <- Inner-Corner   ]
+    # [ Inner-Corner <- Interior, Inner-Corner <- Edge,         0,
+    #   Inner-Corner <- Inner-Edge, Inner-Corner <- Inner-Corner   ]
     # if self.n_pin > 1:
     n_coolant = rr.nsc_cool_type
     for i in range(n_coolant): 
