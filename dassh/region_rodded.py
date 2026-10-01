@@ -3061,11 +3061,6 @@ def _calculate_int_dz(bundle, adiabatic_duct=None):
     else:
         dz = []
         sc_code = []
-        # Interior subchannel --> interior/interior/edge subchannel
-        sc_code.append('1-112')
-        dz.append(_cons1_112(sc_mfr[0], bundle.L[0][0],
-                             bundle.L[0][1], bundle.d['pin-pin'],
-                             keff, bundle.coolant.heat_capacity))
 
         # Corner subchannel --> edge/edge subchannel
         sc_code.append('3-22')
@@ -3084,57 +3079,170 @@ def _calculate_int_dz(bundle, adiabatic_duct=None):
             adiabatic_duct,
             bundle._conv_approx))
 
-        # Edge subchannel --> interior/corner/corner subchannel
-        if bundle.n_pin == 7:
-            sc_code.append('2-133')
-            dz.append(_cons2_133(
-                sc_mfr[1],
-                bundle.L[1][0],
-                bundle.L[1][1],
-                bundle.L[1][2],
-                bundle.d['pin-pin'],
-                bundle.d['pin-wall'],
-                keff,
-                bundle.coolant.heat_capacity,
-                bundle.coolant.density,
-                bundle.coolant_int_params['htc'][1],
-                bundle.coolant_int_params['swirl'][1],
-                bundle.d['wall'][0],
-                bundle.duct.thermal_conductivity,
-                adiabatic_duct,
-                bundle._conv_approx))
+        if bundle.n_ring > bundle.rings_removed + 1:
+            # Bracket: interior SCs available
+            # Interior subchannel --> interior/interior/edge subchannel
+            sc_code.append('1-112')
+            dz.append(_cons1_112(sc_mfr[0], bundle.L[0][0],
+                                    bundle.L[0][1], bundle.d['pin-pin'],
+                                    keff, bundle.coolant.heat_capacity))
+            # Edge subchannel --> interior/corner/corner subchannel
+            if bundle.n_ring == 2:
+                sc_code.append('2-133')
+                dz.append(_cons2_133(
+                    sc_mfr[1],
+                    bundle.L[1][0],
+                    bundle.L[1][1],
+                    bundle.L[1][2],
+                    bundle.d['pin-pin'],
+                    bundle.d['pin-wall'],
+                    keff,
+                    bundle.coolant.heat_capacity,
+                    bundle.coolant.density,
+                    bundle.coolant_int_params['htc'][1],
+                    bundle.coolant_int_params['swirl'][1],
+                    bundle.d['wall'][0],
+                    bundle.duct.thermal_conductivity,
+                    adiabatic_duct,
+                    bundle._conv_approx))
+            else:
+                if bundle.n_ring > bundle.rings_removed + 2:
+                    # Interior subchannel --> interior/interior/interior subchannel
+                    sc_code.append('1-111')
+                    dz.append(_cons1_111(sc_mfr[0], bundle.L[0][0],
+                                            bundle.d['pin-pin'], keff,
+                                            bundle.coolant.heat_capacity))
+                # Edge subchannel --> interior/edge/corner subchannel
+                sc_code.append('2-123')
+                dz.append(_cons2_123(
+                    sc_mfr[1],
+                    bundle.L[1][0],
+                    bundle.L[1][1],
+                    bundle.L[1][2],
+                    bundle.d['pin-pin'],
+                    bundle.d['pin-wall'],
+                    keff,
+                    bundle.coolant.heat_capacity,
+                    bundle.coolant.density,
+                    bundle.coolant_int_params['htc'][1],
+                    bundle.coolant_int_params['swirl'][1],
+                    bundle.d['wall'][0],
+                    bundle.duct.thermal_conductivity,
+                    adiabatic_duct,
+                    bundle._conv_approx))
+                if bundle.n_ring > 3:
+                    # Edge subchannel --> interior/edge/edge subchannel
+                    sc_code.append('2-122')
+                    dz.append(_cons2_122(
+                        sc_mfr[1],
+                        bundle.L[1][0],
+                        bundle.L[1][1],
+                        bundle.d['pin-pin'],
+                        bundle.d['pin-wall'],
+                        keff,
+                        bundle.coolant.heat_capacity,
+                        bundle.coolant.density,
+                        bundle.coolant_int_params['htc'][1],
+                        bundle.coolant_int_params['swirl'][1],
+                        bundle.d['wall'][0],
+                        bundle.duct.thermal_conductivity,
+                        adiabatic_duct,
+                        bundle._conv_approx))
+                if bundle.rings_removed > 1:
+                    # Interior subchannel --> interior/interior/inner-corner subchannel
+                    sc_code.append('1-115')
+                    dz.append(_cons1_115(
+                        sc_mfr[0],
+                        bundle.L[0][0],
+                        bundle.L[0][4],
+                        bundle.d['pin-pin'],
+                        keff,
+                        bundle.coolant.heat_capacity))
+                    if bundle.rings_removed == 2:
+                        # Inner-corner subchannel --> inner-corner/inner-corner/interior subchannel
+                        sc_code.append('5-551')
+                        dz.append(_cons5_551(
+                            sc_mfr[4],
+                            bundle.L[0][4],
+                            bundle.L[4][4],
+                            bundle.d['pin-pin'],
+                            bundle.d['pin-inner-wall'],
+                            keff,
+                            bundle.coolant.heat_capacity,
+                            bundle.coolant.density,
+                            bundle.coolant_int_params['swirl'][4]))
+                    else:
+                        # Interior subchannel --> interior/interior/inner-edge subchannel
+                        sc_code.append('1-114')
+                        dz.append(_cons1_114(
+                            sc_mfr[0],
+                            bundle.L[0][0],
+                            bundle.L[0][3],
+                            bundle.d['pin-pin'],
+                            keff,
+                            bundle.coolant.heat_capacity))
+                        # Inner-corner subchannel --> inner-corner/inner-edge/interior subchannel
+                        sc_code.append('5-541')
+                        dz.append(_cons5_541(
+                            sc_mfr[4],
+                            bundle.L[0][4],
+                            bundle.L[3][4],
+                            bundle.L[4][4],
+                            bundle.d['pin-pin'],
+                            bundle.d['pin-inner-wall'],
+                            keff,
+                            bundle.coolant.heat_capacity,
+                            bundle.coolant.density,
+                            bundle.coolant_int_params['swirl'][4]))
+                        if bundle.rings_removed == 3:
+                            # Inner-edge subchannel --> inner-corner/inner-corner/interior subchannel
+                            sc_code.append('4-551')
+                            dz.append(_cons4_551(
+                                sc_mfr[3],
+                                bundle.L[0][3],
+                                bundle.L[3][4],
+                                bundle.d['pin-pin'],
+                                bundle.d['pin-inner-wall'],
+                                keff,
+                                bundle.coolant.heat_capacity,
+                                bundle.coolant.density,
+                                bundle.coolant_int_params['swirl'][4]))
+                        else:
+                            # Inner-edge subchannel --> inner-edge/inner-corner/interior subchannel
+                            sc_code.append('4-451')
+                            dz.append(_cons4_451(
+                                sc_mfr[3],
+                                bundle.L[0][3],
+                                bundle.L[3][3],
+                                bundle.L[3][4],
+                                bundle.d['pin-pin'],
+                                bundle.d['pin-inner-wall'],
+                                keff,
+                                bundle.coolant.heat_capacity,
+                                bundle.coolant.density,
+                                bundle.coolant_int_params['swirl'][3]))
+                            if bundle.rings_removed > 4:
+                                # Inner-edge subchannel --> inner-edge/inner-edge/interior subchannel
+                                sc_code.append('4-441')
+                                dz.append(_cons4_441(
+                                    sc_mfr[3],
+                                    bundle.L[0][3],
+                                    bundle.L[3][3],
+                                    bundle.d['pin-pin'],
+                                    bundle.d['pin-inner-wall'],
+                                    keff,
+                                    bundle.coolant.heat_capacity,
+                                    bundle.coolant.density,
+                                    bundle.coolant_int_params['swirl'][3]))
         else:
-            # Interior subchannel --> interior/interior/interior subchannel
-            sc_code.append('1-111')
-            dz.append(_cons1_111(sc_mfr[0], bundle.L[0][0],
-                                 bundle.d['pin-pin'], keff,
-                                 bundle.coolant.heat_capacity))
-            # Edge subchannel --> interior/edge/corner subchannel
-            sc_code.append('2-123')
-            dz.append(_cons2_123(
+            # Bracket: no interior available
+            # Edge subchannel --> corner/Edge/inner-corner subchannel
+            sc_code.append('2-325')
+            dz.append(_cons2_325(
                 sc_mfr[1],
-                bundle.L[1][0],
-                bundle.L[1][1],
                 bundle.L[1][2],
-                bundle.d['pin-pin'],
-                bundle.d['pin-wall'],
-                keff,
-                bundle.coolant.heat_capacity,
-                bundle.coolant.density,
-                bundle.coolant_int_params['htc'][1],
-                bundle.coolant_int_params['swirl'][1],
-                bundle.d['wall'][0],
-                bundle.duct.thermal_conductivity,
-                adiabatic_duct,
-                bundle._conv_approx))
-
-        if bundle.n_pin > 19:
-            # Edge subchannel --> interior/edge/edge subchannel
-            sc_code.append('2-122')
-            dz.append(_cons2_122(
-                sc_mfr[1],
-                bundle.L[1][0],
                 bundle.L[1][1],
+                bundle.L[4][1],
                 bundle.d['pin-pin'],
                 bundle.d['pin-wall'],
                 keff,
@@ -3146,7 +3254,90 @@ def _calculate_int_dz(bundle, adiabatic_duct=None):
                 bundle.duct.thermal_conductivity,
                 adiabatic_duct,
                 bundle._conv_approx))
-
+            if bundle.rings_removed == 2:
+                # Inner-corner subchannel --> inner-corner/inner-corner/edge subchannel
+                sc_code.append('5-552')
+                dz.append(_cons5_552(
+                    sc_mfr[4],
+                    bundle.L[4][1],
+                    bundle.L[4][4],
+                    bundle.d['pin-pin'],
+                    bundle.d['pin-inner-wall'],
+                    keff,
+                    bundle.coolant.heat_capacity,
+                    bundle.coolant.density,
+                    bundle.coolant_int_params['swirl'][4]))
+            else:
+                # Edge subchannel --> edge/edge/inner-edge subchannel
+                sc_code.append('2-224')
+                dz.append(_cons2_224(
+                    sc_mfr[1],
+                    bundle.L[1][1],
+                    bundle.L[3][1],
+                    bundle.d['pin-pin'],
+                    bundle.d['pin-wall'],
+                    keff,
+                    bundle.coolant.heat_capacity,
+                    bundle.coolant.density,
+                    bundle.coolant_int_params['htc'][1],
+                    bundle.coolant_int_params['swirl'][1],
+                    bundle.d['wall'][0],
+                    bundle.duct.thermal_conductivity,
+                    adiabatic_duct,
+                    bundle._conv_approx))
+                # Inner-corner subchannel --> inner-corner/inner-edge/edge subchannel
+                sc_code.append('5-542')
+                dz.append(_cons5_542(
+                    sc_mfr[4],
+                    bundle.L[4][1],
+                    bundle.L[3][4],
+                    bundle.L[4][4],
+                    bundle.d['pin-pin'],
+                    bundle.d['pin-inner-wall'],
+                    keff,
+                    bundle.coolant.heat_capacity,
+                    bundle.coolant.density,
+                    bundle.coolant_int_params['swirl'][4]))
+                if bundle.rings_removed == 3:
+                    # Inner-edge subchannel --> inner-corner/inner-corner/edge subchannel
+                    sc_code.append('4-552')
+                    dz.append(_cons4_552(
+                        sc_mfr[3],
+                        bundle.L[3][1],
+                        bundle.L[3][4],
+                        bundle.d['pin-pin'],
+                        bundle.d['pin-inner-wall'],
+                        keff,
+                        bundle.coolant.heat_capacity,
+                        bundle.coolant.density,
+                        bundle.coolant_int_params['swirl'][3]))
+                else:
+                    # Inner-edge subchannel --> inner-edge/inner-corner/edge subchannel
+                    sc_code.append('4-452')
+                    dz.append(_cons4_452(
+                        sc_mfr[3],
+                        bundle.L[3][1],
+                        bundle.L[3][3],
+                        bundle.L[3][4],
+                        bundle.d['pin-pin'],
+                        bundle.d['pin-inner-wall'],
+                        keff,
+                        bundle.coolant.heat_capacity,
+                        bundle.coolant.density,
+                        bundle.coolant_int_params['swirl'][3]))
+                    if bundle.rings_removed > 4:
+                        # Inner-edge subchannel --> inner-edge/inner-edge/edge subchannel
+                        sc_code.append('4-442')
+                        dz.append(_cons4_442(
+                            sc_mfr[3],
+                            bundle.L[3][1],
+                            bundle.L[3][3],
+                            bundle.d['pin-pin'],
+                            bundle.d['pin-inner-wall'],
+                            keff,
+                            bundle.coolant.heat_capacity,
+                            bundle.coolant.density,
+                            bundle.coolant_int_params['swirl'][3]))
         min_dz = min(dz)
         return min_dz, sc_code[dz.index(min_dz)]
 
@@ -3160,6 +3351,13 @@ def _cons1_112(m1, L11, L12, d_p2p, keff, Cp):
     """dz constraint for interior sc touching 2 interior, 1 edge sc"""
     return m1 * Cp / (2 / L11 + 1 / L12) / d_p2p / keff
 
+def _cons1_115(m1, L11, L15, d_p2p, keff, Cp):
+    """dz constraint for interior sc touching 2 interior, 1 inner corner"""
+    return m1 * Cp / (2 / L11 + 1 / L15) / d_p2p / keff
+
+def _cons1_114(m1, L11, L14, d_p2p, keff, Cp):
+    """dz constraint for interior sc touching 2 interior, 1 inner edge"""
+    return m1 * Cp / (2 / L11 + 1 / L14) / d_p2p / keff
 
 def _cons2_122(m2, L21, L22, d_p2p, d_p2w, keff, Cp, rho, h, vs, dw, kw,
                adiabatic=False, conv_approx=False):
@@ -3176,6 +3374,124 @@ def _cons2_122(m2, L21, L22, d_p2p, d_p2w, keff, Cp, rho, h, vs, dw, kw,
     term4 = rho * vs * d_p2w / m2               # swirl
     return 1 / (term1 + term2 + term3 + term4)
 
+def _cons2_224(m2, L22, L24, d_p2p, d_p2w, keff, Cp, rho, h, vs,
+               dw, kw, adiabatic=False, conv_approx=False):
+    """dz constraint for edge sc touching 2 edge, 1 inner-edge sc"""
+    term1 = 0.0                             # convection term
+    if not adiabatic:
+        if conv_approx:
+            R = 1 / h + dw / 2 / kw
+            term1 = L22 / m2 / Cp / R       # conv / cond to duct MW
+        else:
+            term1 = h * L22 / m2 / Cp       # conv to wall
+    term2 = keff * d_p2w / m2 / Cp * 2 / L22    # cond to adj edge
+    term4 = keff * d_p2p / m2 / Cp / L24    # cond to adj inner-edge
+    term5 = rho * vs * d_p2w / m2           # swirl
+    return 1 / (term1 + term2 + term4 + term5)
+
+def _cons2_325(m2, L23, L22, L25, d_p2p, d_p2w, keff, Cp, rho, h, vs,
+               dw, kw, adiabatic=False, conv_approx=False):
+    """dz constraint for edge sc touching 1 corner, 1 edge, 1 inner-corner sc"""
+    term1 = 0.0                             # convection term
+    if not adiabatic:
+        if conv_approx:
+            R = 1 / h + dw / 2 / kw
+            term1 = L22 / m2 / Cp / R       # conv / cond to duct MW
+        else:
+            term1 = h * L22 / m2 / Cp       # conv to wall
+    term2 = keff * d_p2w / m2 / Cp / L22    # cond to adj edge
+    term3 = keff * d_p2w / m2 / Cp / L23    # cond to adj int
+    term4 = keff * d_p2p / m2 / Cp / L25    # cond to adj inner-corner
+    term5 = rho * vs * d_p2w / m2           # swirl
+    return 1 / (term1 + term2 + term3 + term4 + term5)
+
+def _cons4_442(m4, L24, L44, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """dz constraint for inner-edge sc touching 2 inner-edge, 1 edge sc"""
+    term2 = 2 * keff * d_p2w_inner / m4 / Cp / L44    # cond to adj inner-edge
+    term3 = keff * d_p2p / m4 / Cp / L24        # cond to adj edge
+    term4 = rho * vs * d_p2w_inner / m4               # swirl
+    return 1 / (term2 + term3 + term4)
+
+def _cons4_441(m4, L14, L44, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """dz constraint for inner-edge sc touching 2 inner-edge, 1 interior sc"""
+    term2 = 2 * keff * d_p2w_inner / m4 / Cp / L44    # cond to adj inner-edge
+    term3 = keff * d_p2p / m4 / Cp / L14        # cond to adj int
+    term4 = rho * vs * d_p2w_inner / m4               # swirl
+    return 1 / (term2 + term3 + term4)
+
+def _cons4_452(m4, L24, L44, L45, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """
+    dz constraint for inner-edge sc touching 1 inner-edge, 1 inner-corner,
+    1 edge sc
+    """
+    term1 = keff * d_p2w_inner / m4 / Cp / L45    # cond to adj inner-corner
+    term2 = keff * d_p2w_inner / m4 / Cp / L44    # cond to adj inner-edge
+    term3 = keff * d_p2p / m4 / Cp / L24        # cond to adj edge
+    term4 = rho * vs * d_p2w_inner / m4               # swirl
+    return 1 / (term1 + term2 + term3 + term4)
+
+def _cons4_451(m4, L14, L44, L45, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """
+    dz constraint for inner-edge sc touching 1 inner-edge, inner-corner,
+    1 interior sc
+    """
+    term1 = keff * d_p2w_inner / m4 / Cp / L45    # cond to adj inner-corner
+    term2 = keff * d_p2w_inner / m4 / Cp / L44    # cond to adj inner-edge
+    term3 = keff * d_p2p / m4 / Cp / L14        # cond to adj interior
+    term4 = rho * vs * d_p2w_inner / m4               # swirl
+    return 1 / (term1 + term2 + term3 + term4)
+
+def _cons4_552(m4, L24, L45, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """dz constraint for inner-edge sc touching 2 inner-corner, 1 edge sc"""
+    term1 = 2 * keff * d_p2w_inner / m4 / Cp / L45    # cond to adj inner-corner
+    term3 = keff * d_p2p / m4 / Cp / L24        # cond to adj edge
+    term4 = rho * vs * d_p2w_inner / m4               # swirl
+    return 1 / (term1 + term3 + term4)
+
+def _cons4_551(m4, L14, L45, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """dz constraint for inner-edge sc touching 2 inner-corner, 1 interior sc"""
+    term1 = 2 * keff * d_p2w_inner / m4 / Cp / L45    # cond to adj inner-corner
+    term3 = keff * d_p2p / m4 / Cp / L14        # cond to adj interior
+    term4 = rho * vs * d_p2w_inner / m4               # swirl
+    return 1 / (term1 + term3 + term4)
+
+def _cons5_552(m5, L25, L55, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """dz constraint for inner-corner sc touching 2 inner-corner, 1 edge sc"""
+    term1 = 2 * keff * d_p2w_inner / m5 / Cp / L55    # cond to adj inner-corner
+    term3 = keff * d_p2p / m5 / Cp / L25        # cond to adj edge
+    term4 = rho * vs * d_p2w_inner / m5               # swirl
+    return 1 / (term1 + term3 + term4)
+
+def _cons5_551(m5, L15, L55, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """
+    dz constraint for inner-corner sc touching 2 inner-corner, 1 interior sc
+    """
+    term1 = 2 * keff * d_p2w_inner / m5 / Cp / L55    # cond to adj inner-corner
+    term3 = keff * d_p2p / m5 / Cp / L15        # cond to adj interior
+    term4 = rho * vs * d_p2w_inner / m5               # swirl
+    return 1 / (term1 + term3 + term4)
+
+def _cons5_542(m5, L25, L45, L55, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """
+    dz constraint for inner-corner sc touching 1 inner-corner, 1 inner-edge,
+    1 edge sc
+    """
+    term1 = keff * d_p2w_inner / m5 / Cp / L55    # cond to adj inner-corner
+    term2 = keff * d_p2w_inner / m5 / Cp / L45    # cond to adj inner-edge
+    term3 = keff * d_p2p / m5 / Cp / L25        # cond to adj edge
+    term4 = rho * vs * d_p2w_inner / m5               # swirl
+    return 1 / (term1 + term2 + term3 + term4)
+
+def _cons5_541(m5, L15, L45, L55, d_p2p, d_p2w_inner, keff, Cp, rho, vs):
+    """
+    dz constraint for inner-corner sc touching 1 inner-corner, 1 inner-edge,
+    1 interior sc
+    """
+    term1 = keff * d_p2w_inner / m5 / Cp / L55    # cond to adj inner-corner
+    term2 = keff * d_p2w_inner / m5 / Cp / L45    # cond to adj inner-edge
+    term3 = keff * d_p2p / m5 / Cp / L15        # cond to adj interior
+    term4 = rho * vs * d_p2w_inner / m5               # swirl
+    return 1 / (term1 + term2 + term3 + term4)
 
 def _cons2_123(m2, L21, L22, L23, d_p2p, d_p2w, keff, Cp, rho, h, vs,
                dw, kw, adiabatic=False, conv_approx=False):
@@ -3273,10 +3589,10 @@ def _calculate_byp_dz(bundle, adiabatic_duct=None):
 
         # Only corner -> corner bypass subchannels
         if bundle.n_pin == 1:
-            sc_code.append('7-77')
-            dz.append(_cons7_77(
+            sc_code.append('9-99')
+            dz.append(_cons9_99(
                 byp_sc_mfr[i, 1],
-                bundle.L[6][6][i],
+                bundle.L[8][8][i],
                 bundle.d['bypass'][i],
                 bundle.d['wcorner'][i, 1],
                 bundle.d['wcorner'][i + 1, 1],
@@ -3291,10 +3607,10 @@ def _calculate_byp_dz(bundle, adiabatic_duct=None):
                 bundle._conv_approx))
 
         else:
-            sc_code.append('7-66')
-            dz.append(_cons7_66(
+            sc_code.append('9-88')
+            dz.append(_cons9_88(
                 byp_sc_mfr[i, 1],
-                bundle.L[5][6][i],
+                bundle.L[7][8][i],
                 bundle.d['bypass'][i],
                 bundle.d['wcorner'][i, 1],
                 bundle.d['wcorner'][i + 1, 1],
@@ -3310,11 +3626,11 @@ def _calculate_byp_dz(bundle, adiabatic_duct=None):
 
             # Edge subchannel --> corner/corner subchannel
             if bundle.n_pin == 7:
-                sc_code.append('6-77')
-                dz.append(_cons6_77(
+                sc_code.append('8-99')
+                dz.append(_cons8_99(
                     byp_sc_mfr[i, 0],
-                    bundle.L[5][5][i],
-                    bundle.L[5][6][i],
+                    bundle.L[7][7][i],
+                    bundle.L[7][8][i],
                     bundle.d['bypass'][i],
                     bundle.coolant.thermal_conductivity,
                     bundle.coolant.heat_capacity,
@@ -3328,11 +3644,11 @@ def _calculate_byp_dz(bundle, adiabatic_duct=None):
 
             # Edge subchannel --> edge/corner subchannel
             else:
-                sc_code.append('6-67')
-                dz.append(_cons6_67(
+                sc_code.append('8-89')
+                dz.append(_cons8_89(
                     byp_sc_mfr[i, 0],
-                    bundle.L[5][5][i],
-                    bundle.L[5][6][i],
+                    bundle.L[7][7][i],
+                    bundle.L[7][8][i],
                     bundle.d['bypass'][i],
                     bundle.coolant.thermal_conductivity,
                     bundle.coolant.heat_capacity,
@@ -3346,10 +3662,10 @@ def _calculate_byp_dz(bundle, adiabatic_duct=None):
 
             # Edge subchannel --> edge/edge subchannel
             if bundle.n_pin > 19:
-                sc_code.append('6-66')
-                dz.append(_cons6_66(
+                sc_code.append('8-88')
+                dz.append(_cons8_88(
                     byp_sc_mfr[i, 0],
-                    bundle.L[5][5][i],
+                    bundle.L[7][7][i],
                     bundle.d['bypass'][i],
                     bundle.coolant.thermal_conductivity,
                     bundle.coolant.heat_capacity,
@@ -3370,101 +3686,101 @@ def _calculate_byp_dz(bundle, adiabatic_duct=None):
     return min_min_dz, min_sc_code
 
 
-def _cons6_66(m6, L66, d_byp, k, Cp, h_byp, dw1, kw1, dw2, kw2,
+def _cons8_88(m8, L88, d_byp, k, Cp, h_byp, dw1, kw1, dw2, kw2,
               adiabatic_duct=False, conv_approx=False):
     """dz constrant for edge bypass sc touching 2 edge bypass sc"""
     term1_out = 0.0
     if not adiabatic_duct:
         if conv_approx:
             R2 = 1 / h_byp + dw2 / 2 / kw2
-            term1_out = L66 / m6 / Cp / R2  # conv / cond to duct 1 MW
+            term1_out = L88 / m8 / Cp / R2  # conv / cond to duct 1 MW
         else:
-            term1_out = h_byp * L66 / m6 / Cp  # conv to outer duct
+            term1_out = h_byp * L88 / m8 / Cp  # conv to outer duct
     if conv_approx:
         R1 = 1 / h_byp + dw1 / 2 / kw1
-        term1_in = L66 / m6 / Cp / R1       # conv / cond to duct 2 MW
+        term1_in = L88 / m8 / Cp / R1       # conv / cond to duct 2 MW
     else:
-        term1_in = h_byp * L66 / m6 / Cp
-    term2 = 2 * k * d_byp / m6 / Cp / L66   # cond to adj bypass edge
+        term1_in = h_byp * L88 / m8 / Cp
+    term2 = 2 * k * d_byp / m8 / Cp / L88   # cond to adj bypass edge
     return 1 / (term1_in + term1_out + term2)
 
 
-def _cons6_67(m6, L66, L67, d_byp, k, Cp, h_byp, dw1, kw1, dw2, kw2,
+def _cons8_89(m8, L88, L89, d_byp, k, Cp, h_byp, dw1, kw1, dw2, kw2,
               adiabatic_duct=False, conv_approx=False):
     """dz constrant for edge byp sc touching edge, corner byp sc"""
     term1_out = 0.0
     if not adiabatic_duct:
         if conv_approx:
             R2 = 1 / h_byp + dw2 / 2 / kw2
-            term1_out = L66 / m6 / Cp / R2  # conv / cond to duct 2 MW
+            term1_out = L88 / m8 / Cp / R2  # conv / cond to duct 2 MW
         else:
-            term1_out = h_byp * L66 / m6 / Cp  # conv to outer duct
+            term1_out = h_byp * L88 / m8 / Cp  # conv to outer duct
     if conv_approx:
         R1 = 1 / h_byp + dw1 / 2 / kw1
-        term1_in = L66 / m6 / Cp / R1      # conv / cond to duct 1 MW
+        term1_in = L88 / m8 / Cp / R1      # conv / cond to duct 1 MW
     else:
-        term1_in = h_byp * L66 / m6 / Cp
-    term2 = k * d_byp / m6 / Cp / L66   # cond to adj bypass edge
-    term3 = k * d_byp / m6 / Cp / L67   # cond to adj bypass corner
+        term1_in = h_byp * L88 / m8 / Cp
+    term2 = k * d_byp / m8 / Cp / L88   # cond to adj bypass edge
+    term3 = k * d_byp / m8 / Cp / L89   # cond to adj bypass corner
     return 1 / (term1_out + term1_in + term2 + term3)
 
 
-def _cons6_77(m6, L66, L67, d_byp, k, Cp, h_byp, dw1, kw1, dw2, kw2,
+def _cons8_99(m8, L88, L89, d_byp, k, Cp, h_byp, dw1, kw1, dw2, kw2,
               adiabatic_duct=False, conv_approx=False):
     """dz constrant for edge bypass sc touching 2 corner bypass sc"""
     term1_out = 0.0
     if not adiabatic_duct:
         if conv_approx:
             R2 = 1 / h_byp + dw2 / 2 / kw2
-            term1_out = L66 / m6 / Cp / R2  # conv / cond to duct 2 MW
+            term1_out = L88 / m8 / Cp / R2  # conv / cond to duct 2 MW
         else:
-            term1_out = h_byp * L66 / m6 / Cp  # conv to outer duct
+            term1_out = h_byp * L88 / m8 / Cp  # conv to outer duct
     if conv_approx:
         R1 = 1 / h_byp + dw1 / 2 / kw1
-        term1_in = L66 / m6 / Cp / R1      # conv / cond to duct 1 MW
+        term1_in = L88 / m8 / Cp / R1      # conv / cond to duct 1 MW
     else:
-        term1_in = h_byp * L66 / m6 / Cp
-    term2 = 2 * k * d_byp / m6 / Cp / L67   # cond to adj bypass corner
+        term1_in = h_byp * L88 / m8 / Cp
+    term2 = 2 * k * d_byp / m8 / Cp / L89   # cond to adj bypass corner
     return 1 / (term1_in + term1_out + term2)
 
 
-def _cons7_66(m7, L67, d_byp, wc_in, wc_out, k, Cp, h_byp, dw1, kw1,
+def _cons9_88(m9, L89, d_byp, wc_in, wc_out, k, Cp, h_byp, dw1, kw1,
               dw2, kw2, adiabatic_duct=False, conv_approx=False):
     """dz constraint for corner bypass sc touching 2 edge bypass sc"""
     term1_out = 0.0
     if not adiabatic_duct:
         if conv_approx:
             R2 = 1 / h_byp + dw2 / 2 / kw2
-            term1_out = 2 * wc_out / m7 / Cp / R2  # conv / cond to duct 2 MW
+            term1_out = 2 * wc_out / m9 / Cp / R2  # conv / cond to duct 2 MW
         else:
-            term1_out = h_byp * 2 * wc_out / m7 / Cp  # conv to outer duct
+            term1_out = h_byp * 2 * wc_out / m9 / Cp  # conv to outer duct
     if conv_approx:
         R1 = 1 / h_byp + dw1 / 2 / kw1
-        term1_in = 2 * wc_in / m7 / Cp / R1     # conv / cond to duct 1 MW
+        term1_in = 2 * wc_in / m9 / Cp / R1     # conv / cond to duct 1 MW
     else:
-        term1_in = h_byp * 2 * wc_in / m7 / Cp
-    # term1 = 2 * (wc_in + wc_out) * h_byp / m7 / Cp  # conv in/out duct
-    term2 = 2 * k * d_byp / m7 / Cp / L67   # cond to adj bypass edge
+        term1_in = h_byp * 2 * wc_in / m9 / Cp
+    # term1 = 2 * (wc_in + wc_out) * h_byp / m9 / Cp  # conv in/out duct
+    term2 = 2 * k * d_byp / m9 / Cp / L89   # cond to adj bypass edge
     return 1 / (term1_in + term1_out + term2)
 
 
-def _cons7_77(m7, L77, d_byp, wc_in, wc_out, k, Cp, h_byp, dw1, kw1,
+def _cons9_99(m9, L99, d_byp, wc_in, wc_out, k, Cp, h_byp, dw1, kw1,
               dw2, kw2, adiabatic_duct=False, conv_approx=False):
     """dz constraint for corner bypass sc touching 2 corner bypass sc"""
     term1_out = 0.0
     if not adiabatic_duct:
         if conv_approx:
             R2 = 1 / h_byp + dw2 / 2 / kw2
-            term1_out = 2 * wc_out / m7 / Cp / R2  # conv / cond to duct 2 MW
+            term1_out = 2 * wc_out / m9 / Cp / R2  # conv / cond to duct 2 MW
         else:
-            term1_out = h_byp * 2 * wc_out / m7 / Cp  # conv to outer duct
+            term1_out = h_byp * 2 * wc_out / m9 / Cp  # conv to outer duct
     if conv_approx:
         R1 = 1 / h_byp + dw1 / 2 / kw1
-        term1_in = 2 * wc_in / m7 / Cp / R1     # conv / cond to duct 1 MW
+        term1_in = 2 * wc_in / m9 / Cp / R1     # conv / cond to duct 1 MW
     else:
-        term1_in = h_byp * 2 * wc_in / m7 / Cp
-    # term1 = 2 * (wc_in + wc_out) * h_byp / m7 / Cp  # conv in/out duct
-    term2 = 2 * k * d_byp / m7 / Cp / L77   # cond to adj bypass corner
+        term1_in = h_byp * 2 * wc_in / m9 / Cp
+    # term1 = 2 * (wc_in + wc_out) * h_byp / m9 / Cp  # conv in/out duct
+    term2 = 2 * k * d_byp / m9 / Cp / L99   # cond to adj bypass corner
     return 1 / (term1_in + term1_out + term2)
 
 
