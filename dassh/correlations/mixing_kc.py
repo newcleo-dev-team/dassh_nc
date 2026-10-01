@@ -90,10 +90,16 @@ def calculate_mixing_params(rr):
     # Calculate the turbulent mixing parameter based on Pr and Re
     Pr = nusselt_db._calc_prandtl(rr.coolant)
     # Re = rr.coolant_int_params['Re']
+    # The Kim and Chung compute the mixing as a function of only interior SCs.
+    # However, in some extreme configuration with the inner hole, there could
+    # be no interior at all. Need to stop the simulation in such cases.
+    if rr.subchannel.n_sc['coolant']['interior'] < 1:
+        rr.log('error', 'Kim and Chung turbulent mixing correlation cannot be'
+                        'used if no interior SCs are available')
     Re = rr.coolant_int_params['Re_sc'][0]
     Stg = _calculate_stg(Pr, Re, C1, C2, C3, C4)
     #
-    return Stg * rr.L[0][0], 0.0
+    return Stg * rr.L[0][0], 0.0, 0.0
 
 
 def _calculate_stg(Pr, Re, C1, C2, C3, C4):

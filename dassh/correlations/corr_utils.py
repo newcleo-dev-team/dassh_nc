@@ -24,34 +24,45 @@ import numpy as np
 
 def calculate_wproj(corr, P, D, Dw):
     """Calculate area projection of wire wrap into subchannel"""
-    wproj = np.zeros(3)
+    wproj = np.zeros(5)
     wproj[2] = (np.pi * (D + Dw) * Dw / 6)
     if corr == 'mit':
         wproj[0] = np.pi * (P - 0.5 * D)**2 / 6 - np.pi * D**2 / 24
         wproj[1] = np.pi * (0.25 * (0.5 * D + Dw)**2 - 0.0625 * D**2)
+        wproj[3] = wproj[1]
+        wproj[4] = wproj[2] + wproj[3] * 0.5
     else:
         wproj[0] = np.pi * (D + Dw) * Dw / 6
         wproj[1] = np.pi * (D + Dw) * Dw / 4
+        wproj[3] = wproj[1]
+        wproj[4] = np.pi * (D + Dw) * Dw * 5 / 24
     return wproj
 
 
-def calculate_bare_rod_sc_area(corr, P, D, Dw, ep=None):
+def calculate_bare_rod_sc_area(corr, P, D, Dw, ep=None,
+                               inner_ep=None, wdcorner=None):
     """Calculate subchannel area without wire wrap"""
-    a_bare = np.zeros(3)
+    a_bare = np.zeros(5)
     a_bare[0] = np.sqrt(3) * 0.25 * P**2 - 0.125 * np.pi * D**2
     if corr == 'mit':
         a_bare[1] = P * (0.5 * D + Dw) - 0.125 * np.pi * D**2
+        a_bare[3] = P * (0.5 * D + Dw) - 0.125 * np.pi * D**2
     else:
         assert ep is not None
         a_bare[1] = P * (ep - 0.5 * D) - np.pi * D**2 / 8
         a_bare[2] = (ep - 0.5 * D)**2 / np.sqrt(3) - np.pi * D**2 / 24
+        a_bare[3] = P * (inner_ep - 0.5 * D) - np.pi * D**2 / 8
+        a_bare[4] = (P + wdcorner) * (inner_ep - 0.5 * D) * 0.5 - \
+            np.pi * 5 / 48 * D**2
     return a_bare
 
 
-def calculate_bare_rod_wp(P, D, ep):
+def calculate_bare_rod_wp(P, D, ep, wdcorner):
     """Calculate subchannel wetted perimeter without wire wrap"""
-    wp = np.zeros(3)
+    wp = np.zeros(5)
     wp[0] = np.pi * D / 2
     wp[1] = P + np.pi * D / 2
     wp[2] = np.pi * D / 6 + 2 * (ep - 0.5 * D) / np.sqrt(3)
+    wp[3] = P + np.pi * D / 2
+    wp[4] = wdcorner + np.pi * D * 5 / 12
     return wp

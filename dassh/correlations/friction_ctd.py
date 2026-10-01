@@ -157,32 +157,41 @@ def _calc_sc_ff_const(asm, wd, ws):
     a1 = get_ff_poly_constants(asm.pin_pitch / asm.pin_diameter)
     # Edge, corner subchannels
     a23 = get_ff_poly_constants(asm.edge_pitch / asm.pin_diameter)
-
+    # Parameters for inner hole
+    if asm.nsc_cool_type > 3:
+        w2d_inner_m1 = asm.edge_inner_pitch / asm.pin_diameter - 1
+        a45 = get_ff_poly_constants(asm.edge_inner_pitch / asm.pin_diameter)
     # Calculate bare rod friction factors
     Cfb = {}
     for r in ['laminar', 'turbulent']:
-        Cfb[r] = np.zeros(3)
+        Cfb[r] = np.zeros(asm.nsc_cool_type)
         Cfb[r][0] = (a1[r][0, 0] + a1[r][0, 1] * p2d_m1
                      + a1[r][0, 2] * p2d_m1**2)
         Cfb[r][1] = (a23[r][1, 0] + a23[r][1, 1] * w2d_m1
                      + a23[r][1, 2] * w2d_m1**2)
         Cfb[r][2] = (a23[r][2, 0] + a23[r][2, 1] * w2d_m1
                      + a23[r][2, 2] * w2d_m1**2)
-
+        if asm.nsc_cool_type > 3:
+            Cfb[r][3] = (a45[r][1, 0] + a45[r][1, 1] * w2d_inner_m1
+                         + a45[r][1, 2] * w2d_inner_m1**2)
+            # Corner associated to coeff of edge
+            Cfb[r][4] = (a45[r][1, 0] + a45[r][1, 1] * w2d_inner_m1
+                         + a45[r][1, 2] * w2d_inner_m1**2)
     # Calculate wire-wrapped friction factors
     Cf = {}
     if asm.wire_diameter == 0.0:
         Cf = Cfb
     else:
         bwp = corr_utils.calculate_bare_rod_wp(
-            asm.pin_pitch, asm.pin_diameter, asm.edge_pitch)
+            asm.pin_pitch, asm.pin_diameter, asm.edge_pitch,
+            asm.d['wcorner-inner'])
         wproj = corr_utils.calculate_wproj(
             'ctd', asm.pin_pitch, asm.pin_diameter, asm.wire_diameter)
         b_area = corr_utils.calculate_bare_rod_sc_area(
             'ctd', asm.pin_pitch, asm.pin_diameter, asm.wire_diameter,
-            asm.edge_pitch)
+            asm.edge_pitch, asm.edge_inner_pitch, asm.d['wcorner-inner'])
         for r in ['laminar', 'turbulent']:
-            Cf[r] = np.zeros(3)
+            Cf[r] = np.zeros(asm.nsc_cool_type)
             # Interior
             Cf[r][0] = (Cfb[r][0] * (bwp[0] / asm.params['wp'][0])
                         + (wd[r] * (3 * wproj[0] / b_area[0])
@@ -198,6 +207,14 @@ def _calc_sc_ff_const(asm, wd, ws):
             Cf[r][2] = Cfb[r][2]
             Cf[r][2] *= (1 + (ws[r] * (wproj[2] / b_area[2])
                          * np.tan(asm.params['theta'])**2))**_exp
+            if asm.nsc_cool_type > 3:
+                Cf[r][3] = Cfb[r][3]
+                Cf[r][3] *= (1 + (ws[r] * (wproj[3] / b_area[3])
+                                    * np.tan(asm.params['theta'])**2))**_exp
+                # Corner
+                Cf[r][4] = Cfb[r][4]
+                Cf[r][4] *= (1 + (ws[r] * (wproj[4] / b_area[4])
+                                * np.tan(asm.params['theta'])**2))**_exp
     return Cf
 
 
@@ -306,8 +323,8 @@ def _calc_cfb(asm_obj, subchannel_cf):
         _exp1 = MM[r] / (2 - MM[r])
         _exp2 = 1 / (MM[r] - 2)
         _exp3 = MM[r] - 2
-        for i in range(3):
-            sci = ['interior', 'edge', 'corner'][i]
+        for i in range(asm_obj.nsc_cool_type):
+            sci = ['interior', 'edge', 'corner', 'inner-edge', 'inner-corner'][i]
             NAi = (asm_obj.subchannel.n_sc['coolant'][sci]
                    * asm_obj.params['area'][i]
                    / asm_obj.bundle_params['area'])

@@ -57,8 +57,10 @@ def calculate_mixing_params(asm_obj):
     try:
         eddy = asm_obj.corr_constants['mix']['eddy']
         swirl = asm_obj.corr_constants['mix']['swirl']
+        swirl_inner = asm_obj.corr_constants['mix']['swirl-inner']
     except (KeyError, AttributeError):
-        eddy, swirl = ctd_mix.calculate_laminar_turbulent_params(asm_obj)
+        eddy, swirl, swirl_inner = ctd_mix.calculate_laminar_turbulent_params(
+            asm_obj)
 
     # Calculate parameters based on subchannel Reynolds number
     try:
@@ -71,9 +73,11 @@ def calculate_mixing_params(asm_obj):
     if asm_obj.coolant_int_params['Re'] <= Re_bl:
         eddy_diffusivity = eddy['laminar']
         swirl_velocity = swirl['laminar']
+        swirl_velocity_in = swirl_inner['laminar']
     elif asm_obj.coolant_int_params['Re'] >= Re_bt:
         eddy_diffusivity = eddy['turbulent']
         swirl_velocity = swirl['turbulent']
+        swirl_velocity_in = swirl_inner['turbulent']
     else:  # Transition regime; use intermittency factor
         x = calc_sc_intermittency_factors(asm_obj, Re_bl, Re_bt)
         eddy_diffusivity = eddy['turbulent'] - eddy['laminar']
@@ -82,7 +86,13 @@ def calculate_mixing_params(asm_obj):
         swirl_velocity = swirl['turbulent'] - swirl['laminar']
         swirl_velocity *= x[1]**(2 / 3.0)
         swirl_velocity += swirl['laminar']
-    return eddy_diffusivity * asm_obj.L[0][0], swirl_velocity
+        if asm_obj.nsc_cool_type > 3:
+            swirl_velocity_in = swirl_inner['turbulent']-swirl_inner['laminar']
+            swirl_velocity_in *= x[4]**(2 / 3.0)
+            swirl_velocity_in += swirl_inner['laminar']
+        else:
+            swirl_velocity_in = 0.
+    return eddy_diffusivity * asm_obj.L[0][0], swirl_velocity, swirl_velocity_in
 
 
 def calc_sc_intermittency_factors(asm_obj, Re_bL, Re_bT):
@@ -156,6 +166,6 @@ def calc_constants(asm_obj):
     """Calculate and store constants for UCTD mixing parameters so
     I don't have to recalculate them at every step"""
     c = uctd_fs.calc_constants(asm_obj)
-    c['eddy'], c['swirl'] = \
+    c['eddy'], c['swirl'], c['swirl-inner'] = \
         ctd_mix.calculate_laminar_turbulent_params(asm_obj)
     return c

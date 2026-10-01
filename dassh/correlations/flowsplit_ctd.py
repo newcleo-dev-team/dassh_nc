@@ -125,6 +125,11 @@ def _calc_bundle_plus_grid_flow_split(rr, Cf_dict, _lambda=None):
               * rr.params['area'][1],
               rr.subchannel.n_sc['coolant']['corner']
               * rr.params['area'][2]]
+        if rr.rings_removed > 0:
+            na.append(rr.subchannel.n_sc['coolant']['inner-edge']
+                      * rr.params['area'][3])
+            na.append(rr.subchannel.n_sc['coolant']['inner-corner']
+                      * rr.params['area'][4])
 
     # Subchannel constants
     s = [na_x / rr.bundle_params['area'] for na_x in na]
@@ -187,6 +192,11 @@ def _calc_transition_flowsplit(asm_obj, _lambda=None):
               * asm_obj.params['area'][1],
               asm_obj.subchannel.n_sc['coolant']['corner']
               * asm_obj.params['area'][2]]
+        if asm_obj.rings_removed > 0:
+            na.append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
+                      * asm_obj.params['area'][3])
+            na.append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
+                      * asm_obj.params['area'][4])
     # Subchannel constants
     s = [na_x / asm_obj.bundle_params['area'] for na_x in na]
     Re_iL = asm_obj.corr_constants['ff']['Re_bnds'][0] \
@@ -246,20 +256,18 @@ def _iterate(Re, s, De_i, De_b, Re_iL, Re_iT, Cf_iL, Cf_iT,
         Exponent fitted from data, necessary only for UCTD (default=None)
     """
     if GLC_i is None:
-        GLC_i = np.zeros(3)
+        GLC_i = np.zeros_like(s)
         stop_msg = "CTD transition flow split iteration limit reached"
     else:
         stop_msg = "CTD bundle + grid flow split iteration limit reached"
-    Re_i = np.array([Re, Re, Re])
-    x1 = 1
-    x2 = 1
-    x3 = 1
+    Re_i = Re * np.ones_like(s)
+    x_i = np.ones_like(s)
     Dei_over_Deb = De_i / De_b
     L_over_Dei = L / De_i
     log10_ReiT_over_ReiL = np.log10(Re_iT / Re_iL)
     # ITERATE
     for iteration in range(100):
-        Re_i = Re * np.array([x1, x2, x3]) * Dei_over_Deb
+        Re_i = Re * x_i * Dei_over_Deb
         INT_i = np.log10(Re_i / Re_iL) / log10_ReiT_over_ReiL
         INT_i[INT_i > 1.0] = 1.0
         INT_i[INT_i < 0.0] = 0.0
@@ -267,17 +275,15 @@ def _iterate(Re, s, De_i, De_b, Re_iL, Re_iT, Cf_iL, Cf_iT,
         ff_iT = Cf_iT / Re_i**_M['turbulent']
         ff = _calc_ffb_tr(ff_iL, ff_iT, INT_i, _GAMMA, lam)
         t = ff * L_over_Dei + GLC_i
-        x1x2 = np.sqrt(t[1] / t[0])
-        x3x2 = np.sqrt(t[1] / t[2])
-        x2_new = 1 / (s[1] + s[0] * x1x2 + s[2] * x3x2)
-        x1_new = x1x2 * x2_new
-        x3_new = x3x2 * x2_new
-        if abs(x2_new - x2) < 1e-5:
-            return x1_new, x2_new, x3_new
+        xix2 = np.sqrt(t[1] / t)
+        xix2[1] = 1.0
+        x2_new = 1 / np.sum(s * xix2)
+        xi_new = xix2 * x2_new
+        xi_new[1] = x2_new
+        if abs(xi_new[1] - x_i[1]) < 1e-5:
+            return xi_new
         else:
-            x1 = x1_new
-            x2 = x2_new
-            x3 = x3_new
+            x_i = xi_new
     raise StopIteration(stop_msg)
 
 
@@ -355,7 +361,12 @@ def _calc_transition_flowsplit_APPROX(asm_obj, beta=5.0):
               * asm_obj.params['area'][1],
               asm_obj.subchannel.n_sc['coolant']['corner']
               * asm_obj.params['area'][2]]
-    flow_split = np.zeros(3)
+        if asm_obj.rings_removed > 0:
+            na.append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
+                        * asm_obj.params['area'][3])
+            na.append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
+                        * asm_obj.params['area'][4])
+    flow_split = np.zeros_like(na)
     intf_b = ctd.calc_intermittency_factor(
         asm_obj,
         asm_obj.corr_constants['ff']['Re_bnds'][0],
@@ -369,12 +380,11 @@ def _calc_transition_flowsplit_APPROX(asm_obj, beta=5.0):
                    / asm_obj.coolant_int_params['Re']**_M['turbulent']
                    )**_EXP2['turbulent']
     xratio = xratio_t[0] + beta * xratio_t[1]
-    x1x2 = xratio[1] / xratio[0]  # Equation 4.51 in Cheng 1984
-    x3x2 = xratio[1] / xratio[2]  # Equation 4.51 in Cheng 1984
-    flow_split[1] = (asm_obj.bundle_params['area']
-                     / (na[1] + x1x2 * na[0] + x3x2 * na[2]))
-    flow_split[0] = x1x2 * flow_split[1]
-    flow_split[2] = x3x2 * flow_split[1]
+    xix2 = xratio[1] / xratio  # Equation 4.51 in Cheng 1984
+    xix2[1] = 1.0
+    x2_new = (asm_obj.bundle_params['area'] / np.sum(na * xix2))
+    flow_split = xix2 * x2_new
+    flow_split[1] = x2_new
     return flow_split
 
 
@@ -405,6 +415,11 @@ def calc_constants(asm_obj):
                    * asm_obj.params['area'][1],
                    asm_obj.subchannel.n_sc['coolant']['corner']
                    * asm_obj.params['area'][2]]
+    if asm_obj.rings_removed > 0:
+        const['na'].append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
+                           * asm_obj.params['area'][3])
+        const['na'].append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
+                           * asm_obj.params['area'][4])
     # REGIME RATIO CONSTANTS
     const['xr'] = _calc_regime_ratio_constants(asm_obj, const['Cf_sc'])
     # Laminar/turbulent: constant flow split!
@@ -428,9 +443,19 @@ def _calc_regime_ratio_constants(asm_obj, Cf_sc):
         xr[k] = np.array([
             ((asm_obj.params['de'][0] / asm_obj.params['de'][1])**_EXP1[k]
              * (Cf_sc[k][1] / Cf_sc[k][0])**_EXP2[k]),
+            1.0,
             ((asm_obj.params['de'][2] / asm_obj.params['de'][1])**_EXP1[k]
              * (Cf_sc[k][1] / Cf_sc[k][2])**_EXP2[k])
         ])
+        if asm_obj.rings_removed > 0:
+            xr[k] = np.append(
+                xr[k],
+                (asm_obj.params['de'][3] / asm_obj.params['de'][1])**_EXP1[k]
+                    * (Cf_sc[k][1] / Cf_sc[k][3])**_EXP2[k])
+            xr[k] = np.append(
+                xr[k],
+                (asm_obj.params['de'][4] / asm_obj.params['de'][1])**_EXP1[k]
+                    * (Cf_sc[k][1] / Cf_sc[k][4])**_EXP2[k])
     return xr
 
 
@@ -438,11 +463,9 @@ def _calc_constant_flowsplits(asm_obj, const):
     """Laminar and turbulent flowsplits are constant"""
     fs = {}
     for k in ['laminar', 'turbulent']:
-        fs[k] = np.zeros(3)
-        fs[k][1] = (asm_obj.bundle_params['area']
-                    / (const['na'][1]
-                       + const['xr'][k][0] * const['na'][0]
-                       + const['xr'][k][1] * const['na'][2]))
-        fs[k][0] = const['xr'][k][0] * fs[k][1]
-        fs[k][2] = const['xr'][k][1] * fs[k][1]
+        fs[k] = np.zeros_like(const['na'])
+        x2 = (asm_obj.bundle_params['area']
+                / np.sum(np.array(const['na']) * const['xr'][k]))
+        fs[k] = const['xr'][k] * x2
+        fs[k][1] = x2
     return fs

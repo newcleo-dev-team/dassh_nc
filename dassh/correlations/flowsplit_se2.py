@@ -55,12 +55,18 @@ def calculate_flow_split(asm):
         return asm.corr_constants['fs']['fs']
     except (KeyError, AttributeError):
         pass  # continue onward and do the calculation
-    na1 = (asm.subchannel.n_sc['coolant']['interior']
+    ni = np.zeros_like(asm.params['area'])
+    ni[0] = (asm.subchannel.n_sc['coolant']['interior']
            * asm.params['area'][0])
-    na2 = (asm.subchannel.n_sc['coolant']['edge']
+    ni[1] = (asm.subchannel.n_sc['coolant']['edge']
            * asm.params['area'][1])
-    na3 = (asm.subchannel.n_sc['coolant']['corner']
+    ni[2] = (asm.subchannel.n_sc['coolant']['corner']
            * asm.params['area'][2])
+    if len(ni) > 3:
+        ni[3] = (asm.subchannel.n_sc['coolant']['inner-edge']
+                 * asm.params['area'][3])
+        ni[4] = (asm.subchannel.n_sc['coolant']['inner-corner']
+                 * asm.params['area'][4])
     c1 = 2200.0  # correlated constant
     c2 = 1.9  # correlated constant
     c3 = 1.2  # correlated constant
@@ -87,15 +93,15 @@ def calculate_flow_split(asm):
                * (P / hyp2)**2)
     lol = lol / c3 / (1 + (c2 * n * vtv2_gap)**2)**1.375
     # combine into flow split relationships
-    x1 = ((na1 + na2 + na3)
-          / (na1 + ((na2 + na3) * lol**0.571
+    x1 = (np.sum(ni)
+          / (ni[0] + ((np.sum(ni[1:])) * lol**0.571
                     * (asm.params['de'][1]
                        / asm.params['de'][0])**0.714)))
-    x2 = ((na1 + na2 + na3)
-          / ((na2 + na3) + (na1 * lol**-0.571
+    x2 = (np.sum(ni)
+          / ((np.sum(ni[1:])) + (ni[0] * lol**-0.571
                             * (asm.params['de'][0]
                                / asm.params['de'][1])**0.714)))
-    return np.array([x1, x2, x2])
+    return np.concatenate(([x1], [x2] * (len(ni) - 1)))
 
 
 def calc_constants(asm_obj):

@@ -52,7 +52,8 @@ def calculate_mixing_params(asm_obj, shortcut=True):
     if shortcut:
         try:
             return (asm_obj.corr_constants['mix']['eddy'],
-                    asm_obj.corr_constants['mix']['swirl'])
+                    asm_obj.corr_constants['mix']['swirl'],
+                    asm_obj.corr_constants['mix']['swirl-inner'])
         except (KeyError, AttributeError):
             pass  # continue onward and do the calculation
 
@@ -81,12 +82,12 @@ def calculate_mixing_params(asm_obj, shortcut=True):
          * (AR[1] / AS[1])**0.5
          * (D + Dw)
          / np.sqrt(np.pi**2 * (D + Dw)**2 + H**2))
-    return e, s
+    return e, s, s
 
 
 def calc_constants(asm_obj):
     """Calculate and store constants for MIT mixing parameters
     so I don't have to recalculate them at every step"""
     c = {}
-    c['eddy'], c['swirl'] = calculate_mixing_params(asm_obj)
+    c['eddy'], c['swirl'], c['swirl-inner'] = calculate_mixing_params(asm_obj)
     return c
