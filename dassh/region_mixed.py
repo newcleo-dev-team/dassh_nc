@@ -510,7 +510,7 @@ class MixedRegion(RoddedRegion):
             MEX[i] = mom_exchange
         # Swirl mixing term constants
         pin_wall_dist = np.array([self.d['pin-wall']] * 3)
-        if self.rings_removed > 0:
+        if self.nsc_cool_type > 3:
             pin_wall_dist = np.append(
                 pin_wall_dist, [self.d['pin-inner-wall']]*2)
         swirl_consts = pin_wall_dist * self.coolant_int_params['swirl']
@@ -542,7 +542,7 @@ class MixedRegion(RoddedRegion):
         swirl_ind_key = ['ind']
         swirl_type_key = ['type']
         swirl_side = [self._adj_sw]
-        if self.rings_removed > 0:
+        if self.nsc_cool_type > 3:
             swirl_ind_key.append('ind_inner')
             swirl_type_key.append('type_inner')
             swirl_side.append(self._adj_sw_inner)

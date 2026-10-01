@@ -60,8 +60,9 @@ def calculate_mixing_params(asm_obj):
     try:
         eddy = asm_obj.corr_constants['mix']['eddy']
         swirl = asm_obj.corr_constants['mix']['swirl']
+        swirl_inner = asm_obj.corr_constants['mix']['swirl-inner']
     except (KeyError, AttributeError):
-        eddy, swirl = calculate_laminar_turbulent_params(asm_obj)
+        eddy, swirl, swirl_inner = calculate_laminar_turbulent_params(asm_obj)
 
     # Calculate parameters based on subchannel Reynolds number
     try:
@@ -72,9 +73,11 @@ def calculate_mixing_params(asm_obj):
     if asm_obj.coolant_int_params['Re'] <= Re_bl:
         eddy_diffusivity = eddy['laminar']
         swirl_velocity = swirl['laminar']
+        swirl_velocity_in = swirl_inner['laminar']
     elif asm_obj.coolant_int_params['Re'] >= Re_bt:
         eddy_diffusivity = eddy['turbulent']
         swirl_velocity = swirl['turbulent']
+        swirl_velocity_in = swirl_inner['turbulent']
     else:  # Transition regime; use intermittency factor
         x = calc_sc_intermittency_factors(asm_obj, Re_bl, Re_bt)
         eddy_diffusivity = eddy['turbulent'] - eddy['laminar']
@@ -83,7 +86,13 @@ def calculate_mixing_params(asm_obj):
         swirl_velocity = swirl['turbulent'] - swirl['laminar']
         swirl_velocity *= x[1]**(2 / 3.0)
         swirl_velocity += swirl['laminar']
-    return eddy_diffusivity * asm_obj.L[0][0], swirl_velocity
+        if asm_obj.nsc_cool_type > 3:
+            swirl_velocity_in = swirl_inner['turbulent']-swirl_inner['laminar']
+            swirl_velocity_in *= x[4]**(2 / 3.0)
+            swirl_velocity_in += swirl_inner['laminar']
+        else:
+            swirl_velocity_in = 0.
+    return eddy_diffusivity * asm_obj.L[0][0], swirl_velocity, swirl_velocity_in
 
 
 def calc_sc_intermittency_factors(asm_obj, Re_bL, Re_bT):
@@ -157,13 +166,16 @@ def calculate_laminar_turbulent_params(asm_obj):
     """Calculate laminar and turbulent regime mixing params"""
     eddy = {}
     swirl = {}
+    swirl_inner = {}
     cm, cs = calculate_mixing_param_constants(asm_obj)
     # Calculate params in laminar and turbulent regimes
     AS = corr_utils.calculate_bare_rod_sc_area('ctd',
                                                asm_obj.pin_pitch,
                                                asm_obj.pin_diameter,
                                                asm_obj.wire_diameter,
-                                               asm_obj.edge_pitch)
+                                               asm_obj.edge_pitch,
+                                               asm_obj.edge_inner_pitch,
+                                               asm_obj.d['wcorner-inner'])
     AR = corr_utils.calculate_wproj('ctd',
                                     asm_obj.pin_pitch,
                                     asm_obj.pin_diameter,
@@ -173,7 +185,9 @@ def calculate_laminar_turbulent_params(asm_obj):
                    * np.sqrt(AR[0] / AS[0]))
         swirl[r] = (cs[r] * np.tan(asm_obj.params['theta'])
                     * np.sqrt(AR[1] / AS[1]))
-    return eddy, swirl
+        swirl_inner[r] = (cs[r] * np.tan(asm_obj.params['theta'])
+                          * np.sqrt(np.abs(AR[3] / AS[3])))
+    return eddy, swirl, swirl_inner
 
 
 def calculate_mixing_param_constants(asm_obj):
@@ -230,5 +244,6 @@ def calc_constants(asm_obj):
 
     c = {}
     c['Re_bnds'] = ctd_ff.calculate_Re_bounds(asm_obj)
-    c['eddy'], c['swirl'] = calculate_laminar_turbulent_params(asm_obj)
+    c['eddy'], c['swirl'], c['swirl-inner'] = \
+        calculate_laminar_turbulent_params(asm_obj)
     return c

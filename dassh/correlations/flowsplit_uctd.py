@@ -93,7 +93,11 @@ def calc_constants(asm_obj):
                    * asm_obj.params['area'][1],
                    asm_obj.subchannel.n_sc['coolant']['corner']
                    * asm_obj.params['area'][2]]
-
+    if asm_obj.nsc_cool_type > 3:
+        const['na'].append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
+                           * asm_obj.params['area'][3])
+        const['na'].append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
+                           * asm_obj.params['area'][4])
     # REGIME RATIO CONSTANTS
     const['xr'] = fs_ctd._calc_regime_ratio_constants(asm_obj, const['Cf_sc'])
 

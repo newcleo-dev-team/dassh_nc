@@ -53,30 +53,24 @@ def calculate_flow_split(asm_obj, shortcut=True):
             return asm_obj.corr_constants['fs']['fs']
         except (KeyError, AttributeError):
             pass  # continue onward and do the calculation
-
-    na1 = (asm_obj.subchannel.n_sc['coolant']['interior']
+    ni = np.zeros_like(asm_obj.params['area'])
+    ni[0] = (asm_obj.subchannel.n_sc['coolant']['interior']
            * asm_obj.params['area'][0])
-    na2 = (asm_obj.subchannel.n_sc['coolant']['edge']
+    ni[1] = (asm_obj.subchannel.n_sc['coolant']['edge']
            * asm_obj.params['area'][1])
-    na3 = (asm_obj.subchannel.n_sc['coolant']['corner']
+    ni[2] = (asm_obj.subchannel.n_sc['coolant']['corner']
            * asm_obj.params['area'][2])
-
-    x1 = (asm_obj.bundle_params['area']
-          / (na1 + na2 * (asm_obj.params['de'][1]
-                          / asm_obj.params['de'][0])**0.714
-             + na3 * (asm_obj.params['de'][2]
-                      / asm_obj.params['de'][0])**0.714))
-    x2 = (asm_obj.bundle_params['area']
-          / (na2 + na1 * (asm_obj.params['de'][0]
-                          / asm_obj.params['de'][1])**0.714
-             + na3 * (asm_obj.params['de'][2]
-                      / asm_obj.params['de'][1])**0.714))
-    x3 = (asm_obj.bundle_params['area']
-          / (na3 + na1 * (asm_obj.params['de'][0]
-                          / asm_obj.params['de'][2])**0.714
-             + na2 * (asm_obj.params['de'][1]
-                      / asm_obj.params['de'][2])**0.714))
-    return np.array([x1, x2, x3])
+    if len(ni) > 3:
+        ni[3] = (asm_obj.subchannel.n_sc['coolant']['inner-edge']
+                 * asm_obj.params['area'][3])
+        ni[4] = (asm_obj.subchannel.n_sc['coolant']['inner-corner']
+                 * asm_obj.params['area'][4])
+    xi = np.zeros_like(ni)
+    for sc_type in range(len(ni)):
+        xi[sc_type] = (asm_obj.bundle_params['area']
+          / np.sum(ni * (
+              asm_obj.params['de'] / asm_obj.params['de'][sc_type])**0.714))
+    return xi
 
 
 def calc_constants(asm_obj):

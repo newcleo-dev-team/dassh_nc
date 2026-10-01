@@ -178,7 +178,7 @@ def calculate_bundle_friction_factor_const(asm_obj):
     """
     try:
         cf_sc = asm_obj.corr_constants['ff']['Cf_sc']
-    except (KeyError, AttributeError):
+    except (KeyError, AttributeError, TypeError):
         cf_sc = calculate_subchannel_friction_factor_const(asm_obj)
 
     return ctd._calc_cfb(asm_obj, cf_sc)

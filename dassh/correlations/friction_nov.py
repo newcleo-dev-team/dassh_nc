@@ -80,7 +80,13 @@ def calculate_bundle_friction_factor(asm_obj, flow_split=None):
                 asm_obj, shortcut=False)
     else:
         pass
-
+    # The Novendstern correlation function for friction factor computes the ff
+    # as a function of only interior SCs.
+    # However, in some extreme configuration with the inner hole, there could
+    # be no interior at all. Need to stop the simulation in such cases.
+    if asm_obj.subchannel.n_sc['coolant']['interior'] == 0:
+        asm_obj.log('error', 'Novendstern friction factor correlation cannot be'
+                    'used if no interior SCs are available')
     Re1 = asm_obj.coolant_int_params['Re'] * flow_split[0] / cc['de_ratio']
     M = (cc['C1'] + cc['C2'] * Re1**0.086 / cc['C3'])**0.885
     f_smooth = (2 * np.log10(-5.028 * np.log10(16.76 / Re1) / Re1))**-2
