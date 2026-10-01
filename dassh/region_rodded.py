@@ -3302,7 +3302,7 @@ def _calculate_int_dz(bundle, adiabatic_duct=None):
                     # Inner-edge subchannel --> inner-corner/inner-corner/edge subchannel
                     sc_code.append('4-552')
                     dz.append(_cons4_552(
-                        sc_mfr[4],
+                        sc_mfr[3],
                         bundle.L[3][1],
                         bundle.L[3][4],
                         bundle.d['pin-pin'],
