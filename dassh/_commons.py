@@ -24,7 +24,8 @@ SQRT3: float = np.sqrt(3)
 SQRT3OVER3: float = np.sqrt(3) / 3
 """Square root of 3 divided by 3"""
 
-Q_P2SC: np.ndarray = np.array([0.166666666666667, 0.25, 0.166666666666667])
+Q_P2SC: np.ndarray = np.array([
+    0.166666666666667, 0.25, 0.166666666666667, 0.25, 0.])
 """Fraction of pin surface in contact with each type of subchannel"""
 
 MATERIAL_LBH: dict[str, Type] = {
