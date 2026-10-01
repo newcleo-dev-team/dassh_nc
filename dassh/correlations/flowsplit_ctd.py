@@ -125,7 +125,7 @@ def _calc_bundle_plus_grid_flow_split(rr, Cf_dict, _lambda=None):
               * rr.params['area'][1],
               rr.subchannel.n_sc['coolant']['corner']
               * rr.params['area'][2]]
-        if rr.rings_removed > 0:
+        if rr.nsc_cool_type > 3:
             na.append(rr.subchannel.n_sc['coolant']['inner-edge']
                       * rr.params['area'][3])
             na.append(rr.subchannel.n_sc['coolant']['inner-corner']
@@ -192,7 +192,7 @@ def _calc_transition_flowsplit(asm_obj, _lambda=None):
               * asm_obj.params['area'][1],
               asm_obj.subchannel.n_sc['coolant']['corner']
               * asm_obj.params['area'][2]]
-        if asm_obj.rings_removed > 0:
+        if asm_obj.nsc_cool_type > 3:
             na.append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
                       * asm_obj.params['area'][3])
             na.append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
@@ -260,7 +260,6 @@ def _iterate(Re, s, De_i, De_b, Re_iL, Re_iT, Cf_iL, Cf_iT,
         stop_msg = "CTD transition flow split iteration limit reached"
     else:
         stop_msg = "CTD bundle + grid flow split iteration limit reached"
-    Re_i = Re * np.ones_like(s)
     x_i = np.ones_like(s)
     Dei_over_Deb = De_i / De_b
     L_over_Dei = L / De_i
@@ -361,7 +360,7 @@ def _calc_transition_flowsplit_APPROX(asm_obj, beta=5.0):
               * asm_obj.params['area'][1],
               asm_obj.subchannel.n_sc['coolant']['corner']
               * asm_obj.params['area'][2]]
-        if asm_obj.rings_removed > 0:
+        if asm_obj.nsc_cool_type > 3:
             na.append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
                         * asm_obj.params['area'][3])
             na.append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
@@ -415,7 +414,7 @@ def calc_constants(asm_obj):
                    * asm_obj.params['area'][1],
                    asm_obj.subchannel.n_sc['coolant']['corner']
                    * asm_obj.params['area'][2]]
-    if asm_obj.rings_removed > 0:
+    if asm_obj.nsc_cool_type > 3:
         const['na'].append(asm_obj.subchannel.n_sc['coolant']['inner-edge']
                            * asm_obj.params['area'][3])
         const['na'].append(asm_obj.subchannel.n_sc['coolant']['inner-corner']
@@ -447,7 +446,7 @@ def _calc_regime_ratio_constants(asm_obj, Cf_sc):
             ((asm_obj.params['de'][2] / asm_obj.params['de'][1])**_EXP1[k]
              * (Cf_sc[k][1] / Cf_sc[k][2])**_EXP2[k])
         ])
-        if asm_obj.rings_removed > 0:
+        if asm_obj.nsc_cool_type > 3:
             xr[k] = np.append(
                 xr[k],
                 (asm_obj.params['de'][3] / asm_obj.params['de'][1])**_EXP1[k]

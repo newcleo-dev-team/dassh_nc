@@ -175,8 +175,7 @@ def _calc_sc_ff_const(asm, wd, ws):
             Cfb[r][3] = (a45[r][1, 0] + a45[r][1, 1] * w2d_inner_m1
                          + a45[r][1, 2] * w2d_inner_m1**2)
             # Corner associated to coeff of edge
-            Cfb[r][4] = (a45[r][1, 0] + a45[r][1, 1] * w2d_inner_m1
-                         + a45[r][1, 2] * w2d_inner_m1**2)
+            Cfb[r][4] = Cfb[r][3]
     # Calculate wire-wrapped friction factors
     Cf = {}
     if asm.wire_diameter == 0.0:
