@@ -483,7 +483,7 @@ class AssemblyPlot(object):
             xy = np.array([0.0, 0.0])
             if xy_shift is not None:
                 xy = xy_shift
-            # Outer inner shaft wall: plot using gray hexagon
+            # Outer wall of inner hole: plot using gray hexagon
             rad = self.duct['ftf-inner'] / np.sqrt(3)
             duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
             duct = mpl.collections.PatchCollection(
@@ -1164,7 +1164,7 @@ class SingleNodePlot(AssemblyPlot):
             duct.set_array(np.array([data]))
         ax.add_collection(duct)
         if self.has_hole:
-            # Outer inner shaft wall: plot using gray hexagon
+            # Outer wall of inner hole: plot using gray hexagon
             rad = self.duct['ftf-inner'] / np.sqrt(3)
             duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
             duct = mpl.collections.PatchCollection(
@@ -1214,7 +1214,7 @@ class SingleNodePlot(AssemblyPlot):
             duct, facecolor=color, linewidth=lw, edgecolor='k')
         ax.add_collection(duct)
         if self.has_hole:
-            # Outer inner shaft wall: plot using gray hexagon
+            # Outer wall of inner hole: plot using gray hexagon
             rad = self.duct['ftf-inner'] / np.sqrt(3)
             duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
             duct = mpl.collections.PatchCollection(
