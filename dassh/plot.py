@@ -480,9 +480,6 @@ class AssemblyPlot(object):
                 duct, facecolor='1.0', linewidth=lw, edgecolor='k')
             ax.add_collection(duct)
         if self.has_hole:
-            xy = np.array([0.0, 0.0])
-            if xy_shift is not None:
-                xy = xy_shift
             # Outer wall of inner hole: plot using gray hexagon
             rad = self.duct['ftf-inner'] / np.sqrt(3)
             duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
@@ -612,10 +609,10 @@ class SubchannelPlot(AssemblyPlot):
         # 3. Add interior channels (triangles)
         ax = self._add_int_sc(ax, data, xy_shift, **patch_kwargs)
 
-        # 4. Optinally include inner corner, inner edge SCs
+        # 4. Optionally include inner corner, inner edge SCs
         if self.has_hole:
-            ax = self._add_inner_corner_sc(ax, data, **patch_kwargs)
-            ax = self._add_inner_edge_sc(ax, data, **patch_kwargs)
+            ax = self._add_inner_corner_sc(ax, data, xy_shift, **patch_kwargs)
+            ax = self._add_inner_edge_sc(ax, data, xy_shift, **patch_kwargs)
 
         # 5. If requested, add pins
         if kwargs.get('pins'):
@@ -688,7 +685,7 @@ class SubchannelPlot(AssemblyPlot):
         # 3. Add interior channels (triangles)
         ax = self._add_int_sc(ax, data, **patch_kwargs)
 
-        # 4. Optinally include inner corner, inner edge SCs
+        # 4. Optionally include inner corner, inner edge SCs
         if self.has_hole:
             ax = self._add_inner_corner_sc(ax, data, **patch_kwargs)
             ax = self._add_inner_edge_sc(ax, data, **patch_kwargs)
@@ -745,14 +742,13 @@ class SubchannelPlot(AssemblyPlot):
         Returns
         -------
         matplotlib.axes.Axes object
-            With edge subchannel temperatures added
+            With inner-corner subchannel temperatures added
 
         Notes
         -----
-        Inner-corner subchannels are plotted with trapezoid. The construction
-        of the SC is done using local vertices coordinates that are then
-        translated to the SC centroid coordinate and rotated according to the
-        hexagon side.
+        Inner-corner subchannels are plotted as trapezoid. The construction of
+        the SC relies on local vertex coordinates that are then shifted to the
+        SC centroid coordinates and rotated according to the hexagon side.
         """
         xy = self.sc['xy'][np.where(self.sc['type'] == 4)]
         if xy_shift is not None:
@@ -829,11 +825,11 @@ class SubchannelPlot(AssemblyPlot):
         Returns
         -------
         matplotlib.axes.Axes object
-            With edge subchannel temperatures added
+            With inner-edge subchannel temperatures added
 
         Notes
         -----
-        Edge subchannels are plotted with rectangles. Width is pin
+        Inner-edge subchannels are plotted with rectangles. Width is pin
         pitch, height is distance from pin center to inner wall.
         """
         xy = np.copy(self.sc['xy'][np.where(self.sc['type'] == 3)])
@@ -847,8 +843,8 @@ class SubchannelPlot(AssemblyPlot):
         # than center - need to shift each rectangle based on angle.
         dy = self.sc['radius'][3][0] * 0.5
         dx = self.sc['radius'][3][1] * 0.5
-        # delta for each coordinate retrieved from subchannel X,Y coodinates
-        # calculation
+        # Retrieve correct dx, dy displacements from the same procedure adopted
+        # in Subchannel._find_inner_sc_xy method
         d_edge = np.sqrt(dy**2 + dx**2)
         theta = np.arcsin(dy / d_edge)
         _edge_angle = np.array(self.sc['angle'][1]) * np.pi / 180 + np.pi / 2
