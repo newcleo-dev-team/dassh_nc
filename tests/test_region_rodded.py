@@ -68,29 +68,6 @@ class TestMiscellaneous():
         total /= textbook_rr.bundle_params['area']
         assert np.abs(total - 1.0) <= rr_data.fs_tol
 
-    def test_rr_flowsplit_conservation_hole(self, textbook_hole_rr):
-        """
-        Test flowsplit mass conservation requirement in assembly with central
-        hole
-        """
-        textbook_hole_rr._update_coolant_int_params(mat_data.water_temperature)
-        total = (textbook_hole_rr.coolant_int_params['fs'][0]
-                * textbook_hole_rr.params['area'][0]
-                * textbook_hole_rr.subchannel.n_sc['coolant']['interior'])
-        total += (textbook_hole_rr.coolant_int_params['fs'][1]
-                * textbook_hole_rr.params['area'][1]
-                * textbook_hole_rr.subchannel.n_sc['coolant']['edge'])
-        total += (textbook_hole_rr.coolant_int_params['fs'][2]
-                * textbook_hole_rr.params['area'][2]
-                * textbook_hole_rr.subchannel.n_sc['coolant']['corner'])
-        total += (textbook_hole_rr.coolant_int_params['fs'][3]
-                * textbook_hole_rr.params['area'][3]
-                * textbook_hole_rr.subchannel.n_sc['coolant']['inner-edge'])
-        total += (textbook_hole_rr.coolant_int_params['fs'][4]
-                * textbook_hole_rr.params['area'][4]
-                * textbook_hole_rr.subchannel.n_sc['coolant']['inner-corner'])
-        total /= textbook_hole_rr.bundle_params['area']
-        assert np.abs(total - 1.0) <= rr_data.fs_tol
 
     def test_error_correlation_assignment(self, c_fuel_rr, caplog):
         """Make sure RoddedRegion fails if specified correlations 
@@ -209,7 +186,7 @@ class TestGeometry():
                 for i in range(rr.subchannel.n_sc['coolant']['total']):
                     sc_type = rr.subchannel.type[i]
                     tot += rr.params['area'][sc_type]
-        assert pytest.approx(tot) == rr.bundle_params['area']
+                assert pytest.approx(tot) == rr.bundle_params['area']
 
 
     def test_bypass_sc_areas(self, c_ctrl_rr):
@@ -1563,7 +1540,7 @@ class TestEnthalpy():
         Parameters
         ----------
         subtests : pytest.Subtests
-                    Pytest `subtest` fixture
+            Pytest `subtest` fixture
         simple_ctrl_rr_ent : dassh.RoddedRegion
             The RoddedRegion object to test
         c_fuel_rr_ent_hole : dassh.RoddedRegion

@@ -934,7 +934,6 @@ Notes
                         l_conv(ar.coolant_int_params['swirl'][3])))
                 else:
                     params.append(_OMIT)
-                    params.append(_OMIT)
                 params += [
                     self._ffmt0.format(ar.coolant_int_params['Re']),
                     self._ffmt.format(ar.coolant_int_params['ff']),

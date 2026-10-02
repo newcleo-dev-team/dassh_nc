@@ -166,7 +166,7 @@ class TestBalances():
         simple_ctrl_rr_mixconv : dassh.MixedRegion
             The mixed region object to test
         c_fuel_rr_mixconv_hole : dassh.MixedRegion
-            The mixed region object to test involving a geometrical
+            The mixed region object to test a geometrical
             configuration with central hole
             
         Notes:
@@ -210,7 +210,7 @@ class TestBalances():
         simple_ctrl_rr_mixconv : dassh.MixedRegion
             The mixed region object to test
         c_fuel_rr_mixconv_hole : dassh.MixedRegion
-            The mixed region object to test involving a geometrical
+            The mixed region object to test a geometrical
             configuration with central hole
         """
         for rr in [simple_ctrl_rr_mixconv, c_fuel_rr_mixconv_hole]:
@@ -255,7 +255,7 @@ class TestBalances():
         simple_ctrl_rr_mixconv : dassh.MixedRegion
             The mixed region object to test
         c_fuel_rr_mixconv_hole : dassh.MixedRegion
-            The mixed region object to test involving a geometrical
+            The mixed region object to test a geometrical
             configuration with central hole
         """
         for rr in [simple_ctrl_rr_mixconv, c_fuel_rr_mixconv_hole]:
