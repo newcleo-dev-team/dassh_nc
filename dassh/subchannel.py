@@ -935,8 +935,9 @@ class Subchannel(object):
         # coords are appended to it.
         sc_xy = np.zeros((self.n_sc['coolant']['total'], 2))
         # COOLANT SUBCHANNELS -----------------------------------------
-        sc_xy = self._find_inner_sc_xy(
-            sc_xy, pin_xy, n_rings_removed, pin_pitch, inner_hole_ftf)
+        if self.n_rings_removed > 0:
+            sc_xy = self._find_inner_sc_xy(
+                sc_xy, pin_xy, n_rings_removed, pin_pitch, inner_hole_ftf)
         sc_xy = self._find_interior_xy(sc_xy, pin_xy, pin_pitch)
         sc_xy = self._find_edge_xy(sc_xy, pin_xy, n_ring, pin_pitch,
                                    min(duct_ftf[0]))

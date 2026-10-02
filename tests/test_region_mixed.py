@@ -36,8 +36,12 @@ def _assign_parameters(rm: dassh.MixedRegion):
         rm._update_subchannels_properties(temps)
         rm._init_static_correlated_params(np.mean(temps))
         rm.coolant_int_params['eddy'] = rr_data.mixed['eddy']
-        rm.coolant_int_params['swirl'] = np.array([0, rr_data.mixed['swirl'],
-                                                   rr_data.mixed['swirl']])
+        swirl_const = np.array([0, rr_data.mixed['swirl'],
+                                rr_data.mixed['swirl']])
+        if rm.nsc_cool_type > 3:
+            swirl_const = np.append(swirl_const, [rr_data.mixed['swirl'],
+                                                  rr_data.mixed['swirl'],])
+        rm.coolant_int_params['swirl'] = swirl_const
         
 class TestBalances():
     """
@@ -134,7 +138,10 @@ class TestBalances():
         acceleration = (mfr_2 * v_2 - mfr_1 * v_1) / Ai
         # Error introduced by v_star, err = vstar * (m2 - m1) / A_i
         error_vstar = mr._vstar * (mfr_2 - mfr_1) / Ai
-        
+        # Momentum term due to eddy diffusivity
+        _, MEX = mr._calc_EEX_MEX(
+                    rr_data.enthalpy['dz'], 
+                    mr.subchannel.n_sc['coolant']['total'])
         print('total: ', gravity + friction + acceleration - error_vstar)
         print('Error introduced by v_star: ', error_vstar)
         print('gravity: ', gravity)
@@ -142,18 +149,25 @@ class TestBalances():
         print('acceleration: ', acceleration)
         print('delta_P: ', mr._delta_P)
         assert np.allclose(mr._delta_P,
-                           - gravity - friction - acceleration + error_vstar, 
+                           - gravity - friction - acceleration + error_vstar + MEX, 
                            atol=rr_data.mixed['tol'])
         
         
-    def test_EEX_MEX_balance(self, simple_ctrl_rr_mixconv: dassh.MixedRegion):
+    def test_EEX_MEX_balance(self, subtests: pytest.Subtests,
+            simple_ctrl_rr_mixconv: dassh.MixedRegion,
+            c_fuel_rr_mixconv_hole: dassh.MixedRegion):
         """
         Test that the sum of the EEX and MEX contributions is zero
         
         Parameters
         ----------
+        subtests : pytest.Subtests
+            Pytest `subtest` fixture
         simple_ctrl_rr_mixconv : dassh.MixedRegion
             The mixed region object to test
+        c_fuel_rr_mixconv_hole : dassh.MixedRegion
+            The mixed region object to test a geometrical
+            configuration with central hole
             
         Notes:
         ------
@@ -164,93 +178,111 @@ class TestBalances():
         contributions should return zero to conserve energy. 
         The MEX term is the analogous term in the momentum equation. 
         """
-        _assign_parameters(simple_ctrl_rr_mixconv)
-        EEX, MEX = simple_ctrl_rr_mixconv._calc_EEX_MEX(
-            rr_data.enthalpy['dz'], 
-            simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total'])
-        assert np.sum(EEX * simple_ctrl_rr_mixconv.params['area'][
-            simple_ctrl_rr_mixconv.subchannel.type[
-                :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]]) \
-                / rr_data.enthalpy['dz'] \
-            == pytest.approx(0.0, abs=rr_data.enthalpy['tol_balance'])
-        assert np.sum(MEX * simple_ctrl_rr_mixconv.params['area'][
-            simple_ctrl_rr_mixconv.subchannel.type[
-                :simple_ctrl_rr_mixconv.subchannel.n_sc['coolant']['total']]]) \
-                / rr_data.enthalpy['dz'] \
-            == pytest.approx(0.0, abs=rr_data.enthalpy['tol_balance'])
+        for rr in [simple_ctrl_rr_mixconv, c_fuel_rr_mixconv_hole]:
+            with subtests.test(rr=rr):
+                _assign_parameters(rr)
+                EEX, MEX = rr._calc_EEX_MEX(
+                    rr_data.enthalpy['dz'], 
+                    rr.subchannel.n_sc['coolant']['total'])
+                assert np.sum(EEX * rr.params['area'][
+                    rr.subchannel.type[
+                        :rr.subchannel.n_sc['coolant']['total']]]) \
+                        / rr_data.enthalpy['dz'] \
+                    == pytest.approx(0.0, abs=rr_data.enthalpy['tol_balance'])
+                assert np.sum(MEX * rr.params['area'][
+                    rr.subchannel.type[
+                        :rr.subchannel.n_sc['coolant']['total']]]) \
+                        / rr_data.enthalpy['dz'] \
+                    == pytest.approx(0.0, abs=rr_data.enthalpy['tol_balance'])
 
 
-    def test_axial_step_balance(self, 
-                                simple_ctrl_rr_mixconv: dassh.MixedRegion):
+    def test_axial_step_balance(self, subtests: pytest.Subtests,
+            simple_ctrl_rr_mixconv: dassh.MixedRegion,
+            c_fuel_rr_mixconv_hole: dassh.MixedRegion):
         """
         Test that the axial step energy, momentum and mass balances are
         satisfied
         
         Parameters
         ----------
+        subtests : pytest.Subtests
+            Pytest `subtest` fixture
         simple_ctrl_rr_mixconv : dassh.MixedRegion
             The mixed region object to test
+        c_fuel_rr_mixconv_hole : dassh.MixedRegion
+            The mixed region object to test a geometrical
+            configuration with central hole
         """
-        q = mock_AssemblyPower(simple_ctrl_rr_mixconv)
-        _assign_parameters(simple_ctrl_rr_mixconv)
-        # Store mass flow rates, enthalpies and velocities at state 1
-        mfr_1 = simple_ctrl_rr_mixconv.sc_mfr.copy()
-        h_1 = simple_ctrl_rr_mixconv._enthalpy.copy()
-        v_1 = simple_ctrl_rr_mixconv._sc_vel.copy()
-        # Solve for state 2
-        simple_ctrl_rr_mixconv._solve_system(rr_data.enthalpy['dz'], 
-                                             rr_data.enthalpy['dz'], 
-                                             q['pins'],
-                                             q['cool'],
-                                             ebal=False)
-        # Store mass flow rates, enthalpies and velocities at state 2 
-        mfr_2 = simple_ctrl_rr_mixconv.sc_mfr.copy()
-        h_2 = simple_ctrl_rr_mixconv._enthalpy.copy()
-        v_2 = simple_ctrl_rr_mixconv._sc_vel.copy()
-        # Conservation of energy
-        self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
-                                    simple_ctrl_rr_mixconv)
-        # Conservation of mass
-        self._assert_mass_balance(mfr_1, mfr_2)
-        # Conservation of momentum
-        self._assert_momentum_balance(v_1, v_2, simple_ctrl_rr_mixconv,
-                                      mfr_1, mfr_2)
+        for rr in [simple_ctrl_rr_mixconv, c_fuel_rr_mixconv_hole]:
+            with subtests.test(rr=rr):
+                q = mock_AssemblyPower(rr)
+                _assign_parameters(rr)
+                # Store mass flow rates, enthalpies and velocities at state 1
+                mfr_1 = rr.sc_mfr.copy()
+                h_1 = rr._enthalpy.copy()
+                v_1 = rr._sc_vel.copy()
+                # Solve for state 2
+                rr._solve_system(rr_data.enthalpy['dz'], 
+                                                    rr_data.enthalpy['dz'], 
+                                                    q['pins'],
+                                                    q['cool'],
+                                                    ebal=False)
+                # Store mass flow rates, enthalpies and velocities at state 2 
+                mfr_2 = rr.sc_mfr.copy()
+                h_2 = rr._enthalpy.copy()
+                v_2 = rr._sc_vel.copy()
+                # Conservation of energy
+                self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
+                                            rr)
+                # Conservation of mass
+                self._assert_mass_balance(mfr_1, mfr_2)
+                # Conservation of momentum
+                self._assert_momentum_balance(v_1, v_2, rr,
+                                            mfr_1, mfr_2)
 
 
-    def test_axial_step_zero_power(self, 
-                                   simple_ctrl_rr_mixconv: dassh.MixedRegion):
+    def test_axial_step_zero_power(self, subtests: pytest.Subtests,
+            simple_ctrl_rr_mixconv: dassh.MixedRegion,
+            c_fuel_rr_mixconv_hole: dassh.MixedRegion):
         """
         Test that the simulation runs with zero power and that the mass balance
         is ensured and no enthalpy variation is calculated.
 
         Parameters
         ----------
+        subtests : pytest.Subtests
+            Pytest `subtest` fixture
         simple_ctrl_rr_mixconv : dassh.MixedRegion
             The mixed region object to test
+        c_fuel_rr_mixconv_hole : dassh.MixedRegion
+            The mixed region object to test a geometrical
+            configuration with central hole
         """
-        q = mock_ZeroAssemblyPower(simple_ctrl_rr_mixconv)
-        _assign_parameters(simple_ctrl_rr_mixconv)
-        # Store mass flow rates and enthalpies at state 1
-        mfr_1 = simple_ctrl_rr_mixconv.sc_mfr.copy()
-        h_1 = simple_ctrl_rr_mixconv._enthalpy.copy()
-        # Solve for state 2
-        simple_ctrl_rr_mixconv._solve_system(rr_data.enthalpy['dz'], 
-                                             rr_data.enthalpy['dz'], 
-                                             q['pins'],
-                                             q['cool'],
-                                             ebal=False)
-        # Store mass flow rates and enthalpies at state 2 
-        mfr_2 = simple_ctrl_rr_mixconv.sc_mfr.copy()
-        h_2 = simple_ctrl_rr_mixconv._enthalpy.copy()
-        # Conservation of energy
-        self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
-                                    simple_ctrl_rr_mixconv)
-        # Conservation of mass
-        self._assert_mass_balance(mfr_1, mfr_2)
-        # Conservation of enthalpy
-        assert h_2 == pytest.approx(
-            h_1, abs=0.0, rel=rr_data.mixed['tol']
-            )
+        for rr in [simple_ctrl_rr_mixconv, c_fuel_rr_mixconv_hole]:
+            with subtests.test(rr=rr):
+                q = mock_ZeroAssemblyPower(rr)
+                _assign_parameters(rr)
+                # Store mass flow rates and enthalpies at state 1
+                mfr_1 = rr.sc_mfr.copy()
+                h_1 = rr._enthalpy.copy()
+                # Solve for state 2
+                rr._solve_system(rr_data.enthalpy['dz'], 
+                                                    rr_data.enthalpy['dz'], 
+                                                    q['pins'],
+                                                    q['cool'],
+                                                    ebal=False)
+                # Store mass flow rates and enthalpies at state 2 
+                mfr_2 = rr.sc_mfr.copy()
+                h_2 = rr._enthalpy.copy()
+                # Conservation of energy
+                self._assert_energy_balance(q, mfr_1, h_1, mfr_2, h_2, 
+                                            rr)
+                # Conservation of mass
+                self._assert_mass_balance(mfr_1, mfr_2)
+                # Conservation of enthalpy
+                assert h_2 == pytest.approx(
+                    h_1, abs=0.0, rel=rr_data.mixed['tol']
+                    )
         
 class TestMethodsMixedRegion():
     """
