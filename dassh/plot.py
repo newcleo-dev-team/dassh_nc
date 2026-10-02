@@ -848,8 +848,8 @@ class SubchannelPlot(AssemblyPlot):
         d_edge = np.sqrt(dy**2 + dx**2)
         theta = np.arcsin(dy / d_edge)
         _edge_angle = np.array(self.sc['angle'][1]) * np.pi / 180 + np.pi / 2
-        shift[:, 0] = -np.cos(2*np.pi+ np.array(_edge_angle) - theta) * d_edge
-        shift[:, 1] = -np.sin(2*np.pi+ np.array(_edge_angle) - theta) * d_edge
+        shift[:, 0] = -np.cos(np.array(_edge_angle) - theta) * d_edge
+        shift[:, 1] = -np.sin(np.array(_edge_angle) - theta) * d_edge
         edge_sq = []
         for i in range(6):
             side_xy = np.copy(xy[i * sc_edge_side:(i + 1) * sc_edge_side])
