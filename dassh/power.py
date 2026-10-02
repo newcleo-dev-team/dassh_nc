@@ -283,9 +283,10 @@ class Power(LoggedClass):
         p_lin = self.calc_total_linear_power(asm_id, str_vf)
         p_component = self.calc_component_power_dens(asm_id, str_vf)
         for comp in ['pins', 'duct', 'cool']:
-            p_component[comp].shape = (p_component[comp].shape[0],
-                                       p_component[comp].shape[1],
-                                       1)
+            p_component[comp] = np.reshape(
+                p_component[comp], (p_component[comp].shape[0],
+                                    p_component[comp].shape[1],
+                                    1))
             p_lin[comp] = np.sum(p_lin[comp], axis=0)
             power[comp] = np.zeros((sum(self.k_fints),
                                     len(eval_xy[comp]),
@@ -304,11 +305,12 @@ class Power(LoggedClass):
             # the array so it can play
             a1 = (self.mono_coeffs['n'][asm_id] * p_component[comp][0]
                   + self.mono_coeffs['g'][asm_id] * p_component[comp][1])
-            a1.shape = (a1.shape[0], 1, a1.shape[1])
+            a1 = np.reshape(a1, (a1.shape[0], 1, a1.shape[1]))
 
             # Temporary array 2: need to resize the eval_xy array to
             # add an extra dimension
-            eval_xy[comp].shape = (1, len(eval_xy[comp]), self.n_terms)
+            eval_xy[comp] = np.reshape(
+                eval_xy[comp], (1, len(eval_xy[comp]), self.n_terms))
 
             # Multiplying these arrays gives an array of the monomial
             # terms for each axial find mesh, for each pin
