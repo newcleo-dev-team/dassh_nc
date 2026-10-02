@@ -37,6 +37,8 @@ _default_color = {
     'interior': 'b',
     'edge': 'r',
     'corner': 'g',
+    'inner-edge': 'm',
+    'inner-corner': 'y',
     'duct': 'k',
     'bypass': 'c',
     'pins': '0.5'
@@ -47,8 +49,10 @@ _sc_type = {
     'interior': [1],
     'edge': [2],
     'corner': [3],
-    'duct': [4, 5],
-    'bypass': [6, 7]
+    'inner-edge': [4],
+    'inner-corner': [5],
+    'duct': [6, 7],
+    'bypass': [8, 9]
 }
 
 
@@ -348,7 +352,15 @@ class AssemblyPlot(object):
                                  [dassh_asm.rodded.L[1][1],
                                   (dassh_asm.rodded.d['pin-wall']
                                    + 0.5 * dassh_asm.rodded.pin_diameter)],
-                                 dassh_asm.rodded.d['wcorner'][0][0]]
+                                 dassh_asm.rodded.d['wcorner'][0][0],
+                            [dassh_asm.rodded.L[3][3],
+                             (dassh_asm.rodded.d['pin-inner-wall'] +
+                             0.5 * dassh_asm.rodded.pin_diameter)],
+                            [dassh_asm.rodded.L[3][3],
+                             (dassh_asm.rodded.d['pin-inner-wall'] +
+                              0.5 * dassh_asm.rodded.pin_diameter),
+                             dassh_asm.rodded.d['wcorner-inner']],
+                                 ]
             # Note: edge subchannel [1] angle needs to be in deg, not rad
             self.sc['angle'] = [[np.pi / 6, 7 * np.pi / 6],
                                 [(xi - np.pi / 2) * 180 / np.pi for xi in
@@ -364,6 +376,12 @@ class AssemblyPlot(object):
             # Duct characteristics
             self.duct = {}
             self.duct['ftf'] = dassh_asm.rodded.duct_ftf
+            # 
+            if dassh_asm.rodded.nsc_cool_type > 3:
+                self.duct['ftf-inner'] = dassh_asm.rodded.inner_hole_ftf
+                self.has_hole = True
+            else:
+                self.has_hole = False
 
     @staticmethod
     def parse_args(data, lbnd, ubnd, middle, **kwargs):
@@ -460,6 +478,13 @@ class AssemblyPlot(object):
             duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
             duct = mpl.collections.PatchCollection(
                 duct, facecolor='1.0', linewidth=lw, edgecolor='k')
+            ax.add_collection(duct)
+        if self.has_hole:
+            # Outer wall of inner hole: plot using gray hexagon
+            rad = self.duct['ftf-inner'] / np.sqrt(3)
+            duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
+            duct = mpl.collections.PatchCollection(
+                duct, facecolor=color, linewidth=lw, edgecolor='k')
             ax.add_collection(duct)
         return ax
 
@@ -584,7 +609,12 @@ class SubchannelPlot(AssemblyPlot):
         # 3. Add interior channels (triangles)
         ax = self._add_int_sc(ax, data, xy_shift, **patch_kwargs)
 
-        # 4. If requested, add pins
+        # 4. Optionally include inner corner, inner edge SCs
+        if self.has_hole:
+            ax = self._add_inner_corner_sc(ax, data, xy_shift, **patch_kwargs)
+            ax = self._add_inner_edge_sc(ax, data, xy_shift, **patch_kwargs)
+
+        # 5. If requested, add pins
         if kwargs.get('pins'):
             _alpha = 1.0
             if kwargs.get('pin_alpha'):
@@ -655,7 +685,12 @@ class SubchannelPlot(AssemblyPlot):
         # 3. Add interior channels (triangles)
         ax = self._add_int_sc(ax, data, **patch_kwargs)
 
-        # 4. If requested, add pins
+        # 4. Optionally include inner corner, inner edge SCs
+        if self.has_hole:
+            ax = self._add_inner_corner_sc(ax, data, **patch_kwargs)
+            ax = self._add_inner_edge_sc(ax, data, **patch_kwargs)
+
+        # 5. If requested, add pins
         if kwargs.get('pins'):
             _alpha = 1.0
             if kwargs.get('pin_alpha'):
@@ -681,6 +716,153 @@ class SubchannelPlot(AssemblyPlot):
         # Format figure and return
         plt.axis('off')
         ax = self._set_ax_bnds(ax)
+        return ax
+
+    def _add_inner_corner_sc(self, ax, data, xy_shift=None, **kwargs):
+        """Add inner-corner subchannels to existing axis
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes object
+            Axis on which to plot corner subchannels
+        data : numpy.ndarray
+            Subchannel temperature data for the whole assembly
+        xy_shift : numpy.ndarray (optional)
+            New coordinate center for the assembly rather than (0, 0)
+
+        kwargs
+        ------
+        cmap : matploblib.cm object
+            Color map with which to color the subchannel temperatures
+        norm : matplotlib.colors.TwoSlopNorm object, or another norm
+            option from matplotlib.colors
+        lw : float
+            Linewidth to apply to the subchannel patches
+
+        Returns
+        -------
+        matplotlib.axes.Axes object
+            With inner-corner subchannel temperatures added
+
+        Notes
+        -----
+        Inner-corner subchannels are plotted as trapezoid. The construction of
+        the SC relies on local vertex coordinates that are then shifted to the
+        SC centroid coordinates and rotated according to the hexagon side.
+        """
+        xy = self.sc['xy'][np.where(self.sc['type'] == 4)]
+        if xy_shift is not None:
+            xy += xy_shift
+
+        z = data[np.where(self.sc['type'] == 4)]
+        # Left oriented trapezoid
+        vertex_left = np.zeros((4, 2))
+        # patches.Polygon plots from the LOWER LEFT corner
+        vertex_left[0] = [0.0, 0.0]
+        vertex_left[1] = [self.sc['radius'][4][2], 0.0]
+        vertex_left[2] = [self.sc['radius'][4][2], self.sc['radius'][4][1]]
+        vertex_left[3] = [self.sc['radius'][4][2]-self.sc['radius'][4][0],
+                          self.sc['radius'][4][1]]
+        dy_corner = (self.sc['radius'][4][0]**2 + self.sc['radius'][4][0] *
+                     self.sc['radius'][4][2] + self.sc['radius'][4][2]**2)/3/(
+                         self.sc['radius'][4][2] + self.sc['radius'][4][0])
+        dx_corner = self.sc['radius'][4][1] / 3 * (
+            self.sc['radius'][4][0]+ self.sc['radius'][4][2] * 2) / (
+                self.sc['radius'][4][0] + self.sc['radius'][4][2])
+        vertex_left[:, 0] -= self.sc['radius'][4][2] - dy_corner
+        vertex_left[:, 1] -= self.sc['radius'][4][1] - dx_corner
+        # Right oriented trapezoid
+        vertex_right = np.zeros((4, 2))
+        vertex_right[0] = [0.0, 0.0]
+        vertex_right[1] = [self.sc['radius'][4][2], 0.0]
+        vertex_right[2] = [self.sc['radius'][4][0], self.sc['radius'][4][1]]
+        vertex_right[3] = [0.0, self.sc['radius'][4][1]]
+        vertex_right[:, 0] -= dy_corner
+        vertex_right[:, 1] -= self.sc['radius'][4][1] - dx_corner
+        edge_sq = []
+        vertices = np.zeros_like(vertex_right)
+        for i in range(6):
+            side_xy = xy[i * 2:(i + 1) * 2]
+            angle = self.sc['angle'][1][i] * np.pi / 180
+            # Rotate local vertices coordinates to correct orientation and
+            # translate to SC centroid position
+            vertices[:, 0] = vertex_left[:, 0]*np.cos(angle) - \
+                vertex_left[:, 1]*np.sin(angle) + side_xy[0][0]
+            vertices[:, 1] = vertex_left[:, 1]*np.cos(angle) + \
+                vertex_left[:, 0]*np.sin(angle) + side_xy[0][1]
+            edge_sq += [mpl.patches.Polygon(vertices, closed=True)]
+            vertices[:, 0] = vertex_right[:, 0]*np.cos(angle) - \
+                vertex_right[:, 1]*np.sin(angle) + side_xy[1][0]
+            vertices[:, 1] = vertex_right[:, 1]*np.cos(angle) + \
+                vertex_right[:, 0]*np.sin(angle) + side_xy[1][1]
+            edge_sq += [mpl.patches.Polygon(vertices, closed=True)]
+        edge_sq = mpl.collections.PatchCollection(edge_sq, **kwargs)
+        edge_sq.set_array(z)
+        ax.add_collection(edge_sq)
+        return ax
+
+    def _add_inner_edge_sc(self, ax, data, xy_shift=None, **kwargs):
+        """Add inner-edge subchannels to existing axis
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes object
+            Axis on which to plot corner subchannels
+        data : numpy.ndarray
+            Subchannel temperature data for the whole assembly
+        xy_shift : numpy.ndarray (optional)
+            New coordinate center for the assembly rather than (0, 0)
+
+        kwargs
+        ------
+        cmap : matploblib.cm object
+            Color map with which to color the subchannel temperatures
+        norm : matplotlib.colors.TwoSlopNorm object, or another norm
+            option from matplotlib.colors
+        lw : float
+            Linewidth to apply to the subchannel patches
+
+        Returns
+        -------
+        matplotlib.axes.Axes object
+            With inner-edge subchannel temperatures added
+
+        Notes
+        -----
+        Inner-edge subchannels are plotted with rectangles. Width is pin
+        pitch, height is distance from pin center to inner wall.
+        """
+        xy = np.copy(self.sc['xy'][np.where(self.sc['type'] == 3)])
+        if xy_shift is not None:
+            xy += xy_shift
+
+        z = data[np.where(self.sc['type'] == 3)]
+        sc_edge_side = int(len(xy) / 6)
+        shift = np.zeros((6, 2))
+        # patches.Rectangle plots from the LOWER LEFT corner rather
+        # than center - need to shift each rectangle based on angle.
+        dy = self.sc['radius'][3][0] * 0.5
+        dx = self.sc['radius'][3][1] * 0.5
+        # Retrieve correct dx, dy displacements from the same procedure adopted
+        # in Subchannel._find_inner_sc_xy method
+        d_edge = np.sqrt(dy**2 + dx**2)
+        theta = np.arcsin(dy / d_edge)
+        _edge_angle = np.array(self.sc['angle'][1]) * np.pi / 180 + np.pi / 2
+        shift[:, 0] = -np.cos(np.array(_edge_angle) - theta) * d_edge
+        shift[:, 1] = -np.sin(np.array(_edge_angle) - theta) * d_edge
+        edge_sq = []
+        for i in range(6):
+            side_xy = np.copy(xy[i * sc_edge_side:(i + 1) * sc_edge_side])
+            side_xy += shift[i]
+            edge_sq += [mpl.patches.Rectangle(
+                (xi, yi),
+                self.sc['radius'][3][0],
+                self.sc['radius'][3][1],
+                angle=self.sc['angle'][1][i])
+                for xi, yi in zip(side_xy[:, 0], side_xy[:, 1])]
+        edge_sq = mpl.collections.PatchCollection(edge_sq, **kwargs)
+        edge_sq.set_array(z)
+        ax.add_collection(edge_sq)
         return ax
 
     def _add_corner_sc(self, ax, data, xy_shift=None, **kwargs):
@@ -721,7 +903,7 @@ class SubchannelPlot(AssemblyPlot):
         # Can't actually use the corner xy positions because we're
         # plotting with these dang hexagons. Need to calculate the
         # center relative to the duct corner with the known side length
-        xy_duct_corner = self.sc['xy'][np.where(self.sc['type'] == 4)]
+        xy_duct_corner = self.sc['xy'][np.where(self.sc['type'] == 6)]
         xy_duct_corner = xy_duct_corner[:6]  # want only innermost duct
 
         # The shift (duct corner centroid to duct inner corner) will be
@@ -977,6 +1159,13 @@ class SingleNodePlot(AssemblyPlot):
         if not gray:
             duct.set_array(np.array([data]))
         ax.add_collection(duct)
+        if self.has_hole:
+            # Outer wall of inner hole: plot using gray hexagon
+            rad = self.duct['ftf-inner'] / np.sqrt(3)
+            duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
+            duct = mpl.collections.PatchCollection(
+                duct, facecolor='0.5', linewidth=lw, edgecolor='k')
+            ax.add_collection(duct)
         return ax
 
     def plot_single_color(self, ax, color, lw=0.5, xy_shift=None):
@@ -1020,6 +1209,13 @@ class SingleNodePlot(AssemblyPlot):
         duct = mpl.collections.PatchCollection(
             duct, facecolor=color, linewidth=lw, edgecolor='k')
         ax.add_collection(duct)
+        if self.has_hole:
+            # Outer wall of inner hole: plot using gray hexagon
+            rad = self.duct['ftf-inner'] / np.sqrt(3)
+            duct = [mpl.patches.RegularPolygon(xy, 6, radius=rad)]
+            duct = mpl.collections.PatchCollection(
+                duct, facecolor='0.5', linewidth=lw, edgecolor='k')
+            ax.add_collection(duct)
         return ax
 
 
@@ -1315,7 +1511,7 @@ class DuctPlot(AssemblyPlot):
         z = data[cols]
 
         # Duct edge XY positions for all ducts
-        xy = self.sc['xy'][np.where(self.sc['type'] == 3)]
+        xy = self.sc['xy'][np.where(self.sc['type'] == 5)]
 
         # Downselect to desired duct
         xy = xy[(duct_id * self.sc['n_sc']['duct']['edge']):
@@ -2206,14 +2402,21 @@ class CoreSubchannelPlot(CorePlot):
         # 3. Add interior channels (triangles)
         ax = self.scp[asm]._add_int_sc(ax, data['int'], asm_xy, **patch_kw)
 
-        # 4. If requested, add pins
+        # 4. Add Optionally inner corner, inner edge SCs
+        if self.scp[asm].has_hole:
+            ax = self.scp[asm]._add_inner_corner_sc(
+                ax, data['int'], asm_xy, **patch_kw)
+            ax = self.scp[asm]._add_inner_edge_sc(
+                ax, data['int'], asm_xy, **patch_kw)
+
+        # 5. If requested, add pins
         if pins:
             ax = self.scp[asm]._add_pins(ax, color='1.0',
                                          alpha=pin_alpha,
                                          xy_shift=asm_xy)
 
-        # 5. Add bypass gap subchannels, if present
-        # 6. Add gap subchannel temperatures
+        # 6. Add bypass gap subchannels, if present
+        # 7. Add gap subchannel temperatures
         return ax
 
 
