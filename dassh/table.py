@@ -334,7 +334,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                 self.len_conv(a.duct_ftf[-1][-1])
             dat['Outside duct thickness'][i] = \
                 self.len_conv(a.d['wall'][-1])
-            if has_hole:
+            if a.rings_removed > 0:
                 dat['Inner hole outer FTF'][i] = \
                     self.len_conv(a.inner_hole_ftf)
                 dat['Removed inner pin rings'][i] = a.rings_removed
@@ -360,7 +360,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
             dat['1. Interior'][i] = a.subchannel.n_sc['coolant']['interior']
             dat['2. Edge'][i] = a.subchannel.n_sc['coolant']['edge']
             dat['3. Corner'][i] = a.subchannel.n_sc['coolant']['corner']
-            if has_hole:
+            if a.rings_removed > 0:
                 dat['4. Inner-Edge'][i] = \
                     a.subchannel.n_sc['coolant']['inner-edge']
                 dat['5. Inner-Corner'][i] = \
@@ -385,7 +385,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                 self.len_conv(self.len_conv(a.params['area'][1]))
             dat['3. Corner area'][i] = \
                 self.len_conv(self.len_conv(a.params['area'][2]))
-            if has_hole:
+            if a.rings_removed > 0:
                 dat['4. Inner-Edge area'][i] = \
                         self.len_conv(self.len_conv(a.params['area'][3])
                                       ) if has_inner_edge else '  '+_OMIT
@@ -409,7 +409,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                                                      ) if has_int else '  '+_OMIT
             dat['2. Edge De'][i] = self.len_conv(a.params['de'][1])
             dat['3. Corner De'][i] = self.len_conv(a.params['de'][2])
-            if has_hole:
+            if a.rings_removed > 0:
                 dat['4. Inner-Edge De'][i] = self.len_conv(a.params['de'][3]) \
                     if has_inner_edge else '  '+_OMIT
                 dat['5. Inner-Corner De'][i] = self.len_conv(a.params['de'][4])
@@ -428,16 +428,18 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                 a.L[0][0]) if has_int else '  '+_OMIT
             dat['1 <--> 2'][i] = self.len_conv(
                 a.L[0][1]) if has_int else '  '+_OMIT
-            dat['2 <--> 2'][i] = self.len_conv(a.L[1][1])
+            dat['2 <--> 2'][i] = self.len_conv(a.L[1][1]) if \
+                a.subchannel.n_sc['coolant']['edge'] > 6 else '  '+_OMIT
             dat['2 <--> 3'][i] = self.len_conv(a.L[1][2])
-            dat['3 <--> 3'][i] = self.len_conv(a.L[2][2])
-            if has_hole:
+            if a.rings_removed > 0:
                 dat['4 <--> 1'][i] = self.len_conv(
                     a.L[0][3]) if has_int else '  '+_OMIT
                 dat['4 <--> 2'][i] = self.len_conv(
                     a.L[1][3]) if not has_int else '  '+_OMIT
                 dat['4 <--> 4'][i] = self.len_conv(
-                    a.L[3][3]) if has_inner_edge else '  '+_OMIT
+                    a.L[3][3]) if has_inner_edge and \
+                    a.subchannel.n_sc['coolant']['inner-edge'] > 6 \
+                    else '  '+_OMIT
                 dat['4 <--> 5'][i] = self.len_conv(
                     a.L[3][4]) if has_inner_edge else '  '+_OMIT
                 dat['5 <--> 1'][i] = self.len_conv(
@@ -448,13 +450,11 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
             for j in range(1, a.n_duct):
                 # Edge-edge
                 dat[f'Byp {_MAX_DUCT - j} 8 <--> 8'][i] = \
-                    self.len_conv(a.L[7][7][-j])
+                    self.len_conv(a.L[7][7][-j]) if \
+                a.subchannel.n_sc['coolant']['edge'] > 6 else '  '+_OMIT
                 # Edge-corner
                 dat[f'Byp {_MAX_DUCT - j} 8 <--> 9'][i] = \
                     self.len_conv(a.L[7][8][-j])
-                # Corner-corner
-                dat[f'Byp {_MAX_DUCT - j} 9 <--> 9'][i] = \
-                    self.len_conv(a.L[8][8][-j])
 
             dat['Friction factor'][i] = a.corr_names['ff']
             dat['Flow split'][i] = a.corr_names['fs']
@@ -534,8 +534,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                           '1 <--> 1',
                           '1 <--> 2',
                           '2 <--> 2',
-                          '2 <--> 3',
-                          '3 <--> 3']
+                          '2 <--> 3']
         if has_hole:
             _SUMMARY_KEYS += ['4 <--> 1',
                               '4 <--> 2',
@@ -546,8 +545,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                               '5 <--> 5']
         for j in range(1, _MAX_DUCT):
             _SUMMARY_KEYS += [f'Byp {_MAX_DUCT - j} 8 <--> 8',
-                              f'Byp {_MAX_DUCT - j} 8 <--> 9',
-                              f'Byp {_MAX_DUCT - j} 9 <--> 9']
+                              f'Byp {_MAX_DUCT - j} 8 <--> 9']
 
         _SUMMARY_KEYS += ['Correlations',
                           'Friction factor',
@@ -898,11 +896,12 @@ Notes
                 params = [a.name,
                           _fmt_pos(a.loc),
                           self._ffmt3.format(
-                              l_conv(ar.coolant_int_params['vel'])) if 
-                        ar.subchannel.n_sc['coolant']['interior'] > 0 else _OMIT,
+                              l_conv(ar.coolant_int_params['vel'])),
                           self._ffmt3.format(
                               l_conv(ar.coolant_int_params['vel']
-                                     * ar.coolant_int_params['fs'][0])),
+                                     * ar.coolant_int_params['fs'][0]) if 
+                          ar.subchannel.n_sc['coolant']['interior'] > 0
+                          else _OMIT),
                           self._ffmt3.format(
                               l_conv(ar.coolant_int_params['vel']
                                      * ar.coolant_int_params['fs'][1])),
