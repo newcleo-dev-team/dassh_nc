@@ -306,8 +306,10 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
             _MAX_DUCT = 1
         else:
             _MAX_DUCT = np.max(ducts)
-
-        dat = self._initialize(asm_list, _MAX_DUCT)
+        has_hole = np.any([
+            a.rodded.rings_removed > 0 for a in asm_list if a.has_rodded
+        ])
+        dat = self._initialize(asm_list, _MAX_DUCT, has_hole)
         for i in range(len(asm_list)):
             if not asm_list[i].has_rodded:
                 continue
@@ -332,6 +334,16 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                 self.len_conv(a.duct_ftf[-1][-1])
             dat['Outside duct thickness'][i] = \
                 self.len_conv(a.d['wall'][-1])
+            if a.rings_removed > 0:
+                dat['Inner hole outer FTF'][i] = \
+                    self.len_conv(a.inner_hole_ftf)
+                dat['Removed inner pin rings'][i] = a.rings_removed
+                dat['Pin-inner-wall gap'][i] = self.len_conv(
+                    a.d['pin-inner-wall'])
+            else:
+                dat['Inner hole outer FTF'][i] = '  '+_OMIT
+                dat['Removed inner pin rings'][i] = '  '+_OMIT
+                dat['Pin-inner-wall gap'][i] = '  '+_OMIT
             # Do stuff for asm with multiple ducts, bypass gaps
             # Recall that everything is initialized with _OMIT
             for j in range(1, a.n_duct):
@@ -348,30 +360,44 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
             dat['1. Interior'][i] = a.subchannel.n_sc['coolant']['interior']
             dat['2. Edge'][i] = a.subchannel.n_sc['coolant']['edge']
             dat['3. Corner'][i] = a.subchannel.n_sc['coolant']['corner']
+            if a.rings_removed > 0:
+                dat['4. Inner-Edge'][i] = \
+                    a.subchannel.n_sc['coolant']['inner-edge']
+                dat['5. Inner-Corner'][i] = \
+                    a.subchannel.n_sc['coolant']['inner-corner']
             dat['Duct (per wall)'][i] = a.subchannel.n_sc['duct']['total']
-            dat['4. Edge'][i] = a.subchannel.n_sc['duct']['edge']
-            dat['5. Corner'][i] = a.subchannel.n_sc['duct']['corner']
+            dat['6. Edge'][i] = a.subchannel.n_sc['duct']['edge']
+            dat['7. Corner'][i] = a.subchannel.n_sc['duct']['corner']
             if a.n_duct > 1:
                 dat['Bypass (per gap)'][i] = \
                     a.subchannel.n_sc['bypass']['total']
-                dat['6. Edge'][i] = a.subchannel.n_sc['bypass']['edge']
-                dat['7. Corner'][i] = a.subchannel.n_sc['bypass']['corner']
+                dat['8. Edge'][i] = a.subchannel.n_sc['bypass']['edge']
+                dat['9. Corner'][i] = a.subchannel.n_sc['bypass']['corner']
 
+            has_int = a.subchannel.n_sc['coolant']['interior'] > 0
+            has_inner_edge = a.subchannel.n_sc['coolant']['inner-edge'] > 0
             # Flow area: convert twice for length squared
             # dat[f'Subchannel area'][i] = blank
             dat['1. Interior area'][i] = \
-                self.len_conv(self.len_conv(a.params['area'][0]))
+                self.len_conv(self.len_conv(a.params['area'][0])
+                              ) if has_int else '  '+_OMIT
             dat['2. Edge area'][i] = \
                 self.len_conv(self.len_conv(a.params['area'][1]))
             dat['3. Corner area'][i] = \
                 self.len_conv(self.len_conv(a.params['area'][2]))
+            if a.rings_removed > 0:
+                dat['4. Inner-Edge area'][i] = \
+                        self.len_conv(self.len_conv(a.params['area'][3])
+                                      ) if has_inner_edge else '  '+_OMIT
+                dat['5. Inner-Corner area'][i] = \
+                        self.len_conv(self.len_conv(a.params['area'][4]))
             dat['Interior total area'][i] = \
                 self.len_conv(self.len_conv(a.bundle_params['area']))
             for j in range(1, a.n_duct):
-                dat[f'6. Bypass {_MAX_DUCT - j} edge area'][i] = \
+                dat[f'8. Bypass {_MAX_DUCT - j} edge area'][i] = \
                     self.len_conv(self.len_conv(
                         a.bypass_params['area'][-j, 0]))
-                dat[f'7. Bypass {_MAX_DUCT - j} corner area'][i] = \
+                dat[f'9. Bypass {_MAX_DUCT - j} corner area'][i] = \
                     self.len_conv(self.len_conv(
                         a.bypass_params['area'][-j, 1]))
                 dat[f'Bypass {_MAX_DUCT - j} total area'][i] = \
@@ -379,35 +405,56 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                         a.bypass_params['total area'][-j]))
 
             # Hydraulic Diameters
-            dat['1. Interior De'][i] = self.len_conv(a.params['de'][0])
+            dat['1. Interior De'][i] = self.len_conv(a.params['de'][0]
+                                                     ) if has_int else '  '+_OMIT
             dat['2. Edge De'][i] = self.len_conv(a.params['de'][1])
             dat['3. Corner De'][i] = self.len_conv(a.params['de'][2])
+            if a.rings_removed > 0:
+                dat['4. Inner-Edge De'][i] = self.len_conv(a.params['de'][3]) \
+                    if has_inner_edge else '  '+_OMIT
+                dat['5. Inner-Corner De'][i] = self.len_conv(a.params['de'][4])
             dat['Bundle De'][i] = self.len_conv(a.bundle_params['de'])
             for j in range(1, a.n_duct):
-                dat[f'6. Bypass {_MAX_DUCT - j} edge De'][i] = \
+                dat[f'8. Bypass {_MAX_DUCT - j} edge De'][i] = \
                     self.len_conv(a.bypass_params['de'][-j, 0])
-                dat[f'7. Bypass {_MAX_DUCT - j} corner De'][i] = \
+                dat[f'9. Bypass {_MAX_DUCT - j} corner De'][i] = \
                     self.len_conv(a.bypass_params['de'][-j, 1])
                 dat[f'Bypass {_MAX_DUCT - j} total De'][i] = \
                     self.len_conv(a.bypass_params['total de'][-j])
 
             # Centroid-centroid distances
             # dat['Centroid-centroid dist'][i] = blank
-            dat['1 <--> 1'][i] = self.len_conv(a.L[0][0])
-            dat['1 <--> 2'][i] = self.len_conv(a.L[0][1])
-            dat['2 <--> 2'][i] = self.len_conv(a.L[1][1])
+            dat['1 <--> 1'][i] = self.len_conv(
+                a.L[0][0]) if has_int else '  '+_OMIT
+            dat['1 <--> 2'][i] = self.len_conv(
+                a.L[0][1]) if has_int else '  '+_OMIT
+            dat['2 <--> 2'][i] = self.len_conv(a.L[1][1]) if \
+                a.subchannel.n_sc['coolant']['edge'] > 6 else '  '+_OMIT
             dat['2 <--> 3'][i] = self.len_conv(a.L[1][2])
-            dat['3 <--> 3'][i] = self.len_conv(a.L[2][2])
+            if a.rings_removed > 0:
+                dat['4 <--> 1'][i] = self.len_conv(
+                    a.L[0][3]) if has_int else '  '+_OMIT
+                dat['4 <--> 2'][i] = self.len_conv(
+                    a.L[1][3]) if not has_int else '  '+_OMIT
+                dat['4 <--> 4'][i] = self.len_conv(
+                    a.L[3][3]) if has_inner_edge and \
+                    a.subchannel.n_sc['coolant']['inner-edge'] > 6 \
+                    else '  '+_OMIT
+                dat['4 <--> 5'][i] = self.len_conv(
+                    a.L[3][4]) if has_inner_edge else '  '+_OMIT
+                dat['5 <--> 1'][i] = self.len_conv(
+                    a.L[0][4]) if has_int else '  '+_OMIT
+                dat['5 <--> 2'][i] = self.len_conv(
+                    a.L[1][4]) if not has_int else '  '+_OMIT
+                dat['5 <--> 5'][i] = self.len_conv(a.L[4][4])
             for j in range(1, a.n_duct):
                 # Edge-edge
-                dat[f'Byp {_MAX_DUCT - j} 6 <--> 6'][i] = \
-                    self.len_conv(a.L[5][5][-j])
+                dat[f'Byp {_MAX_DUCT - j} 8 <--> 8'][i] = \
+                    self.len_conv(a.L[7][7][-j]) if \
+                a.subchannel.n_sc['coolant']['edge'] > 6 else '  '+_OMIT
                 # Edge-corner
-                dat[f'Byp {_MAX_DUCT - j} 6 <--> 7'][i] = \
-                    self.len_conv(a.L[5][6][-j])
-                # Corner-corner
-                dat[f'Byp {_MAX_DUCT - j} 7 <--> 7'][i] = \
-                    self.len_conv(a.L[6][6][-j])
+                dat[f'Byp {_MAX_DUCT - j} 8 <--> 9'][i] = \
+                    self.len_conv(a.L[7][8][-j])
 
             dat['Friction factor'][i] = a.corr_names['ff']
             dat['Flow split'][i] = a.corr_names['fs']
@@ -417,7 +464,7 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
         return dat
 
     @staticmethod
-    def _initialize(asm_list, _MAX_DUCT):
+    def _initialize(asm_list, _MAX_DUCT, has_hole):
         """Set up empty rows to overwrite with values"""
         n_asm = len(asm_list)
         empty_row = [_OMIT for a in range(n_asm)]
@@ -435,52 +482,70 @@ class GeometrySummaryTable(LoggedClass, DASSH_Table):
                          'Number of duct walls',
                          'Number of bypass gaps',
                          'Outside duct outer FTF',
-                         'Outside duct thickness']
+                         'Outside duct thickness',
+                         'Inner hole outer FTF',
+                         'Removed inner pin rings',
+                         'Pin-inner-wall gap',]
         for j in range(1, _MAX_DUCT):
             _SUMMARY_KEYS += [f'Bypass {_MAX_DUCT - j} thickness',
                               f'Duct {_MAX_DUCT - j} outer FTF',
                               f'Duct {_MAX_DUCT - j} thickness']
 
-        _SUMMARY_KEYS += ['Coolant',
+        _SUMMARY_KEYS += ['Number of SCs',
+                          'Coolant',
                           '1. Interior',
                           '2. Edge',
                           '3. Corner',
+                          '4. Inner-Edge',
+                          '5. Inner-Corner',
                           'Duct (per wall)',
-                          '4. Edge',
-                          '5. Corner',
-                          'Bypass (per gap)',
                           '6. Edge',
                           '7. Corner',
+                          'Bypass (per gap)',
+                          '8. Edge',
+                          '9. Corner',
                           'Subchannel area',
                           '1. Interior area',
                           '2. Edge area',
-                          '3. Corner area',
-                          'Interior total area']
+                          '3. Corner area']
+        if has_hole:
+            _SUMMARY_KEYS += ['4. Inner-Edge area',
+                              '5. Inner-Corner area']
+        _SUMMARY_KEYS += ['Interior total area']
         for j in range(1, _MAX_DUCT):
-            _SUMMARY_KEYS += [f'6. Bypass {_MAX_DUCT - j} edge area',
-                              f'7. Bypass {_MAX_DUCT - j} corner area',
+            _SUMMARY_KEYS += [f'8. Bypass {_MAX_DUCT - j} edge area',
+                              f'9. Bypass {_MAX_DUCT - j} corner area',
                               f'Bypass {_MAX_DUCT - j} total area']
 
         _SUMMARY_KEYS += ['Hydraulic diam.',
                           '1. Interior De',
                           '2. Edge De',
-                          '3. Corner De',
-                          'Bundle De']
+                          '3. Corner De']
+        if has_hole:
+            _SUMMARY_KEYS += ['4. Inner-Edge De',
+                              '5. Inner-Corner De']
+        _SUMMARY_KEYS += ['Bundle De']
         for j in range(1, _MAX_DUCT):
-            _SUMMARY_KEYS += [f'6. Bypass {_MAX_DUCT - j} edge De',
-                              f'7. Bypass {_MAX_DUCT - j} corner De',
+            _SUMMARY_KEYS += [f'8. Bypass {_MAX_DUCT - j} edge De',
+                              f'9. Bypass {_MAX_DUCT - j} corner De',
                               f'Bypass {_MAX_DUCT - j} total De']
 
         _SUMMARY_KEYS += ['Centroid-centroid dist',
                           '1 <--> 1',
                           '1 <--> 2',
                           '2 <--> 2',
-                          '2 <--> 3',
-                          '3 <--> 3']
+                          '2 <--> 3']
+        if has_hole:
+            _SUMMARY_KEYS += ['4 <--> 1',
+                              '4 <--> 2',
+                              '4 <--> 4',
+                              '4 <--> 5',
+                              '5 <--> 1',
+                              '5 <--> 2',
+                              '5 <--> 5']
         for j in range(1, _MAX_DUCT):
-            _SUMMARY_KEYS += [f'Byp {_MAX_DUCT - j} 6 <--> 6',
-                              f'Byp {_MAX_DUCT - j} 6 <--> 7',
-                              f'Byp {_MAX_DUCT - j} 7 <--> 7']
+            _SUMMARY_KEYS += [f'Byp {_MAX_DUCT - j} 8 <--> 8',
+                              f'Byp {_MAX_DUCT - j} 8 <--> 9']
 
         _SUMMARY_KEYS += ['Correlations',
                           'Friction factor',
@@ -756,8 +821,11 @@ class CoolantFlowTable(LoggedClass, DASSH_Table):
     Int. - Coolant velocity in the interior subchannel
     Edge - Coolant velocity in the edge subchannel
     Corner - Coolant velocity in the corner subchannel
+    Inn-Edg - Coolant velocity in the inner-edge subchannel, if applicable
+    Inn-Cor - Coolant velocity in the inner-corner subchannel, if applicable
     Bypass - Average coolant velocity in the bypass gap, if applicable
     Swirl - Transverse velocity in edge/corner subchannels due to wire-wrap
+    Inn-Swr - Transverse velocity in inner-edge/inner-corner subchannels due to wire-wrap, if applicable
     Bundle RE - Average Reynolds number in rod bundle or assembly
     Friction factor - Unitless friction factor for bundle or assembly
     Eddy df. - Correlated eddy diffusivity in subchannels
@@ -776,7 +844,7 @@ Notes
         self._ffmt5 = '{' + f':.{5}f' + '}'
 
         # Inherit from DASSH_Table
-        DASSH_Table.__init__(self, 11, col_width, col0_width, sep)
+        DASSH_Table.__init__(self, 14, col_width, col0_width, sep)
 
     def make(self, reactor_obj):
         """Create the table
@@ -796,8 +864,11 @@ Notes
                           '',
                           '|' + '-' * (self.col_width - 1),
                           '-' * self.col_width,
+                          '-' * self.col_width,
                           'Velocity',
                           f'({len_unit}/s) ' + unit_fill,
+                          '-' * self.col_width,
+                          '-' * self.col_width,
                           '-' * self.col_width,
                           '-' * (self.col_width - 1) + '|',
                           'Bundle',
@@ -809,8 +880,11 @@ Notes
                               'Int.',
                               'Edge',
                               'Corner',
+                              'Inn-Edg',
+                              'Inn-Cor',
                               'Bypass',
                               'Swirl',
+                              'Inn-Swr',
                               'RE',
                               'Factor',
                               f'({len_unit}^2/s)'])
@@ -825,21 +899,43 @@ Notes
                               l_conv(ar.coolant_int_params['vel'])),
                           self._ffmt3.format(
                               l_conv(ar.coolant_int_params['vel']
-                                     * ar.coolant_int_params['fs'][0])),
+                                     * ar.coolant_int_params['fs'][0]) if 
+                          ar.subchannel.n_sc['coolant']['interior'] > 0
+                          else _OMIT),
                           self._ffmt3.format(
                               l_conv(ar.coolant_int_params['vel']
                                      * ar.coolant_int_params['fs'][1])),
                           self._ffmt3.format(
                               l_conv(ar.coolant_int_params['vel']
                                      * ar.coolant_int_params['fs'][2]))]
+                if ar.nsc_cool_type > 3:
+                    params.append(self._ffmt3.format(
+                        l_conv(ar.coolant_int_params['vel']
+                        * ar.coolant_int_params['fs'][3])) if 
+                        ar.subchannel.n_sc['coolant']['inner-edge'] > 0
+                        else _OMIT)
+                    params.append(self._ffmt3.format(
+                        l_conv(ar.coolant_int_params['vel']
+                        * ar.coolant_int_params['fs'][4])))
+                else:
+                    params.append(_OMIT)
+                    params.append(_OMIT)
                 if hasattr(ar, 'coolant_byp_params'):
                     params.append(self._ffmt3.format(
                         l_conv(ar.coolant_byp_params['vel'][0])))
                 else:
                     params.append(_OMIT)
-                params += [
+                params.append(
                     self._ffmt3.format(
-                        l_conv(ar.coolant_int_params['swirl'][1])),
+                        l_conv(ar.coolant_int_params['swirl'][1])))
+                if ar.nsc_cool_type > 3:
+                    params.append(
+                    self._ffmt3.format(
+                        l_conv(ar.coolant_int_params['swirl'][3])))
+                else:
+                    params.append(_OMIT)
+                    params.append(_OMIT)
+                params += [
                     self._ffmt0.format(ar.coolant_int_params['Re']),
                     self._ffmt.format(ar.coolant_int_params['ff']),
                     self._ffmt5.format(
@@ -851,6 +947,9 @@ Notes
                           _fmt_pos(a.loc),
                           self._ffmt3.format(
                               l_conv(reg.coolant_params['vel'])),
+                          _OMIT,
+                          _OMIT,
+                          _OMIT,
                           _OMIT,
                           _OMIT,
                           _OMIT,

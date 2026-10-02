@@ -1443,7 +1443,7 @@ class Reactor(LoggedClass):
                 tmp = np.zeros((n_sc + 2, n_z + 3))
                 tmp[2:, [0, 1]] = asm_obj.rodded.subchannel.xy[:n_sc]
                 sc_types.append(
-                    [['interior', 'edge', 'corner'][i]
+                    [['interior', 'edge', 'corner', 'inner-edge', 'inner-corner'][i]
                      for i in asm_obj.rodded.subchannel.type[:n_sc]])
             else:
                 n_sc = 1
