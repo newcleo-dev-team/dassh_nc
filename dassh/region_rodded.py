@@ -1723,6 +1723,9 @@ class RoddedRegion(LoggedClass, DASSH_Region):
                 right_pointing = indexes[1::2]
                 q_1d[right_pointing] = q[right_pointing, 0] * Q_P2SC[3] + \
                     q[right_pointing, 1] * Q_P2SC[0]
+                # Last right_pointing corner has pins not in clockwise order
+                q_1d[indexes[-1]] = q[indexes[-1], 0] * Q_P2SC[0] + \
+                    q[indexes[-1], 1] * Q_P2SC[3]
             if cool_power is not None:
                 q_1d += cool_power
             return q_1d

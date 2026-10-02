@@ -468,7 +468,8 @@ class Orificing(LoggedClass):
             found = self._find_precalculated_power_dist(wd_path)
             args = {'save_reactor': True,        # Save Reactor object
                     'verbose': False,            # Don't print stuff
-                    'no_power_calc': not found}  # Do the power calc?
+                    'no_power_calc': not found,  # Do the power calc?
+                    'plot_only_geom': False}  
             dassh_inp = self._setup_input_orifice(mfr)
             dassh_inp.path = wd_path
             dassh.run_dassh(dassh_inp, args)

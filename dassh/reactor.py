@@ -158,6 +158,7 @@ class Reactor(LoggedClass):
             dassh.plot.make_SubchannelMap(self, plot_data)
             dassh.plot.make_PinMap(self, plot_data)
             self.log('info', 'Exit from plot_only_geom option')
+            self.write_summary_only_geometry()
             sys.exit(0)
 
         # Determine whether inter-assembly heat transfer is necessary,
@@ -1300,6 +1301,23 @@ class Reactor(LoggedClass):
         # Write detailed assembly subchannel output, if requested
         if 'AssemblyTables' in self._options.keys():
             self.write_assembly_data_tables()
+
+    def write_summary_only_geometry(self):
+        """
+        Write the main DASSH output file including only geometry information.
+        """
+        # Output file preamble
+        out = 'DASSH: Ducted Assembly Steady-State Heat Transfer Code\n'
+        out += f'Version {dassh.__version__}\n'
+        out += f'Executed {str(datetime.datetime.now())}\n'
+
+        # Geometry summary
+        geom = dassh.table.GeometrySummaryTable(len(self.asm_templates))
+        out += geom.generate(self)
+
+        # Write to output file
+        with open(os.path.join(self.path, 'dassh.out'), 'w') as f:
+            f.write(out)
 
     def write_summary(self):
         """Write the main DASSH output file"""

@@ -19,6 +19,7 @@ author: matz
 Test the correlations
 """
 ########################################################################
+import copy
 import os
 import pandas as pd
 import numpy as np
@@ -1225,3 +1226,40 @@ def test_cdd_spacergrid():
     # two relationships do generate similar curves for loss coeff vs.
     # Re, so I think this an acceptable check.
     assert np.max(np.abs(rdiff)) < 0.2
+
+
+@pytest.mark.parametrize("corr_name", ["ctd", "uctd", "mit", "se2", "nov"])
+def test_flow_split_corr_inner_hole(
+    corr_name: str, c_fuel_rr_hole: dassh.RoddedRegion):
+    """
+    Check coefficients from flow split correlations when used for a bundle
+    configuration with inner central hole. Use the definition of flow split
+    factors to check conservation of mass.
+
+    Parameters
+    ----------
+    corr_name : str
+        Correlation identifier.
+    c_fuel_rr_hole : dassh.RoddedRegion
+        Reference RoddedRegion object with hole configuration.
+    """
+    rr = copy.deepcopy(c_fuel_rr_hole)
+    nsc = np.array([rr.subchannel.n_sc['coolant']['interior'],
+                    rr.subchannel.n_sc['coolant']['edge'],
+                    rr.subchannel.n_sc['coolant']['corner'],
+                    rr.subchannel.n_sc['coolant']['inner-edge'],
+                    rr.subchannel.n_sc['coolant']['inner-corner']])
+    rr.corr_constants['fs'] = {}
+    rr._update_coolant_int_params(pytest.rr_data.inlet_temp)
+    _, _, coeff = dassh.region_rodded._import_flowsplit_correlation(
+        corr_name, rr, True)
+    if isinstance(coeff['fs'], dict):
+        assert np.finfo(float).eps * 10 > abs(
+                rr.bundle_params['area'] -
+                np.sum(coeff['fs']['turbulent']*nsc*rr.params['area']))
+        assert np.finfo(float).eps * 10 > abs(
+                rr.bundle_params['area'] -
+                np.sum(coeff['fs']['laminar']*nsc*rr.params['area']))
+    else:
+        assert np.finfo(float).eps * 10 > abs(
+            rr.bundle_params['area']-np.sum(coeff['fs']*nsc*rr.params['area']))
