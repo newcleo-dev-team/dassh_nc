@@ -1008,7 +1008,7 @@ def simple_ctrl_rr_ent(simple_ctrl_params: tuple[dict, dict]):
 
 @pytest.fixture
 def simple_ctrl_rr_mixconv(simple_ctrl_params):
-    """DASSH MixeddRegion object: simple hexagonal bundle parameters
+    """DASSH MixedRegion object: simple hexagonal bundle parameters
     for double-ducted assembly"""
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
     mat = {'coolant': dassh.Material('sodium', 
@@ -1202,7 +1202,7 @@ def c_fuel_rr_ent_hole(c_fuel_params_hole: tuple[dict, dict]):
 @pytest.fixture(scope='module')
 def c_fuel_rr_mixconv_hole(c_fuel_params_hole: tuple[dict, dict]):
     """
-    DASSH MixeddRegion object: simple hexagonal bundle parameters
+    DASSH MixedRegion object: simple hexagonal bundle parameters
     with a central hole.
     
     Parameters
@@ -1212,8 +1212,8 @@ def c_fuel_rr_mixconv_hole(c_fuel_params_hole: tuple[dict, dict]):
         
     Returns
     -------
-    MixeddRegion
-        Activated MixeddRegion object.
+    MixedRegion
+        Activated MixedRegion object.
     """
     flowrate = pytest.rr_data.non_isotropic['flow_rate']
     mat = {'coolant': dassh.Material('sodium', 
