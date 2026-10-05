@@ -3,11 +3,8 @@
 
 **DASSH_nc** is the <em>new</em>cleo's fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh).
 
-[![Build](https://github.com/dassh-dev/dassh/actions/workflows/ci.yml/badge.svg)](https://github.com/dassh-dev/dassh/actions)
-[![codecov](https://codecov.io/gh/dassh-dev/dassh/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/dassh-dev/dassh)
-[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-DASSH-nc is a <em>new</em>cleo fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh). 
+## Introduction
 
 The Ducted Assembly Steady State Heat Transfer Software (**DASSH**) is an open-source tool for calculating temperature and flow distributions in hexagonal, ducted assemblies comprised of wire-wrapped pin bundles. DASSH is intended for use during the design process to provide a rapid assessment of the flow and temperature distribution, especially when assembly designs are in their early stages and not fully developed.
 
@@ -71,7 +68,6 @@ To run the code, the following dependencies must be satisfied:
 
 
 ## Installation
-DASSH requires Python 3.6+. Detailed installation instructions can be found in the [user guide](https://github.com/dassh-dev/documents/blob/master/user_guide.pdf).
 
 To install **DASSH_nc**, clone its repo and execute the following command inside the base folder:
 
@@ -90,18 +86,18 @@ To install **DASSH_nc**, clone its repo and execute the following command inside
 If you use **DASSH_nc** in your research, please consider citing the following items:
 
 * Milos Atz, Micheal A. Smith, Florent Heidet. “DASSH software for ducted assembly thermal hydraulics calculations – overview and benchmark”. Transactions of the American Nuclear Society 123 pp. 1673-1676 (2020). [URL](https://www.ans.org/pubs/transactions/article-49036/).
+
 * Milos Atz, Micheal A. Smith, Florent Heidet, "Ducted Assembly Steady State Heat Transfer Software (DASSH) - Theory Manual", ANL/NSE-21/33, Argonne National Laboratory, 2021.
+
 * Milos Atz, Micheal A. Smith, Florent Heidet, "Ducted Assembly Steady State Heat Transfer Software (DASSH) - User Guide", ANL/NSE-21/34, Argonne National Laboratory, 2021.
 
-## Troubleshooting and reporting bugs
-If you encounter issues installing or running DASSH-nc or would like to report a bug, please reach out to the developers. 
+* Francesco Pepe, Gabriele Ottino, Roberto Bonifetto. "Extension and first validation of dassh subchannel code for liquid metal cooled fast reactors." Annals of Nuclear Energy, 238:112513, 2026.
 
-## Documentation
-* User guide: https://github.com/dassh-dev/documents/blob/master/user_guide.pdf
-* Theory manual: https://github.com/dassh-dev/documents/blob/master/theory_manual.pdf
+## Contact
 
-User and Theory manuals cover the original DASSH. 
-Please refer to [#6](https://github.com/newcleo-dev-team/dassh_nc/issues/6) for documentation updates regarding the modifications implemented in this fork. 
+For information on this fork and how to contribute to it, please contact @newcleo-dev-team.
+
+For information about the original repository, please follow the recommendations provided in the ANL DASSH repository.
 
 ## License
 
