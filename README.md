@@ -94,7 +94,7 @@ If you use **DASSH_nc** in your research, please consider citing the following i
 * Milos Atz, Micheal A. Smith, Florent Heidet, "Ducted Assembly Steady State Heat Transfer Software (DASSH) - User Guide", ANL/NSE-21/34, Argonne National Laboratory, 2021.
 
 ## Troubleshooting and reporting bugs
-If you encounter issues installing or running DASSH-nc or would like to report a bug, please reach out to the developer via _francesco.pepe@newcleo.com_. 
+If you encounter issues installing or running DASSH-nc or would like to report a bug, please reach out to the developers. 
 
 ## Documentation
 * User guide: https://github.com/dassh-dev/documents/blob/master/user_guide.pdf
