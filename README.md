@@ -4,12 +4,8 @@
 **DASSH_nc** is the <em>new</em>cleo's fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh).
 
 [![Build](https://github.com/dassh-dev/dassh/actions/workflows/ci.yml/badge.svg)](https://github.com/dassh-dev/dassh/actions)
+[![codecov](https://codecov.io/gh/dassh-dev/dassh/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/dassh-dev/dassh)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-
-|    <!-- -->    |        <!-- -->    |
-|----------------|--------------------|
-| Author: | Francesco Pepe |
-| Contributor: | Gabriele Ottino |
 
 DASSH-nc is a <em>new</em>cleo fork of the ANL DASSH repository (https://github.com/dassh-dev/dassh). 
 
