@@ -532,7 +532,7 @@ class Assembly(LoggedClass):
         if mixed_convection and self.active_region.is_rodded:
             self.active_region.calculate_pressure_drop(self.z, dz)
             self.active_region.calculate(dz, self._z, pow_j, t_gap, h_gap, 
-                                             adiabatic, ebal)
+                                         adiabatic, ebal)
         else:
             self.active_region.calculate(dz, pow_j, t_gap, h_gap, adiabatic,
                                          ebal)
