@@ -95,7 +95,7 @@ If you use **DASSH_nc** in your research, please consider citing the following i
 
 ## Contact
 
-For information on this fork and how to contribute to it, please contact @newcleo-dev-team.
+For information on this fork and how to contribute to it, please contact [newcleo-dev-team](https://github.com/newcleo-dev-team).
 
 For information about the original repository, please follow the recommendations provided in the ANL DASSH repository.
 
