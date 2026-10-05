@@ -73,8 +73,10 @@ def check_dependencies():
         if sys.version_info < (3, 7):
             assert version.parse(pytest.__version__) == version.parse('5.4')
     except (ImportError, AssertionError):
-        install_requires.append('pytest; python_version >= "3.7"')
         install_requires.append('pytest == 5.4; python_version < "3.7"')
+        install_requires.append('pytest > 5.4; python_version >= "3.7" and python_version < "3.10"')
+        install_requires.append('pytest-subtests; python_version < "3.10"')
+        install_requires.append('pytest >= 9.0.0; python_version >= "3.10"')
     try:
         import dill
     except ImportError:
