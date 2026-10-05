@@ -22,3 +22,6 @@
         data_label = boolean(default=True)
         omit_nonvalue_rings = boolean(default=False)
         use_default_filename = boolean(default=False)
+        fontsize = integer(min=1, default=6)
+        linewidth = float(default=1.0)
+		edgecolor = string(default="k")
