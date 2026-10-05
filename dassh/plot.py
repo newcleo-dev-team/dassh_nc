@@ -1336,8 +1336,17 @@ class DuctPlot(AssemblyPlot):
             kwargs['cmap'] = mpl.cm.jet
 
         if not kwargs.get('norm'):
-            kwargs['norm'] = colors.TwoSlopeNorm(
-                vmin=lbnd, vcenter=middle, vmax=ubnd)
+            if lbnd < middle < ubnd:
+                kwargs['norm'] = colors.TwoSlopeNorm(
+                    vmin=lbnd, vcenter=middle, vmax=ubnd
+                )
+            else:
+                # Check for bad middle values
+                if middle > ubnd or middle < lbnd:
+                    raise ValueError('vmin, vcenter, and vmax must be in '
+                                        'ascending order')
+                # Safe fallback if middle lands exactly on the boundaries
+                kwargs['norm'] = colors.Normalize(vmin=lbnd, vmax=ubnd)
 
         # isolate the patch kwargs
         patch_kwargs = {'cmap': kwargs['cmap'],
@@ -1819,8 +1828,17 @@ class CorePlot(object):
             kwargs['cmap'] = mpl.cm.jet
 
         if not kwargs.get('norm'):
-            kwargs['norm'] = colors.TwoSlopeNorm(
-                vmin=lbnd, vcenter=middle, vmax=ubnd)
+            if lbnd < middle < ubnd:
+                kwargs['norm'] = colors.TwoSlopeNorm(
+                    vmin=lbnd, vcenter=middle, vmax=ubnd
+                )
+            else:
+                # Check for bad middle values
+                if middle > ubnd or middle < lbnd:
+                    raise ValueError('vmin, vcenter, and vmax must be in '
+                                        'ascending order')
+                # Safe fallback if middle lands exactly on the boundaries
+                kwargs['norm'] = colors.Normalize(vmin=lbnd, vmax=ubnd)
 
         return kwargs
 
