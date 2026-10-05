@@ -529,7 +529,7 @@ class Assembly(LoggedClass):
 
         # Calculate coolant and duct temperatures, pressure drop
         
-        if mixed_convection:
+        if mixed_convection and self.active_region.is_rodded:
             self.active_region.calculate_pressure_drop(self.z, dz)
             self.active_region.calculate(dz, self._z, pow_j, t_gap, h_gap, 
                                              adiabatic, ebal)
