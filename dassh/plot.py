@@ -285,7 +285,7 @@ def make_PinMap(dassh_reactor, plot_info: dict):
                 break
         pp.map(**plot_data)
         plot_filename = 'pinMap'
-        plot_filename += '_asm=' + asm.name
+        plot_filename += '_asm=' + str(asm.id + 1)
         plot_filename += '.png'
         plot_filename = os.path.join(dassh_reactor.path, plot_filename)
         _save_and_close(plot_filename, plot_data['dpi'])
@@ -307,7 +307,7 @@ def make_SubchannelMap(dassh_reactor, plot_info: dict):
                 break
         ascp.map(**plot_data)
         plot_filename = 'subchannelMap'
-        plot_filename += '_asm=' + asm.name
+        plot_filename += '_asm=' + str(asm.id + 1)
         plot_filename += '.png'
         plot_filename = os.path.join(dassh_reactor.path, plot_filename)
         _save_and_close(plot_filename, plot_data['dpi'])
