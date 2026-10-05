@@ -6,7 +6,7 @@
 
 |    <!-- -->    |        <!-- -->    |
 |----------------|--------------------|
-| Author: | Francesco Pepe, Antonino Lombardo |
+| Author: | Francesco Pepe |
 | Contributor: | Gabriele Ottino |
 
 ## Introduction
