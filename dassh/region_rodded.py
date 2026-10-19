@@ -1055,7 +1055,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
             
     def _update_sc_velocity_and_htc(self, sc_vel: np.ndarray = None) -> None:
         
-        if self.corr_names['mix'] in ['uctd', 'ctd']:
+        if self.corr_names['mix'] in ['uctd', 'ctd', 'kc-bare']:
             self._calculate_sc_type_Re()
             
         if sc_vel is None:            

@@ -1534,7 +1534,7 @@ Duct face key                  Face 6    =   Face 1
             ndps = int(ndsc / 6)
             for d in range(nduct):
                 tmp = asm.region[-1].temp['duct_mw'][d].copy()
-                tmp.shape = (6, ndps)
+                tmp = np.reshape(tmp, (6, ndps))
                 tmp2 = np.zeros((6, ndps + 1))
                 tmp2[:, 1:] = tmp
                 tmp2[:, 0] = np.roll(tmp[:, -1], 1)

@@ -423,7 +423,7 @@ class Orificing(LoggedClass):
                     'verbose': False,
                     'no_power_calc': True}
             dassh_inp = self._setup_input_perfect()
-            dassh.__main__.run_dassh(dassh_inp, args)
+            dassh.run_dassh(dassh_inp, args)
             results = self._get_dassh_results(dassh_inp.path)
             np.savetxt(data_path, results, delimiter=',')
         return results
@@ -471,7 +471,7 @@ class Orificing(LoggedClass):
                     'no_power_calc': not found}  # Do the power calc?
             dassh_inp = self._setup_input_orifice(mfr)
             dassh_inp.path = wd_path
-            dassh.__main__.run_dassh(dassh_inp, args)
+            dassh.run_dassh(dassh_inp, args)
             results = self._get_dassh_results(dassh_inp.path)
             np.savetxt(data_path, results, delimiter=',')
         return results

@@ -10,7 +10,8 @@ from dassh.mixed_class import MixedClass
 from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
     setup_conduction_constants, setup_convection_constants, \
         specify_region_details
-from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, MC_MAX_ITER
+from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
+    MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE, DENSITY_MAX_ABS_ERR
 import sys
 from typing import Union
 
@@ -277,9 +278,15 @@ class MixedRegion(MixedClass, RoddedRegion):
             delta_v = xx[1:2*nn:2]
             delta_P = xx[-1]
             # Calculate errors
-            err_vect = self._calc_error(np.dstack((delta_rho, delta_v)), 
-                                        np.dstack((delta_rho0, delta_v0)),
-                                        delta_P, delta_P0)
+            new_solution = np.dstack((delta_rho, delta_v))
+            old_solution = np.dstack((delta_rho0, delta_v0))
+            err_vect[:2] = np.max(np.abs((new_solution - old_solution) 
+                                         / old_solution), axis=1)
+            err_vect[2] = np.abs((delta_P - delta_P0) / delta_P0)
+            err_abs = np.max(np.abs(delta_rho - delta_rho0))
+            # Neglect relative error if absolute error of density is negligible
+            if err_abs < DENSITY_MAX_ABS_ERR:
+                err_vect[0] = 0.
             # Verbose output iteration info
             if self._verbose:
                 self.log('info', f'{iter+1}       {err_vect[0]:.6e}' + \
