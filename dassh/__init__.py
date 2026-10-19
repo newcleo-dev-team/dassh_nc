@@ -38,6 +38,7 @@ from dassh.table import *
 from dassh.pin_model import *
 from dassh._ascii import *
 from dassh.plot import *
+from dassh.run_dassh import *
 from dassh import mesh_functions
 from dassh.orificing import *
 from dassh import hotspot
