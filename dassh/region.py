@@ -286,7 +286,7 @@ class DASSH_Region(object):
         # Energy balance utilities: track hex side energy balance
         n = self.temp['duct_mw'].shape[1]  # number of duct elements
         duct_idx = np.arange(0, n, 1)
-        duct_idx.shape = ((6, int(n / 6)))
+        duct_idx = np.reshape(duct_idx, (6, int(n / 6)))
         ebal_duct_idx = np.zeros((6, int(n / 6) + 1), dtype='int')
         ebal_duct_idx[:, 1:] = duct_idx
         ebal_duct_idx[:, 0] = np.roll(duct_idx[:, -1], 1)
