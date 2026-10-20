@@ -1,6 +1,14 @@
+########################################################################
+"""
+date: 2026-07-xx
+author: fpepe
+Abstract class to handle the mixed convection models
+"""
+########################################################################
+
 from abc import ABC, abstractmethod
 import numpy as np
-from dassh._commons import GRAVITY_CONST
+from dassh._commons import GRAVITY_CONST, MIXED_CONV_PROP_TO_UPDATE
 from dassh.material import Material
 
 class MixedClass(ABC):
@@ -33,16 +41,70 @@ class MixedClass(ABC):
         self._hstar: np.ndarray = np.zeros(n_sc)
         self._vstar: np.ndarray = np.zeros(n_sc)
         # Initialize pressure drop
-        self._pressure_drop: float = 0.0 
+        self._pressure_drop_tot: float = 0.0 
         # Initialize coolant density in subchannels
-        self.sc_properties['density']: np.ndarray = self._coolant.density \
-            * np.ones(n_sc) 
+        self.sc_properties['density'] = self._coolant.density * np.ones(n_sc) 
         # Initialize enthalpy array
         self._enthalpy: np.ndarray = self._coolant.convert_properties(
             density=self.sc_properties['density'])
         # Initialize subchannel velocities
         self._sc_vel: np.ndarray = np.zeros(n_sc)
 
+
+    def _build_matrix(self, dz: float, delta_v: np.ndarray,
+                      delta_rho: np.ndarray, RR: np.ndarray, 
+                      nn: int, ff: np.ndarray, de: np.ndarray,
+                      areas: np.ndarray) -> np.ndarray:
+        """
+        Build the matrix for the system to solve
+
+        Parameters
+        ----------
+        dz : float
+            Axial step size (m)
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+        delta_rho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+        RR : np.ndarray
+            Enthalpy variation coefficient (J*m^3/kg^2)
+        nn : int
+            Number of coolant subchannels
+        ff : np.ndarray
+            Friction factor for each subchannel (-)
+        de : np.ndarray
+            Hydraulic diameter for each subchannel (m)
+        areas : np.ndarray
+            Subchannel flow areas (m^2)
+
+        Returns
+        -------
+        AA : np.ndarray
+            Coefficient matrix for the system to solve
+        """
+        self._vstar = self._calc_star_quantity(delta_v, delta_rho, 'v')
+        # Calculate coefficients for the matrix
+        EE, FF = self._calc_momentum_coefficients(dz, ff, de, delta_v)
+        SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
+        C_rho, C_v = self._calc_continuity_coefficients(delta_v, areas)
+        # Build matrix
+        AA = np.zeros((2*nn + 1, 2*nn + 1))
+            
+        diag = np.zeros(2*nn + 1)
+        sup_diag = np.zeros(2*nn)
+        sub_diag = np.zeros(2*nn)
+    
+        diag[0:2*nn:2] = EE
+        diag[1:2*nn:2] = TT
+        sup_diag[0:2*nn:2] = FF
+        sub_diag[0:2*nn:2] = SS
+            
+        AA += np.diag(diag) + np.diag(sup_diag, k=1) + np.diag(sub_diag, k=-1)
+        AA[0:-2:2,-1] = 1
+        AA[-1,0:2*nn:2] = C_rho
+        AA[-1,1:2*nn:2] = C_v
+        return AA
+        
         
     def _calc_momentum_coefficients(self, dz: float, 
                                     ff: np.ndarray, dh: np.ndarray,
@@ -90,7 +152,7 @@ class MixedClass(ABC):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Derivative of enthalpy w.r.t. density (J*m^3/kg^2)
+            Enthalpy variation coefficient (J*m^3/kg^2)
             
         Returns
         -------
@@ -100,10 +162,9 @@ class MixedClass(ABC):
             - SS coefficients 
             - TT coefficients
         """
-        SS = (self._sc_vel + delta_v) * (self._enthalpy - self._hstar + 
-                                         RR * (self.sc_properties['density'] 
-                                               + delta_rho))
-        TT = self.sc_properties['density'] * (self._enthalpy - self._hstar)
+        SS = (self._sc_vel + delta_v) * (self._enthalpy  + 
+            RR * (self.sc_properties['density'] + delta_rho))
+        TT = self.sc_properties['density'] * self._enthalpy 
         return SS, TT
     
     
@@ -151,11 +212,88 @@ class MixedClass(ABC):
             density=self.sc_properties['density']+drho) 
                 - self._enthalpy) / drho
     
+    
+    def _copy_solution(self, drho: np.ndarray, dv: np.ndarray, 
+                        dP: float) -> tuple[np.ndarray, float]:
+        """
+        Copy solution deltas
+        
+        Parameters
+        ----------
+        drho : np.ndarray
+            Density variation (kg/m^3)
+        dv : np.ndarray
+            Velocity variation (m/s)
+        dP : float
+            Pressure drop (Pa)
+            
+        Returns
+        -------
+        tuple[np.ndarray, float]
+            Copied density variation, velocity variation, and pressure drop
+        """
+        return drho.copy(), dv.copy(), dP
+    
+    
+    def _calc_error(self, new_vrho: np.ndarray, old_vrho: np.ndarray,
+                    new_dP: float, old_dP: float) -> np.ndarray:
+        """
+        Calculate the error between the new and old solutions
+        
+        Parameters
+        ----------
+        new_vrho : np.ndarray
+            New velocity and density variations
+        old_vrho : np.ndarray
+            Old velocity and density variations
+        new_dP : float
+            New pressure drop
+        old_dP : float
+            Old pressure drop
+
+        Returns
+        -------
+        np.ndarray
+            Error vector for each subchannel and variable
+        """
+        err_vect = np.ones(3)
+        err_vect[:2] = np.max(np.abs((new_vrho - old_vrho) / old_vrho), 
+                              axis=1)
+        err_vect[2] = np.abs((new_dP - old_dP) / old_dP)
+        return err_vect
+
+
+    def _update_subchannels_properties(self, temp: np.ndarray) -> None:
+        """
+        Update subchannel properties based on temperature
+        
+        Parameters
+        ----------
+        temp : np.ndarray
+            Array of temperatures
+        """
+        for i in range(len(temp)):  
+            self._coolant.update(temp[i])
+            for prop in MIXED_CONV_PROP_TO_UPDATE:
+                self.sc_properties[prop][i] = getattr(self._coolant, prop)
+    
+    
+    @abstractmethod
+    def _build_vector(self):
+        """Build the known vector for the system to solve"""
+        pass
+    
+    
     @abstractmethod
     def _calc_star_quantity():
         """Calculate the star quantities hstar and vstar"""
         pass
     
+    
+    @abstractmethod
+    def _solve_system(self):
+        """Solve the system of equations for the mixed convection model"""
+        pass
 
     @property
     def coolant(self) -> Material:

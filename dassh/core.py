@@ -72,7 +72,8 @@ class Core(LoggedClass):
                  test=False, htc_params_duct=None):
         """Instantiate Core object."""
         LoggedClass.__init__(self, 4, 'dassh.core.Core')
-        if model not in ['flow', 'no_flow', 'duct_average', None]:
+        if model not in ['flow', 'no_flow', 'duct_average', 
+                         'mixed_flow', None]:
             msg = 'Do not understand input inter-assembly gap model: '
             self.log('error', msg + model)
 
@@ -86,12 +87,7 @@ class Core(LoggedClass):
         self.gap_coolant = coolant_obj
         self.gap_coolant.update(inlet_temperature)
         self.gap_flow_rate = gap_flow_rate
-        self.coolant_gap_params = \
-            {'Re': 0.0,  # bundle-average Reynolds number
-             'Re_sc': np.zeros(2),  # subchannel Reynolds numbers
-             'vel': 0.0,  # bundle-average coolant velocity
-             'ff': np.zeros(2),  # subchannel friction factors
-             'htc': np.zeros(2)}  # heat transfer coefficients
+        self.coolant_gap_params = {}  
         self.z = [0.0]
         self.model = model
         if htc_params_duct:
@@ -240,7 +236,20 @@ class Core(LoggedClass):
         # self.ebal = np.zeros(())
         self.ebal = {}
         self.ebal['asm'] = np.zeros(self._asm_sc_adj.shape)
-
+        
+        # Instantiate the inter-assembly gap model object
+        self.ia_obj = InterAssembly(self.model, self.n_sc, self.gap_coolant, 
+                                    self._Rcond, self._sc_adj, 
+                                    self._conv_util, self._inv_sc_mfr,
+                                    self.gap_params['de'], 
+                                    self.gap_params['area'])
+        # If mixed convection model, initialize velocities and 
+        # pass coefficients fot Nusselt number correlation
+        if self.model == 'mixed_flow':
+            self.ia_obj.set_mixed_only(self._sc_mfr/self.gap_params['area'], 
+                                       self._htc_params)
+            
+            
     # MAP INTER-ASSEMBLY GAP; DEFINE GEOMETRY --------------------------
 
     def _collect_sc_geom_params(self, asm_list):
@@ -1262,23 +1271,9 @@ class Core(LoggedClass):
         """
         self.gap_coolant.update(temp)
 
-        # Inter-assembly gap average velocity
-        self.coolant_gap_params['vel'] = \
-            (self.gap_flow_rate
-             / self.gap_coolant.density
-             / self.gap_params['total area'])
-
-        # Gap-average Reynolds number
-        self.coolant_gap_params['Re'] = \
-            (self.gap_flow_rate
-             * self.gap_params['total de']
-             / self.gap_coolant.viscosity
-             / self.gap_params['total area'])
-
         # Subchannel Reynolds numbers
-        self.coolant_gap_params['Re_sc'] = \
-            (self.coolant_gap_params['_Re_sc']  # <-- = m_i * De_i / A_i
-             / self.gap_coolant.viscosity)
+        Re_sc = (self.coolant_gap_params['_Re_sc']  # <-- = m_i * De_i / A_i
+                 / self.gap_coolant.viscosity)
 
         # Heat transfer coefficient (via Nusselt number)
         # Although coolant properties are global and velocity is the
@@ -1288,12 +1283,23 @@ class Core(LoggedClass):
             self.coolant_gap_params['htc'] = np.zeros(self.n_sc)
         elif self.model == 'flow':
             nu = nusselt_db.calculate_sc_Nu(
-                self.coolant_gap_params['Re_sc'],
+                Re_sc,
                 self._htc_params,
                 coolant_obj=self.gap_coolant)
             self.coolant_gap_params['htc'] = \
                 (self.gap_coolant.thermal_conductivity
                  * nu / self.gap_params['de'])
+        elif self.model == 'mixed_flow':
+            if hasattr(self, 'ia_obj') and hasattr(self.ia_obj, '_htc'):
+                self.coolant_gap_params['htc'] = self.ia_obj._htc
+            else:
+                nu = nusselt_db.calculate_sc_Nu(
+                    Re_sc,
+                    self._htc_params,
+                    coolant_obj=self.gap_coolant)
+                self.coolant_gap_params['htc'] = \
+                    (self.gap_coolant.thermal_conductivity
+                    * nu / self.gap_params['de'])
         else:  # Nu == 1
             # self.coolant_gap_params['htc'] = \
             #     (self.gap_coolant.thermal_conductivity
@@ -1302,7 +1308,8 @@ class Core(LoggedClass):
             # self.coolant_gap_params['htc'] *= 0.5 * self.d_gap
             h = 2 * self.gap_coolant.thermal_conductivity / self.d_gap
             self.coolant_gap_params['htc'] = np.full((self.n_sc,), h)
-
+        
+        
     ####################################################################
     # COOLANT TEMPERATURE CALCULATION
     ####################################################################
@@ -1328,13 +1335,9 @@ class Core(LoggedClass):
         self._update_energy_balance(dz, asm_duct_temps)
 
         # Calculate new coolant gap temperatures
-        IAobj = InterAssembly(self.model, dz, asm_duct_temps, 
-                              self.coolant_gap_temp, 
-                              self.gap_coolant, self._Rcond, self._sc_adj, 
-                              self._conv_util, self._inv_sc_mfr, 
-                              self.coolant_gap_params['htc'])
-        
-        self.coolant_gap_temp = IAobj.gap_model()
+        self.ia_obj.set_params(dz, asm_duct_temps, self.coolant_gap_temp,
+                               self.coolant_gap_params['htc'])
+        self.coolant_gap_temp = self.ia_obj.gap_model()
 
 
     def _update_energy_balance(self, dz, approx_duct_temps):
