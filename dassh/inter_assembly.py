@@ -9,7 +9,7 @@ import numpy as np
 from dassh.correlations import nusselt_db, friction_ia
 from dassh.material import Material
 from dassh.mixed_class import MixedClass
-from dassh._commons import PROPS_NAME, GRAVITY_CONST
+from dassh._commons import PROPS_NAME, GRAVITY_CONST, MC_MAX_ITER, MC_TOL
 from typing import Union
 
 
@@ -21,8 +21,6 @@ class InterAssembly(MixedClass):
     model : str
         Inter-assembly gap model to use
         Options are: 'flow', 'no_flow', 'duct_average', and 'mixed_flow'
-    n_sc : int
-        Number of subchannels in the assembly
     gap_coolant : DASSH Material object
         Coolant object for the inter-assembly gap coolant
     Rcond : numpy.ndarray
@@ -35,10 +33,16 @@ class InterAssembly(MixedClass):
         Inverse of the subchannel mass flow rate [s/kg]
     de : numpy.ndarray
         Hydraulic diameter of the inter-assembly gap subchannels [m]
+    areas: numpy.ndarray
+        Cross-sectional area of the inter-assembly gap subchannels [m^2]
     """    
-    def __init__(self, model: str, n_sc: int,
-                 gap_coolant: Material, Rcond: np.ndarray, 
-                 sc_adj: np.ndarray, 
+    available_models_list: list[str] = [
+        'flow', 'no_flow', 'duct_average', 'mixed_flow'
+        ]
+    """List of available inter-assembly gap models"""
+    
+    def __init__(self, model: str, gap_coolant: Material,
+                 Rcond: np.ndarray, sc_adj: np.ndarray, 
                  conv_util: dict[str, Union[np.ndarray, list]],
                  inv_sc_mfr: np.ndarray, de: np.ndarray,
                  areas: np.ndarray):
@@ -51,11 +55,11 @@ class InterAssembly(MixedClass):
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
         self._de: np.ndarray = de
         self._areas: np.ndarray = areas
-        self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(n_sc) 
+        self._n_sc: int = sc_adj.shape[0]
+        self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(self._n_sc) 
                                                      for k in PROPS_NAME}
         if self._model == 'mixed_flow':
-            MixedClass.__init__(self, n_sc, coolant_obj=gap_coolant)
-        self._n_sc: int = n_sc
+            MixedClass.__init__(self, self._n_sc, coolant_obj=gap_coolant)
 
 
     def set_params(self, dz: float, t_duct: np.ndarray, 
@@ -73,7 +77,7 @@ class InterAssembly(MixedClass):
             Inter-assembly gap coolant temperature [K]
         htc : numpy.ndarray
             Heat transfer coefficient for the inter-assembly 
-            gap subchannels [W/m^2-K]
+            gap subchannels [W/m^2/K]
         """
         self._dz: float = dz
         self._t_duct: np.ndarray = t_duct
@@ -89,10 +93,9 @@ class InterAssembly(MixedClass):
         ----------
         rhov_in : numpy.ndarray
             Inlet mass flux for the inter-assembly gap 
-            subchannels [kg/m^2-s]
+            subchannels [kg/m^2/s]
         htc_params : list[float]
-            Heat transfer coefficient for the inter-assembly 
-            gap subchannels [W/m^2-K]
+            Constants for the Nusselt number correlation 
         """
         self._sc_vel = rhov_in / self.sc_properties['density']
         self._htc_params = htc_params
@@ -173,9 +176,8 @@ class InterAssembly(MixedClass):
         Notes
         -----
         Recommended for use when inter-assembly gap flow rate is so
-        low that the the axial mesh requirement is intractably small.
-        Assumes no thermal contact resistance between the duct wall
-        and the coolant.
+        low that the axial mesh requirement is intractably small.
+        Assumes no convection exchange between the duct wall and the coolant
         """
         # CONDUCTION TO/FROM DUCT WALL
         R_conv = self._conv_util['const']
@@ -206,8 +208,7 @@ class InterAssembly(MixedClass):
         -----
         Recommended for use when inter-assembly gap flow rate is so
         low that the axial mesh requirement is intractably small.
-        Assumes no thermal contact resistance between the duct wall
-        and the coolant
+        Assumes no convection exchange between the duct wall and the coolant
         """
         # Lookup temperatures and mask as necessary
         T0 = self._t_duct[tuple(self._conv_util['inds'][0])]
@@ -253,19 +254,18 @@ class InterAssembly(MixedClass):
     def _solve_system(self):
         """
         Solve the system of equations for the mixed convection model
-        
         """
         # Use previous step deltas as initial guesses
         delta_rho0, delta_v0, delta_P0 = \
             self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
-        # BUild known vector
+        # Build frozen part of known vector
         bb_frozen = self._build_vector()
         # Calculate initial RR using guess `delta_rho0`
         RR = self._calc_RR(delta_rho0)
         # Iterate to solve the system
         iter = 0
         err_vect = np.ones(3)
-        while np.any(err_vect > 1e-3) and iter < 10:
+        while np.any(err_vect > MC_TOL) and iter < MC_MAX_ITER:
             # Update star quantities
             self._hstar = self._calc_star_quantity(
                 delta_v0, delta_rho0, 'h', RR
@@ -289,8 +289,8 @@ class InterAssembly(MixedClass):
             delta_v = xx[1:2*self._n_sc:2]
             delta_P = xx[-1]
             # Calculate errors
-            err_vect = self._calc_error(np.dstack((delta_rho, delta_v)), 
-                                        np.dstack((delta_rho0, delta_v0)),
+            err_vect = self._calc_error(delta_rho, delta_rho0, 
+                                        delta_v, delta_v0, 
                                         delta_P, delta_P0)
             # Update guesses for next iteration
             delta_rho0, delta_v0, delta_P0 = \
@@ -314,6 +314,11 @@ class InterAssembly(MixedClass):
     def _build_vector(self) -> np.ndarray:
         """
         Build the vector of known terms
+        
+        Returns
+        -------
+        numpy.ndarray
+            Vector of known terms for the system to solve
         """
         # Calculate and GG terms
         GG = - self.sc_properties['density'] * self._dz * \
@@ -370,9 +375,6 @@ class InterAssembly(MixedClass):
         """
         dict[str, callable]: Dictionary of available inter-assembly gap models
         """
-        return {
-            "flow": self._flow_model,
-            "no_flow": self._noflow_model,
-            "duct_average": self._duct_average_model,
-            "mixed_flow": self._mixed_flow_model,
-            }
+        return dict(zip(self.available_models_list, 
+                        [self._flow_model, self._noflow_model,
+                         self._duct_average_model, self._mixed_flow_model])) 

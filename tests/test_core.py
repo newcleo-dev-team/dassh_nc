@@ -57,7 +57,7 @@ def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
     numpy.ndarray
         Temperature change dT or temperature in the inter-assembly gap
     """
-    IAobj = InterAssembly(model, c.n_sc,c.gap_coolant, c._Rcond, c._sc_adj,
+    IAobj = InterAssembly(model, c.gap_coolant, c._Rcond, c._sc_adj,
                           c._conv_util, c._inv_sc_mfr, de, areas)
     IAobj.set_params(dz, t_duct, c.coolant_gap_temp, 
                      c.coolant_gap_params['htc'])

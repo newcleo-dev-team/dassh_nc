@@ -72,8 +72,7 @@ class Core(LoggedClass):
                  test=False, htc_params_duct=None):
         """Instantiate Core object."""
         LoggedClass.__init__(self, 4, 'dassh.core.Core')
-        if model not in ['flow', 'no_flow', 'duct_average', 
-                         'mixed_flow', None]:
+        if model not in InterAssembly.available_models_list + [None]:
             msg = 'Do not understand input inter-assembly gap model: '
             self.log('error', msg + model)
 
@@ -238,7 +237,7 @@ class Core(LoggedClass):
         self.ebal['asm'] = np.zeros(self._asm_sc_adj.shape)
         
         # Instantiate the inter-assembly gap model object
-        self.ia_obj = InterAssembly(self.model, self.n_sc, self.gap_coolant, 
+        self.ia_obj = InterAssembly(self.model, self.gap_coolant, 
                                     self._Rcond, self._sc_adj, 
                                     self._conv_util, self._inv_sc_mfr,
                                     self.gap_params['de'], 

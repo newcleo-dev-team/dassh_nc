@@ -8,7 +8,8 @@ Abstract class to handle the mixed convection models
 
 from abc import ABC, abstractmethod
 import numpy as np
-from dassh._commons import GRAVITY_CONST, MIXED_CONV_PROP_TO_UPDATE
+from dassh._commons import GRAVITY_CONST, MIXED_CONV_PROP_TO_UPDATE, \
+    DENSITY_MAX_ABS_ERR
 from dassh.material import Material
 
 class MixedClass(ABC):
@@ -26,7 +27,7 @@ class MixedClass(ABC):
     n_sc : int
         Number of subchannels
     coolant_obj : DASSH Material object
-        Coolant object for the subchannels
+        Coolant object
     """
     
     
@@ -67,7 +68,7 @@ class MixedClass(ABC):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
+            Derivative of enthalpy w.r.t. density (J*m^3/kg^2)
         nn : int
             Number of coolant subchannels
         ff : np.ndarray
@@ -82,7 +83,6 @@ class MixedClass(ABC):
         AA : np.ndarray
             Coefficient matrix for the system to solve
         """
-        self._vstar = self._calc_star_quantity(delta_v, delta_rho, 'v')
         # Calculate coefficients for the matrix
         EE, FF = self._calc_momentum_coefficients(dz, ff, de, delta_v)
         SS, TT = self._calc_energy_coefficients(delta_v, delta_rho, RR)
@@ -107,7 +107,7 @@ class MixedClass(ABC):
         
         
     def _calc_momentum_coefficients(self, dz: float, 
-                                    ff: np.ndarray, dh: np.ndarray,
+                                    ff: np.ndarray, de: np.ndarray,
                                     delta_v: np.ndarray) -> tuple[np.ndarray]:
         """
         Calculate coefficients for the momentum equation.
@@ -118,7 +118,7 @@ class MixedClass(ABC):
             Axial step size (m)
         ff : np.ndarray
             Friction factor for each subchannel (-)
-        dh : np.ndarray
+        de : np.ndarray
             Hydraulic diameter for each subchannel (m) 
         delta_v : np.ndarray
             Variation of the SC velocities (m/s)
@@ -132,10 +132,10 @@ class MixedClass(ABC):
             - FF coefficients
         """
         EE = (self._sc_vel + delta_v) * (self._sc_vel + delta_v - self._vstar) \
-            + GRAVITY_CONST * dz / 2 + ff * dz / 16 / dh * \
+            + GRAVITY_CONST * dz / 2 + ff * dz / 16 / de * \
                 (2 * self._sc_vel + delta_v)**2 
-        FF = self.sc_properties['density'] * ((2 + ff * dz / 2 / dh) * \
-            self._sc_vel + (1 + ff * dz / 8 / dh) * delta_v - self._vstar)
+        FF = self.sc_properties['density'] * ((2 + ff * dz / 2 / de) * \
+            self._sc_vel + (1 + ff * dz / 8 / de) * delta_v - self._vstar)
         return EE, FF
     
     
@@ -152,7 +152,7 @@ class MixedClass(ABC):
         delta_rho : np.ndarray
             Variation of the SC densities (kg/m^3)
         RR : np.ndarray
-            Enthalpy variation coefficient (J*m^3/kg^2)
+            Derivative of enthalpy w.r.t. density (J*m^3/kg^2)
             
         Returns
         -------
@@ -235,20 +235,25 @@ class MixedClass(ABC):
         return drho.copy(), dv.copy(), dP
     
     
-    def _calc_error(self, new_vrho: np.ndarray, old_vrho: np.ndarray,
-                    new_dP: float, old_dP: float) -> np.ndarray:
+    def _calc_error(self, delta_rho: np.ndarray, delta_rho0: np.ndarray,
+                    delta_v: np.ndarray, delta_v0: np.ndarray,
+                    delta_P: float, delta_P0: float) -> np.ndarray:
         """
         Calculate the error between the new and old solutions
         
         Parameters
         ----------
-        new_vrho : np.ndarray
-            New velocity and density variations
-        old_vrho : np.ndarray
-            Old velocity and density variations
-        new_dP : float
+        delta_rho : np.ndarray
+            New density variations
+        delta_rho0 : np.ndarray
+            Old density variations
+        delta_v : np.ndarray
+            New velocity variations
+        delta_v0 : np.ndarray
+            Old velocity variations
+        delta_P : float
             New pressure drop
-        old_dP : float
+        delta_P0 : float
             Old pressure drop
 
         Returns
@@ -257,9 +262,13 @@ class MixedClass(ABC):
             Error vector for each subchannel and variable
         """
         err_vect = np.ones(3)
-        err_vect[:2] = np.max(np.abs((new_vrho - old_vrho) / old_vrho), 
-                              axis=1)
-        err_vect[2] = np.abs((new_dP - old_dP) / old_dP)
+        new_solution = np.dstack((delta_rho, delta_v))
+        old_solution = np.dstack((delta_rho0, delta_v0))
+        err_vect[:2] = np.max(np.abs((new_solution - old_solution) 
+                                     / old_solution), axis=1)
+        err_vect[2] = np.abs((delta_P - delta_P0) / delta_P0)
+        if np.max(np.abs(delta_rho - delta_rho0)) < DENSITY_MAX_ABS_ERR:
+            err_vect[0] = 0.0
         return err_vect
 
 
@@ -302,4 +311,5 @@ class MixedClass(ABC):
     
     @coolant.setter
     def coolant(self, value: Material):
+        """Set the coolant instance"""
         self._coolant = value
