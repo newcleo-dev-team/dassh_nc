@@ -36,7 +36,7 @@ class InterAssembly(MixedClass):
     areas: numpy.ndarray
         Cross-sectional area of the inter-assembly gap subchannels [m^2]
     """    
-    available_models_list: list[str] = [
+    AVAILABLE_MODELS_LIST: list[str] = [
         'flow', 'no_flow', 'duct_average', 'mixed_flow'
         ]
     """List of available inter-assembly gap models"""
@@ -265,7 +265,8 @@ class InterAssembly(MixedClass):
         # Iterate to solve the system
         iter = 0
         err_vect = np.ones(3)
-        while np.any(err_vect > MC_TOL) and iter < MC_MAX_ITER:
+        while np.any(err_vect > self._mixed_convection_rel_tol) \
+            and iter < MC_MAX_ITER:
             # Update star quantities
             self._hstar = self._calc_star_quantity(
                 delta_v0, delta_rho0, 'h', RR
@@ -375,6 +376,6 @@ class InterAssembly(MixedClass):
         """
         dict[str, callable]: Dictionary of available inter-assembly gap models
         """
-        return dict(zip(self.available_models_list, 
+        return dict(zip(self.AVAILABLE_MODELS_LIST, 
                         [self._flow_model, self._noflow_model,
                          self._duct_average_model, self._mixed_flow_model])) 

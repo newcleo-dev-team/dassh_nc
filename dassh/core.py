@@ -72,7 +72,7 @@ class Core(LoggedClass):
                  test=False, htc_params_duct=None):
         """Instantiate Core object."""
         LoggedClass.__init__(self, 4, 'dassh.core.Core')
-        if model not in InterAssembly.available_models_list + [None]:
+        if model not in InterAssembly.AVAILABLE_MODELS_LIST + [None]:
             msg = 'Do not understand input inter-assembly gap model: '
             self.log('error', msg + model)
 

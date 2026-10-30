@@ -11,7 +11,7 @@ from dassh.region_rodded import RoddedRegion, calculate_ht_constants, \
     setup_conduction_constants, setup_convection_constants, \
         specify_region_details
 from dassh._commons import GRAVITY_CONST, MIX_CON_VERBOSE_OUTPUT, \
-    MC_MAX_ITER, MIXED_CONV_PROP_TO_UPDATE, DENSITY_MAX_ABS_ERR
+    MC_MAX_ITER
 import sys
 from typing import Union
 
@@ -139,7 +139,7 @@ class MixedRegion(MixedClass, RoddedRegion):
                  corr_flowsplit, corr_mixing, corr_nusselt,
                  corr_shapefactor, spacer_grid=None, byp_ff=None,
                  byp_k=None, wwdir='clockwise', sf=1.0, se2=False,
-                 param_update_tol=0.0, mixed_convection_rel_tol=1e-3):
+                 param_update_tol=0.0, mixed_convection_rel_tol=None):
         # Instantiate RoddedRegion object
         RoddedRegion.__init__(self, name, n_ring, pin_pitch, pin_diam,
                               wire_pitch, wire_diam, clad_thickness, duct_ftf,
@@ -155,7 +155,8 @@ class MixedRegion(MixedClass, RoddedRegion):
         # Flag to indicate whether to track iteration convergence or not 
         self._verbose = verbose
         # Tolerance for mixed convection solver and star quantities calculation
-        self._mixed_convection_rel_tol = mixed_convection_rel_tol
+        if mixed_convection_rel_tol is not None:
+            self._mixed_convection_rel_tol = mixed_convection_rel_tol
         self._accurate_star_quantities = accurate_star_quantities
 
 

@@ -9,7 +9,7 @@ Abstract class to handle the mixed convection models
 from abc import ABC, abstractmethod
 import numpy as np
 from dassh._commons import GRAVITY_CONST, MIXED_CONV_PROP_TO_UPDATE, \
-    DENSITY_MAX_ABS_ERR
+    DENSITY_MAX_ABS_ERR, MC_TOL
 from dassh.material import Material
 
 class MixedClass(ABC):
@@ -50,7 +50,8 @@ class MixedClass(ABC):
             density=self.sc_properties['density'])
         # Initialize subchannel velocities
         self._sc_vel: np.ndarray = np.zeros(n_sc)
-
+        # Initialize mixed convection relative tolerance
+        self._mixed_convection_rel_tol = MC_TOL
 
     def _build_matrix(self, dz: float, delta_v: np.ndarray,
                       delta_rho: np.ndarray, RR: np.ndarray, 
@@ -259,7 +260,11 @@ class MixedClass(ABC):
         Returns
         -------
         np.ndarray
-            Error vector for each subchannel and variable
+            Error vector made of three elements that represent:
+            
+            - Maximum relative error on density variations
+            - Maximum relative error on velocity variations
+            - Relative error on pressure drop
         """
         err_vect = np.ones(3)
         new_solution = np.dstack((delta_rho, delta_v))
