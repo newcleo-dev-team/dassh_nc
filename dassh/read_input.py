@@ -1950,13 +1950,18 @@ class DASSH_Input(DASSHPlot_Input, DASSH_Assignment, LoggedClass):
                 self.log('error', msg)
             else:
                 # No custom material defined, check built-in materials
+                if self.data['Core']['gap_model'] == 'mixed_flow' or \
+                    self.data['Setup']['mixed_convection']:
+                    mc = True
+                else: 
+                    mc = False
                 matdict[m.lower()] = \
                     dassh.Material(m.lower(), 
                                    temperature=inlet_temp,
                                    lbh15_correlations=self.data['Core']['lbh15_correlations'],
                                    use_correlation=self.data['Core']['use_correlation'],
                                    solve_enthalpy=self.data['Setup']['solve_enthalpy'],
-                                   mixed_convection=self.data['Setup']['mixed_convection'])
+                                   mixed_convection=mc)
 
         # Check all of the materials to make sure they all have the
         # properties they need. Structure: thermal conductivity
