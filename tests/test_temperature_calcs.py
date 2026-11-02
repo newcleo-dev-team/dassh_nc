@@ -42,14 +42,16 @@ EXTERNAL_IND: list[list[int]] = [
 ]
 """Indices of inter-assembly gap subchannels that are close to only one 
 assembly in a 3-assembly core. Each sublist corresponds to one assembly."""
-DELTAZ = 1e-3
+DELTAZ: float = 1e-3
 """Axial step size for calculating inter-assembly gap temperatures in tests."""
-DELTA_T_DUCT = 10.0
-"""Temperature difference for duct wall temperatures in tests."""
-HIGH_MFR = 100.0
+DELTA_T_DUCT: float = 10.0
+"""Axial temperature increase within a duct element in tests."""
+HIGH_MFR: float = 100.0
 """High mass flow rate for testing inter-assembly gap flow models in tests."""
-ABSTOL = 1e-2
+ABS_TOL: float = 1e-14
 """Absolute tolerance for comparing inter-assembly gap temperatures in tests."""
+REL_TOL: float = 1e-12
+"""Relative tolerance for comparing inter-assembly gap temperatures in tests."""
 
 
 # Use "print_option" to print temperatures and parameters
@@ -579,8 +581,11 @@ def _setup_mixed_flow(three_asm_core: tuple[list[dassh.Assembly],
     Returns
     -------
     tuple[dassh.Core, np.ndarray]
-        A tuple containing the core object and an array of duct wall
-        temperatures for the three assemblies.
+        A tuple containing:
+        
+        - modified core object with the `mixed_flow` model set as 
+          inter-assembly model;
+        - an array of duct wall temperatures for the three assemblies.
     """
     asm_list, core_obj = three_asm_core
     core_obj.model = 'mixed_flow'
@@ -588,8 +593,8 @@ def _setup_mixed_flow(three_asm_core: tuple[list[dassh.Assembly],
     return core_obj, duct_temps
     
 
-def test_mixed_flow_zero_flux(three_asm_core: tuple[list[dassh.Assembly],
-                                                    dassh.Core]) -> None:
+def test_mixed_flow_isothermal(three_asm_core: tuple[list[dassh.Assembly],
+                                                     dassh.Core]) -> None:
     """
     Test that the `mixed_flow` model for inter-assembly gap coolant
     temperatures does not produce temperature increases in the gap
@@ -607,7 +612,8 @@ def test_mixed_flow_zero_flux(three_asm_core: tuple[list[dassh.Assembly],
     ans = core_obj.coolant_gap_temp.copy()
     # Calculate gap temperatures with duct wall temperatures
     core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
-    assert np.allclose(core_obj.coolant_gap_temp, ans)    
+    assert np.allclose(core_obj.coolant_gap_temp, ans, rtol=REL_TOL,
+                       atol=ABS_TOL)    
     
 
 def test_mixed_flow_symmetric(three_asm_core: tuple[list[dassh.Assembly], 
@@ -625,20 +631,25 @@ def test_mixed_flow_symmetric(three_asm_core: tuple[list[dassh.Assembly],
         object is an instance of the `Core` class.
     """
     core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
-    duct_temps += DELTA_T_DUCT # increase all duct wall temperatures by 10 K 
+    # increase all duct wall temperatures by the same quantity
+    duct_temps += DELTA_T_DUCT
     core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
     # SCs between two assembly sides
-    assert np.all(core_obj.coolant_gap_temp[INTERNAL_IND] == 
-                  core_obj.coolant_gap_temp[INTERNAL_IND[0]])
+    assert np.allclose(core_obj.coolant_gap_temp[INTERNAL_IND],
+                       core_obj.coolant_gap_temp[INTERNAL_IND[0]],
+                       rtol=REL_TOL, atol=ABS_TOL)
     # SCs between two assembly corners
-    assert np.all(core_obj.coolant_gap_temp[CORNER_IND] == 
-                  core_obj.coolant_gap_temp[CORNER_IND[0]])
+    assert np.allclose(core_obj.coolant_gap_temp[CORNER_IND],
+                       core_obj.coolant_gap_temp[CORNER_IND[0]],
+                       rtol=REL_TOL, atol=ABS_TOL)
     # External SCs
-    assert np.all(core_obj.coolant_gap_temp[EXTERNAL_IND[0]] == 
-                  core_obj.coolant_gap_temp[EXTERNAL_IND[1]])
-    assert np.all(core_obj.coolant_gap_temp[EXTERNAL_IND[2]] == 
-                  core_obj.coolant_gap_temp[EXTERNAL_IND[1]])
-    
+    assert np.allclose(core_obj.coolant_gap_temp[EXTERNAL_IND[0]],
+                       core_obj.coolant_gap_temp[EXTERNAL_IND[1]],
+                       rtol=REL_TOL, atol=ABS_TOL)
+    assert np.allclose(core_obj.coolant_gap_temp[EXTERNAL_IND[2]],
+                       core_obj.coolant_gap_temp[EXTERNAL_IND[1]],
+                       rtol=REL_TOL, atol=ABS_TOL)
+
     
 def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly], 
                                                      dassh.Core]) -> None:
@@ -659,23 +670,25 @@ def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly],
     Notes
     -----
     This test is conducted in two steps:
-    1. One side of the duct wall temperature of the first assembly is 
-       increased by 10 K, while the other duct wall temperatures remain at 
-       the inlet coolant temperature. When the `calculate_gap_temperatures` 
-       method is called, only the temperature of the subchannel adjacent to the
-       higher duct wall temperature changes. The other subchannels remain at 
-       the inlet coolant temperature because inter-subchannel heat transfer 
-       is based on the previous axial step.
+    1. The temperature of one subchannel discretizing the first assembly duct  
+       is increased by DELTA_T_DUCT, while the other duct wall temperatures
+       remain equal to the inlet coolant temperature. 
+       When the `calculate_gap_temperatures` method is called, only the
+       temperature of the subchannel adjacent to the higher duct wall 
+       temperature changes. The other subchannels remain at the inlet coolant 
+       temperature because inter-subchannel heat transfer is based on the 
+       previous axial step.
        Test: The maximum temperature in the gap is in the subchannel adjacent 
-       to the higher duct wall temperature.
+       to the duct having the highest wall temperature.
     2. The `calculate_gap_temperatures` method is called again with the same
-       duct wall temperatures. This time, the subchannel adjacent to the higher
-       duct wall temperature exchanges heat with its neighbors. 
+       duct wall temperatures. This time, the coolant subchannel adjacent to
+       the higher duct wall temperature exchanges heat with its coolant 
+       neighbors. 
        Test: The maximum temperature in the gap is still in the subchannel 
        adjacent to the higher duct wall temperature. Temperatures of the 
-       neighboring subchannels are higher than the inlet coolant temperature, 
-       but lower than the subchannel adjacent to the higher duct wall 
-       temperature.
+       neighboring gap subchannels are higher than the inlet coolant 
+       temperature, but lower than the subchannel adjacent to the higher duct 
+       wall temperature.
     """
     core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
     duct_temps[0][0] += DELTA_T_DUCT
@@ -705,7 +718,7 @@ def test_mixed_flow_high_mfr(three_asm_core: tuple[list[dassh.Assembly],
     """Test that the `mixed_flow` model for inter-assembly gap coolant
     temperatures produces a temperature distribution that is close to the
     one predicted by the `flow` model when the mass flow rate in the gap is 
-    high
+    high enough to be in forced convection regime. 
     
     Parameters
     ----------
@@ -733,7 +746,7 @@ def test_mixed_flow_high_mfr(three_asm_core: tuple[list[dassh.Assembly],
     core_obj.coolant_gap_temp = t_in
     core_obj.model = 'flow'
     gap_temps_flow = run_model()
-    assert np.allclose(gap_temps_mixed_flow, gap_temps_flow, atol=ABSTOL)
+    assert np.allclose(gap_temps_mixed_flow, gap_temps_flow, atol=ABS_TOL)
     
 
 # def test_porous_media_method(simple_asm, conceptual_core):
