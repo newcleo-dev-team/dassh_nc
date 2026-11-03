@@ -23,7 +23,6 @@ def calculate_subchannel_friction_factor(Re: np.ndarray) -> np.ndarray:
         
     Note
     ----
-    Blasius for the time being, to be replaced with a more appropriate 
-    correlation for non-circular geometries
+    Blasius correlation function
     """
     return 0.316/Re**0.25
