@@ -674,28 +674,28 @@ def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly],
        is increased by DELTA_T_DUCT, while the other duct wall temperatures
        remain equal to the inlet coolant temperature. 
        When the `calculate_gap_temperatures` method is called, only the
-       temperature of the subchannel adjacent to the higher duct wall 
-       temperature changes. The other subchannels remain at the inlet coolant 
+       temperature of the subchannel adjacent to the higher temperature
+       duct wall. The other subchannels remain at the inlet coolant 
        temperature because inter-subchannel heat transfer is based on the 
        previous axial step.
        Test: The maximum temperature in the gap is in the subchannel adjacent 
        to the duct having the highest wall temperature.
     2. The `calculate_gap_temperatures` method is called again with the same
        duct wall temperatures. This time, the coolant subchannel adjacent to
-       the higher duct wall temperature exchanges heat with its coolant 
+       the higher temperature duct wall exchanges heat with its coolant 
        neighbors. 
        Test: The maximum temperature in the gap is still in the subchannel 
-       adjacent to the higher duct wall temperature. Temperatures of the 
+       adjacent to the higher temperature duct wall. Temperatures of the 
        neighboring gap subchannels are higher than the inlet coolant 
-       temperature, but lower than the subchannel adjacent to the higher duct 
-       wall temperature.
+       temperature, but lower than the subchannel adjacent to the higher 
+       temperature duct wall temperature.
     """
     core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
     duct_temps[0][0] += DELTA_T_DUCT
     t_in = core_obj.coolant_gap_temp[0]
     core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
-    # Maximum temperature should be in the gap adjacent to the higher duct wall 
-    # temperature
+    # Maximum temperature should be in the gap adjacent to the higher 
+    # temperature duct wall
     assert np.all(core_obj.coolant_gap_temp <= 
                   core_obj.coolant_gap_temp[INTERNAL_IND[0]])
     # Call the method again to allow heat exchange between subchannels
