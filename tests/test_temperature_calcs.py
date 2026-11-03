@@ -675,7 +675,7 @@ def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly],
        remain equal to the inlet coolant temperature. 
        When the `calculate_gap_temperatures` method is called, only the
        temperature of the subchannel adjacent to the higher temperature
-       duct wall. The other subchannels remain at the inlet coolant 
+       duct wall changes. The other subchannels remain at the inlet coolant 
        temperature because inter-subchannel heat transfer is based on the 
        previous axial step.
        Test: The maximum temperature in the gap is in the subchannel adjacent 
@@ -688,7 +688,7 @@ def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly],
        adjacent to the higher temperature duct wall. Temperatures of the 
        neighboring gap subchannels are higher than the inlet coolant 
        temperature, but lower than the subchannel adjacent to the higher 
-       temperature duct wall temperature.
+       temperature duct wall.
     """
     core_obj, duct_temps = _setup_mixed_flow(three_asm_core)
     duct_temps[0][0] += DELTA_T_DUCT
@@ -701,7 +701,7 @@ def test_mixed_flow_asymmetric(three_asm_core: tuple[list[dassh.Assembly],
     # Call the method again to allow heat exchange between subchannels
     core_obj.calculate_gap_temperatures(DELTAZ, duct_temps)
     # Maximum temperature should still be in the gap adjacent to the 
-    # higher duct wall temperature
+    # higher temperature duct wall
     assert np.all(core_obj.coolant_gap_temp <= 
                   core_obj.coolant_gap_temp[INTERNAL_IND[0]])
     # Check that the neighboring subchannels have higher temperatures than the
