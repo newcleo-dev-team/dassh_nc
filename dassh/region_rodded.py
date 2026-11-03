@@ -369,7 +369,7 @@ class RoddedRegion(LoggedClass, DASSH_Region):
         if htc_params_duct:
             self.htc_params['duct'] = htc_params_duct
         else:
-            self.htc_params['duct'] = [0.023, 0.8, 0.4, 7.0]
+            self.htc_params['duct'] = [0.023, 0.8, 0.8, 7.0]
 
         # Pin and subchannel objects; contain maps and adjacency arrays
         self.pin_lattice = PinLattice(n_ring, pin_pitch, pin_diam)

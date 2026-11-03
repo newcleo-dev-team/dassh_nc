@@ -22,9 +22,48 @@ Test the mapping of assemblies and inter-assembly gap coolant
 import numpy as np
 import pytest
 import dassh
-from dassh import core
+from dassh import core, InterAssembly
+from typing import Union
 # np.set_printoptions(threshold=sys.maxsize)
 # np.set_printoptions(linewidth=500)
+
+def _get_inter_assembly_model_res(c: dassh.core.Core, model: str,
+                                  t_duct: np.ndarray,
+                                  dz: float = 0.0,
+                                  de: Union[np.ndarray, None] = None,
+                                  areas: Union[np.ndarray, None] = None
+                                  ) -> np.ndarray:
+    """Instantiate an InterAssembly object for testing and return 
+    the expected result: either the temperature change dT if 'flow' model,
+    or the temperature itself if 'no_flow' or 'duct_average' models
+    
+    Parameters
+    ----------
+    c : DASSH Core object
+        Core object
+    model : str
+        Inter-assembly gap model to use
+    t_duct : numpy.ndarray
+        Duct wall temperature array [K]
+    dz : float
+        Axial mesh [m]
+    de : Union[np.ndarray, None], optional
+        Hydraulic diameter array [m]
+    areas : Union[np.ndarray, None], optional
+        Cross-sectional area array [m^2]
+        
+    Returns
+    -------
+    numpy.ndarray
+        Temperature change dT or temperature in the inter-assembly gap
+    """
+    IAobj = InterAssembly(model, c.gap_coolant, c._Rcond, c._sc_adj,
+                          c._conv_util, c._inv_sc_mfr, de, areas)
+    IAobj.set_params(dz, t_duct, c.coolant_gap_temp, 
+                     c.coolant_gap_params['htc'])
+    if model == 'flow':
+        return - c.coolant_gap_temp + IAobj.gap_model()
+    return IAobj.gap_model()
 
 
 def build_asm_list(n_ring, empty_positions=()):
@@ -718,6 +757,7 @@ def test_adiabatic_wall_temp(small_core_no_power):
     """Test that adiabatic wall model never changes gap temp and that
     outer wall HTC is always returned as zero"""
     small_core_no_power.model = None
+    small_core_no_power.ia_obj._model = None
     scpa = np.max(small_core_no_power._n_sc_per_asm)
     T_duct = [(np.random.random(scpa) - 0.5) * 5 + 650 for a in
               range(small_core_no_power.n_asm)]
@@ -781,7 +821,7 @@ def test_accelerated_noflow_model(small_core_no_power_all_fuel):
         ans[sci] = ans[sci] / C
 
     # -----------------------------------------------------------------
-    res = c._noflow_model(t_duct)
+    res = _get_inter_assembly_model_res(c, c.model, t_duct)
     diff = res - ans
     for i in range(len(diff)):
         if np.abs(diff[i]) > 1e-10:
@@ -806,7 +846,7 @@ def test_accelerated_ductavg_model(small_core_no_power_all_fuel):
             t_duct.append(approx_duct[asm[i]][loc[i]])
         ans[sci] = np.average(t_duct)
     # -----------------------------------------------------------------
-    res = c._duct_average_model(approx_duct)
+    res = _get_inter_assembly_model_res(c, 'duct_average', approx_duct)
     assert np.allclose(ans, res)
 
 
@@ -894,7 +934,7 @@ def test_acc_flow_model_conv_only(small_core_no_power_all_fuel):
 
     approx_duct = np.random.random(c._asm_sc_adj.shape) * 10 + 623.15
     ans = _convection_model_OLD(c, 0.1, approx_duct, ht_consts, htc)
-    res = c._flow_model(0.1, approx_duct)
+    res = _get_inter_assembly_model_res(c, 'flow', approx_duct, 0.1)
     diff = res - ans
     for i in range(diff.shape[0]):
         if np.abs(diff[i]) > 1e-10:
@@ -994,7 +1034,7 @@ def test_acc_flow_model(small_core_no_power_all_fuel, c_fuel_asm):
 
     approx_duct = np.random.random(c._asm_sc_adj.shape) * 10 + 623.15
     ans = _convection_model_OLD(c, 0.1, approx_duct, ht_consts, htc)
-    res = c._flow_model(0.1, approx_duct)
+    res = _get_inter_assembly_model_res(c, 'flow', approx_duct, 0.1)
     diff = res - ans
     for i in range(diff.shape[0]):
         if np.abs(diff[i]) > 1e-10:
