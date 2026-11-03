@@ -6,23 +6,21 @@ Class to handle the inter-assembly models
 """
 ########################################################################
 import numpy as np
+from dassh.correlations import nusselt_db, friction_ia
 from dassh.material import Material
+from dassh.mixed_class import MixedClass
+from dassh._commons import PROPS_NAME, GRAVITY_CONST, MC_MAX_ITER, MC_TOL
 from typing import Union
 
-class InterAssembly():
+
+class InterAssembly(MixedClass):
     """Class to handle the inter-assembly models
     
     Parameters
     ----------
     model : str
         Inter-assembly gap model to use
-        Options are: 'flow', 'no_flow', 'duct_average'
-    dz : float
-        Axial mesh [m]
-    t_duct : numpy.ndarray
-        Duct wall temperature [K]
-    coolant_gap_temp : numpy.ndarray
-        Inter-assembly gap coolant temperature [K]
+        Options are: 'flow', 'no_flow', 'duct_average', and 'mixed_flow'
     gap_coolant : DASSH Material object
         Coolant object for the inter-assembly gap coolant
     Rcond : numpy.ndarray
@@ -33,29 +31,76 @@ class InterAssembly():
         Dictionary of convection utility variables
     inv_sc_mfr : numpy.ndarray
         Inverse of the subchannel mass flow rate [s/kg]
-    htc : numpy.ndarray
-        Heat transfer coefficient between the duct wall and the inter-assembly 
-        gap coolant [W/m^2-K]
+    de : numpy.ndarray
+        Hydraulic diameter of the inter-assembly gap subchannels [m]
+    areas: numpy.ndarray
+        Cross-sectional area of the inter-assembly gap subchannels [m^2]
     """    
-    def __init__(self, model: str, dz: float, t_duct: np.ndarray, 
-                 coolant_gap_temp: np.ndarray, 
-                 gap_coolant: Material, Rcond: np.ndarray, 
-                 sc_adj: np.ndarray, 
+    AVAILABLE_MODELS_LIST: list[str] = [
+        'flow', 'no_flow', 'duct_average', 'mixed_flow'
+        ]
+    """List of available inter-assembly gap models"""
+    
+    def __init__(self, model: str, gap_coolant: Material,
+                 Rcond: np.ndarray, sc_adj: np.ndarray, 
                  conv_util: dict[str, Union[np.ndarray, list]],
-                 inv_sc_mfr: np.ndarray, htc: np.ndarray):
+                 inv_sc_mfr: np.ndarray, de: np.ndarray,
+                 areas: np.ndarray):
         
         self._model: str = model
-        self._dz: float = dz
-        self._t_duct: np.ndarray = t_duct
-        self._coolant_gap_temp: np.ndarray = coolant_gap_temp
         self._gap_coolant: Material = gap_coolant
         self._sc_adj: np.ndarray = sc_adj
         self._Rcond: np.ndarray = Rcond
-        self._htc: np.ndarray = htc
         self._conv_util: dict[str, Union[np.ndarray, list]] = conv_util
         self._inv_sc_mfr: np.ndarray = inv_sc_mfr
-        
+        self._de: np.ndarray = de
+        self._areas: np.ndarray = areas
+        self._n_sc: int = sc_adj.shape[0]
+        self.sc_properties: dict[str, np.ndarray] = {k: np.zeros(self._n_sc) 
+                                                     for k in PROPS_NAME}
+        if self._model == 'mixed_flow':
+            MixedClass.__init__(self, self._n_sc, coolant_obj=gap_coolant)
 
+
+    def set_params(self, dz: float, t_duct: np.ndarray, 
+                   coolant_gap_temp: np.ndarray, htc: np.ndarray):
+        """
+        Set non-constant parameters for the inter-assembly gap model
+        
+        Parameters
+        ----------
+        dz : float
+            Axial mesh size [m]
+        t_duct : numpy.ndarray
+            Duct wall temperature [K]
+        coolant_gap_temp : numpy.ndarray
+            Inter-assembly gap coolant temperature [K]
+        htc : numpy.ndarray
+            Heat transfer coefficient for the inter-assembly 
+            gap subchannels [W/m^2/K]
+        """
+        self._dz: float = dz
+        self._t_duct: np.ndarray = t_duct
+        self._coolant_gap_temp: np.ndarray = coolant_gap_temp
+        self._htc: np.ndarray = htc
+        
+    
+    def set_mixed_only(self, rhov_in: np.ndarray, htc_params: list[float]):
+        """
+        Set parameters that are only used for the mixed convection model
+        
+        Parameters
+        ----------
+        rhov_in : numpy.ndarray
+            Inlet mass flux for the inter-assembly gap 
+            subchannels [kg/m^2/s]
+        htc_params : list[float]
+            Constants for the Nusselt number correlation 
+        """
+        self._sc_vel = rhov_in / self.sc_properties['density']
+        self._htc_params = htc_params
+        
+        
     def gap_model(self) -> np.ndarray:
         """Run the selected inter-assembly gap model to calculate the 
         temperature in the inter-assembly 
@@ -80,33 +125,59 @@ class InterAssembly():
         the actual velocity of the interassembly gap flow
         """
         # CONVECTION TO/FROM DUCT WALL
-        C = self._conv_util['const'] * self._htc[:, None]
-        dT = C[:, 0] * (self._t_duct[tuple(self._conv_util['inds'][0])]
-                        - self._coolant_gap_temp)
-        dT += C[:, 1] * (self._t_duct[tuple(self._conv_util['inds'][1])]
-                         - self._coolant_gap_temp)
-        dT += C[:, 2] * (self._t_duct[tuple(self._conv_util['inds'][2])]
-                         - self._coolant_gap_temp)
-
+        dT = self._convection_duct_wall()
+    
         # CONDUCTION TO/FROM OTHER COOLANT CHANNELS
-        dT += (self._gap_coolant.thermal_conductivity * 
-               np.sum((self._Rcond * (self._coolant_gap_temp[self._sc_adj - 1]
-                                     - self._coolant_gap_temp[..., None])), 
-                      axis=1))
+        dT += self._conduction_adj_sc()
 
         self._coolant_gap_temp += dT * self._dz * self._inv_sc_mfr \
             / self._gap_coolant.heat_capacity
         
+    
+    def _convection_duct_wall(self) -> np.ndarray:
+        """Calculate the linear heat transfer due to convection to/from 
+        the duct wall
         
+        Returns
+        -------
+        numpy.ndarray
+            Linear heat transfer [W/m]
+        """
+        C = self._conv_util['const'] * self._htc[:, None]
+        qconv = C[:, 0] * (self._t_duct[tuple(self._conv_util['inds'][0])]
+                        - self._coolant_gap_temp)
+        qconv += C[:, 1] * (self._t_duct[tuple(self._conv_util['inds'][1])]
+                            - self._coolant_gap_temp)
+        qconv += C[:, 2] * (self._t_duct[tuple(self._conv_util['inds'][2])]
+                         - self._coolant_gap_temp)
+        return qconv    
+    
+    
+    def _conduction_adj_sc(self) -> np.ndarray:
+        """Calculate the linear heat transfer due to conduction to/from 
+        adjacent subchannels
+        
+        Returns
+        -------
+        numpy.ndarray
+            Linear heat transfer [W/m]
+        """
+        qcond = (np.sum((self._Rcond * (self._coolant_gap_temp[self._sc_adj - 1]
+                                     - self._coolant_gap_temp[..., None])), 
+                     axis=1))
+        if self._model == 'flow':
+            return qcond * self._gap_coolant.thermal_conductivity
+        return qcond * self.sc_properties['thermal_conductivity']
+    
+    
     def _noflow_model(self):
         """Inter-assembly gap conduction model
 
         Notes
         -----
         Recommended for use when inter-assembly gap flow rate is so
-        low that the the axial mesh requirement is intractably small.
-        Assumes no thermal contact resistance between the duct wall
-        and the coolant.
+        low that the axial mesh requirement is intractably small.
+        Assumes no convection exchange between the duct wall and the coolant
         """
         # CONDUCTION TO/FROM DUCT WALL
         R_conv = self._conv_util['const']
@@ -137,8 +208,7 @@ class InterAssembly():
         -----
         Recommended for use when inter-assembly gap flow rate is so
         low that the axial mesh requirement is intractably small.
-        Assumes no thermal contact resistance between the duct wall
-        and the coolant
+        Assumes no convection exchange between the duct wall and the coolant
         """
         # Lookup temperatures and mask as necessary
         T0 = self._t_duct[tuple(self._conv_util['inds'][0])]
@@ -151,13 +221,161 @@ class InterAssembly():
         self._coolant_gap_temp = (np.sum((T0, T1, T2), axis=0)
                                   / np.count_nonzero((T0, T1, T2), axis=0))
         
+        
+    def _mixed_flow_model(self):
+        """
+        Inter-assembly gap model that uses a mixed convection model
+        to calculate the inter-assembly gap coolant temperature
+        """   
+        self._update_mixed_params()     
+        self._solve_system()
+        self._coolant_gap_temp = \
+            self._coolant.convert_properties(enthalpy=self._enthalpy)       
+        
+    
+    def _update_mixed_params(self):
+        """
+        Update the parameters for the mixed convection model
+        """
+        # Update subchannel properties
+        self._update_subchannels_properties(self._coolant_gap_temp)
+        # Calculate Reynolds number
+        Re_sc = self.sc_properties['density'] * self._sc_vel * \
+            self._de / self.sc_properties['viscosity']
+        # Calculate Nusselt number and HTC
+        Nu_sc = nusselt_db.calculate_sc_Nu(Re_sc, consts=self._htc_params,
+                                           sc_prop=self.sc_properties)
+        self._htc = Nu_sc * self.sc_properties['thermal_conductivity'] \
+            / self._de
+        # Calculate friction factor
+        self._ff = friction_ia.calculate_subchannel_friction_factor(Re_sc)
+        
+        
+    def _solve_system(self):
+        """
+        Solve the system of equations for the mixed convection model
+        """
+        # Use previous step deltas as initial guesses
+        delta_rho0, delta_v0, delta_P0 = \
+            self._copy_solution(self._delta_rho, self._delta_v, self._delta_P)
+        # Build frozen part of known vector
+        bb_frozen = self._build_vector()
+        # Calculate initial RR using guess `delta_rho0`
+        RR = self._calc_RR(delta_rho0)
+        # Iterate to solve the system
+        iter = 0
+        err_vect = np.ones(3)
+        while np.any(err_vect > self._mixed_convection_rel_tol) \
+            and iter < MC_MAX_ITER:
+            # Update star quantities
+            self._hstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, 'h', RR
+                )
+            self._vstar = self._calc_star_quantity(
+                delta_v0, delta_rho0, 'v'
+                )
+            # Build matrix
+            AA = self._build_matrix(self._dz, delta_v0, delta_rho0, RR, 
+                                    self._n_sc, self._ff, self._de, 
+                                    self._areas)
+            # Build known vector
+            bb = np.copy(bb_frozen)
+            bb[1:2*self._n_sc:2] += self._hstar * (
+                (self._sc_vel + delta_v0) * delta_rho0 +
+                self.sc_properties['density'] * delta_v0)
+            # Solve system
+            xx = np.linalg.solve(AA, bb)
+            # Extract deltas
+            delta_rho = xx[0:2*self._n_sc:2]
+            delta_v = xx[1:2*self._n_sc:2]
+            delta_P = xx[-1]
+            # Calculate errors
+            err_vect = self._calc_error(delta_rho, delta_rho0, 
+                                        delta_v, delta_v0, 
+                                        delta_P, delta_P0)
+            # Update guesses for next iteration
+            delta_rho0, delta_v0, delta_P0 = \
+                self._copy_solution(delta_rho, delta_v, delta_P)
+            # Recalculate RR 
+            RR = self._calc_RR(delta_rho)
+            # Update iteration counter
+            iter += 1
+        # Update deltas with converged values
+        self._delta_rho, self._delta_v, self._delta_P = \
+            self._copy_solution(delta_rho, delta_v, delta_P)
+        # Update velocity, density, pressure drop adding convergence deltas
+        self._sc_vel += self._delta_v
+        self.sc_properties['density'] += self._delta_rho
+        # self._pressure_drop_tot -= self._delta_P
+        # Update enthalpy using converting density
+        self._enthalpy = self._coolant.convert_properties(
+            density=self.sc_properties['density'])
+    
+    
+    def _build_vector(self) -> np.ndarray:
+        """
+        Build the vector of known terms
+        
+        Returns
+        -------
+        numpy.ndarray
+            Vector of known terms for the system to solve
+        """
+        # Calculate and GG terms
+        GG = - self.sc_properties['density'] * self._dz * \
+            (GRAVITY_CONST + self._ff * self._sc_vel**2 / 2 / self._de)
+        # Build energy terms of the known vector
+        EEX = self._conduction_adj_sc() * self._dz / self._areas
+        # Wall convection term
+        qwall = self._convection_duct_wall() * self._dz / self._areas
+        # Assemble known vector
+        bb = np.zeros(2 * self._n_sc + 1)
+        bb[1:2*self._n_sc:2] = qwall + EEX
+        bb[0:2*self._n_sc:2] = GG
+        return bb
+        
+        
+    def _calc_star_quantity(self, delta_v: np.ndarray, delta_rho: np.ndarray,
+                            variable: str, 
+                            RR: Union[np.ndarray, None] = None) -> np.ndarray:
+        """
+        Update hstar or vstar
+        
+        Parameters
+        ----------
+        delta_v : np.ndarray
+            Variation of the SC velocities (m/s)
+        delta_rho : np.ndarray
+            Variation of the SC densities (kg/m^3)
+        variable : str
+            Indicate whether to calculate hstar or vstar; 
+            options are 'h' or 'v'
+        RR : Union[np.ndarray, None], optional
+            Derivative of enthalpy with respect to density (J*m^3/kg^2);
+            Only used for hstar calculation
+
+        Returns
+        -------
+        np.ndarray
+            Calculated star quantity for each subchannel
+
+        Raises
+        ------
+        ValueError
+            If `variable` is not 'h' or 'v'
+        """   
+        if variable != 'h' and variable != 'v':
+            raise ValueError("Invalid variable for star quantity calculation.")
+        if variable == 'h':
+            return self._enthalpy + RR * delta_rho / 2
+        return self._sc_vel + delta_v / 2
+
+
     @property
     def available_models(self):
         """
         dict[str, callable]: Dictionary of available inter-assembly gap models
         """
-        return {
-            "flow": self._flow_model,
-            "no_flow": self._noflow_model,
-            "duct_average": self._duct_average_model
-            }
+        return dict(zip(self.AVAILABLE_MODELS_LIST, 
+                        [self._flow_model, self._noflow_model,
+                         self._duct_average_model, self._mixed_flow_model])) 

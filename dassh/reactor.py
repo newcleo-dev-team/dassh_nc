@@ -792,6 +792,7 @@ class Reactor(LoggedClass):
         # self._setup_interpolation_params()
         self._setup_gap_mesh_params()
 
+
     def _setup_interpolation_params(self):
         """Give each assembly some precalculated constants to speed up
         the quadratic interpolation"""

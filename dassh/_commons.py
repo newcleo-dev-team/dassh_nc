@@ -70,6 +70,9 @@ MIX_CON_VERBOSE_OUTPUT: list[str] = [
 MC_MAX_ITER: int = 10
 """Maximum number of iterations for mixed convection region solver"""
 
+MC_TOL: float = 1e-3
+"""Tolerance for the mixed convection region solver"""
+
 DENSITY_MAX_ABS_ERR: float = 1e-8
 """
 Maximum absolute error allowed on density variation in mixed-convection solver.
